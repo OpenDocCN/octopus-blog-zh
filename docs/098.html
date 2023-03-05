@@ -1,0 +1,354 @@
+<html>
+<head>
+<title>Building trust in an automated database deployment process - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在自动化数据库部署过程中建立信任- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/building-trust-in-automated-db-deployments#2021-08-12">https://octopus.com/blog/building-trust-in-automated-db-deployments#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/database-deployments.png" class="zoom" data-title=""><img src="../Images/1b58ca2133d1199424b9c278d6c05748.png" class="img-fluid center" alt="Building trust in an automated database deployment process" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/database-deployments.png"/>T2】</a></p>
+
+<p>当我开始自动化数据库部署时，我担心工具会在不应该的时候删除列或表。我不禁总在想，我是不是把一切都配置正确了？核心问题是我没有在我的数据库部署过程中包括建立信任的必要步骤。在这篇博文中，我介绍了一些我用来帮助建立信任的技术和配置，这样我就可以放心地自动部署数据库。</p>
+
+
+
+<h2 id="assume-zero-trust-on-day-one">假设第一天的信任为零</h2>
+
+<p>本文重点介绍如何使用数据库工具和Octopus Deploy在部署管道中建立信任。</p>
+
+<p>请注意，诸如验证数据库更改在语法上是否正确，或者数据库更改是否通过了静态分析之类的任务应该在CI或构建服务器上完成，这超出了本文的范围。</p>
+
+<p>在设计和实现自动化数据库部署过程时，我从这种心态开始:</p>
+
+<blockquote class="blockquote">
+<p>我需要向我自己和我团队中的每个人证明，部署会导致数据丢失或生产中断的是<strong> <em>而不是</em> </strong>。</p>
+</blockquote>
+
+<p>在本文中，我从头开始创建了一个自动化的数据库部署过程。每一节都建立在前一节的基础上，利用Octopus Deploy中的一个新特性。我意识到很容易忘记每个特性，所以为了使事情变得简单，下面是本文将使用的特性列表:</p>
+
+<ul>
+<li><a href="https://octopus.com/docs/deployment-process/steps/manual-intervention-and-approvals">手动干预</a>暂停部署，等待某人批准或拒绝变更。</li>
+<li><a href="https://octopus.com/docs/deployment-process/artifacts">工件</a>存储增量脚本，供DBA在手动干预期间审查。</li>
+<li><a href="https://octopus.com/docs/deployment-process/conditions#run-condition">运行条件</a>始终将部署结果通知开发团队，并在生产失败时呼叫数据库管理员。</li>
+<li><a href="https://octopus.com/docs/deployment-examples/custom-scripts/logging-messages-in-scripts">自定义日志级别</a>由运行脚本步骤使用，用于通知数据库管理员脚本中的潜在问题。</li>
+<li><a href="https://octopus.com/docs/deployment-process/steps/email-notifications">电子邮件和其他通知选项</a>让批准者了解待定的变更。</li>
+<li><a href="https://octopus.com/docs/managing-releases/guided-failures">引导故障模式</a>暂停故障部署，让人们调查故障，并可能再次尝试。</li>
+<li><a href="https://octopus.com/docs/projects/variables/output-variables">输出变量</a>以跳过部署中不必要的步骤。例如，如果工具报告没有数据库变更，那么运行部署数据库变更步骤就没有意义。</li>
+<li><a href="https://octopus.com/docs/administration/managing-users-and-teams/auditing">审计日志</a>了解谁启动了部署、谁批准了部署，以及部署是何时发生的。</li>
+<li><a href="https://octopus.com/docs/administration/managing-users-and-teams">用户和团队</a>仅允许DBA启动生产部署，但仍允许开发人员部署到较低的环境中。</li>
+</ul>
+
+<h2 id="bare-bones-deployment-process">基本部署流程</h2>
+
+<p>如果我们完全信任这个过程，我们将只需要部署步骤。让我们从那里开始。</p>
+
+<p>本文使用<a href="https://dbup.github.io/" class="alert-link" rel="nofollow"> DbUp </a>，一个跨平台的数据库部署工具来处理数据库部署。本文的核心概念适用于任何数据库服务器的任何数据库部署工具。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/deployment-process-start.png" class="zoom" data-title=""><img src="../Images/e2453508d12d66b9979a9a890997289a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/deployment-process-start.png"/>T2】</a></p>
+
+<p>现在，这个过程将获取包中的脚本，并在数据库上运行它们。如果能知道这些脚本是什么就好了。让我们添加一个生成增量脚本或报告的步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/adding-delta-report.png" class="zoom" data-title=""><img src="../Images/0d88130ed0d4a262f6407682148d8185.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/adding-delta-report.png"/>T2】</a></p>
+
+<p><code>Create Delta Report</code>步骤在脚本末尾有这样一行，它将脚本作为工件上传到Octopus Deploy:</p>
+
+<pre><code class="language-PowerShell">New-OctopusArtifact -Path "$generatedReport" -Name "$environmentName.UpgradeReport.html"
+</code></pre>
+
+<p>创建增量报告的方法将根据您的数据库部署工具而有所不同。请查阅该工具的文档来了解如何操作。在某些情况下，我们的<a href="https://octopus.com/docs/deployment-examples/database-deployments" class="alert-link">文档</a>提供了您可以利用的示例。</p>
+
+
+<p>在部署期间，该工件将出现在屏幕上的两个地方。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/octopus-deploy-artifact.png" class="zoom" data-title=""><img src="../Images/a9a59f7f867d1e86251fafde021357ee.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/octopus-deploy-artifact.png"/>T2】</a></p>
+
+<p>点击其中任何一个都会下载神器。</p>
+
+<p>部署屏幕还显示谁启动了部署以及何时启动的。该审计日志和工件都将保留到时间结束，除非您已经配置了<a href="https://octopus.com/docs/administration/retention-policies">保留策略</a>，在这种情况下，它们将只保留到部署被保留策略删除。</p>
+
+<p>现在我们有所进展；我们有一份delta报告，只要该版本存在，它就会被保留，供任何人(包括审计员)下载和审查。</p>
+
+<h2 id="approvals">批准</h2>
+
+<p>但是如果delta报告显示一个带有类似于<code>drop table</code>或<code>drop column</code>的命令的脚本呢？可以吗？也许是，也许不是。断然拒绝剧本是没有意义的。更有意义的做法是暂停部署，检查脚本，如果有些事情看起来不对劲，找到创建脚本的人并与他们讨论。为此，我们可以添加手动干预。</p>
+
+<p>当创建手动干预时，一个有趣的想法出现了。必须选择一个团队。我知道你在想什么。“团队应该是DBA！”这一步将在所有环境中运行。DBA应该在什么时候审查变更？他们正忙于保持数据库服务器正常运行。不得不审查<em>每个</em>部署的<em>每个</em>增量脚本将是一项全职工作。</p>
+
+<p>将开发人员和数据库管理员分成两个团队是行不通的，因为这意味着开发人员<strong>或数据库管理员</strong>可以批准部署。这对于<code>Development</code>和<code>Test</code>环境来说是可以接受的，但对于<code>Production</code>来说却不是:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/creating-manual-intervention.png" class="zoom" data-title=""><img src="../Images/a5a24499216687f9098ffc9bfacf93a6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/creating-manual-intervention.png"/>T2】</a></p>
+
+<p>在这个例子中，DBA批准<code>Staging</code>和<code>Production</code>的增量脚本是有意义的。同时，开发人员可以批准<code>Development</code>和<code>Test</code>的增量脚本。</p>
+
+<p>我喜欢在所有人工干预中加入章鱼经理团队。这样，如果所有数据库管理员都不可用，他们可以在紧急情况下承担责任。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/dba-approve-delta-script.png" class="zoom" data-title=""><img src="../Images/6a1c23455ab4198cd62a592e2caf4349.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/dba-approve-delta-script.png"/>T2】</a></p>
+
+<p>最终的部署过程将有两个手动干预步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/deployment-process-with-manual-interventions.png" class="zoom" data-title=""><img src="../Images/07205ab38b6c63679efbcebe4096ef57.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/deployment-process-with-manual-interventions.png"/>T2】</a></p>
+
+<p>根据我的经验，在delta脚本运行之前暂停并检查它的能力对建立信任大有帮助。如果批准者看到他们不同意的东西，他们可以中止部署。更好的是，负责批准的人在审计日志中。我们可以看到我开始了部署并批准了它(这在演示/测试环境之外是一个大禁忌)。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/manual-interventions-during-deployment.png" class="zoom" data-title=""><img src="../Images/17cd448c8656894ae2e049ccbdd39b9d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/manual-interventions-during-deployment.png"/>T2】</a></p>
+
+<h2 id="notifications">通知</h2>
+
+<p>DBA很可能不会每天都整天看着Octopus部署。他们需要被告知他们所负责的审批。但是他们在批准部署后应该做什么呢？看完？那可能要花很长时间。这似乎不是对他们时间的有效利用。如果部署成功，他们可能不需要做任何其他事情。部署失败是一件大事；应该通知他们。</p>
+
+<p>对于这个例子，我将电子邮件通知直接包含在流程中。您还可以利用Octopus Deploy中的<a href="https://octopus.com/docs/administration/managing-infrastructure/subscriptions">订阅</a>特性。</p>
+
+<p>电子邮件表单中的初始字段相当简单。主题和正文是导致我停顿的原因。数据库管理员可能一天会收到几十封这样的电子邮件。他们应该很容易批准部署，所以主题行应该包括关于部署的详细信息。如果有些事情看起来不对劲，他们可以将电子邮件转发给您，并提供他们的反馈。正文应包含一个深层链接，供审批者点击。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/notification-subject-and-body.png" class="zoom" data-title=""><img src="../Images/10b539a369bf50427754343039e9e1a4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/notification-subject-and-body.png"/></a>T2】</p>
+
+<p>重新输入截图中的内容并不好玩。下面是主题和正文的文本。</p>
+
+<pre><code>Subject:
+Pending approval for #{Octopus.Project.Name} #{Octopus.Release.Number} to #{Octopus.Environment.Name}
+
+Body:
+Please approve the release #{Octopus.Project.Name} #{Octopus.Release.Number} to #{Octopus.Environment.Name} here:
+
+#{Octopus.Web.DeploymentLink}
+</code></pre>
+
+<p>失败通知有点不同。电子邮件的优先级需要从正常更改为高，并且运行条件应该配置为仅在失败时运行步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/failure-notification.png" class="zoom" data-title=""><img src="../Images/b3f666198ea483d44262cc457620c8e0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/failure-notification.png"/>T2】</a></p>
+
+<p>这个示例使用电子邮件通知，但是您也可以利用其他工具，例如Slack、Teams、VictorOps等等。</p>
+
+
+<p>最后，负责应用程序的团队应该总是被告知部署的状态。如果部署团队使用Slack，我们可以在他们的Slack通道中发送类似的消息。这个例子使用了库中的<a href="https://library.octopus.com/step-templates/99e6f203-3061-4018-9e34-4a3a9c3c3179/actiontemplate-slack-send-simple-notification" rel="nofollow"> Slack - Send简单通知</a>步骤模板。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/deployment-process-with-notifications.png" class="zoom" data-title=""><img src="../Images/2e95cf20aec5d4361eabf0436508a066.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/deployment-process-with-notifications.png"/>T2】</a></p>
+
+<p>现在我们向关键人物发出通知。典型地，关键人物也是忙碌的人；如果您需要拨入通知来降低信噪比，请不要感到惊讶。</p>
+
+<h2 id="helping-the-approvers">帮助审批者</h2>
+
+<p>随着时间的推移，数据库管理员必须批准的部署数量将呈指数级增长。这是自动化的本质。当团队对工具感到满意并信任流程时，他们自然会进行更多的部署。</p>
+
+<p>部署多了是把双刃剑；不利的一面是审查数据库变更的时间变少了。DBA或开发人员可能会错过导致重大损失的模式更改，但是这个过程应该对他们有所帮助。幸运的是，Octopus Deploy是一个API优先的应用程序，使用该API可以下载delta报告或SQL工件来查找任何潜在的破坏性语句:</p>
+
+<pre><code class="language-PowerShell">$CommandsToLookFor = "Drop Table,Drop Column,Alter Table,Create Table,Create View"
+
+$OctopusURL = ## YOUR URL
+$APIKey = ## YOUR API KEY
+$FileExtension = "SQL"
+$SpaceId = $OctopusParameters["Octopus.Space.Id"]
+$DeploymentId = $OctopusParameters["Octopus.Deployment.Id"]
+
+Write-Host "Commands to look for: $CommandsToLookFor"
+Write-Host "Octopus Url: $OctopusUrl"
+Write-Host "SpaceId: $SpaceId"
+Write-Host "DeploymentId: $DeploymentId"
+Write-Host "File Extension: $FileExtension"
+
+$header = @{ "X-Octopus-ApiKey" = $APIKey }
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$artifactUrl = "$OctopusUrl/api/$SpaceId/artifacts?take=2147483647&amp;regarding=$DeploymentId&amp;order=asc"
+Write-Host "Getting the artifacts from $artifactUrl"
+$artifactResponse = Invoke-RestMethod $artifactUrl -Headers $header
+$fileListToCheck = @()
+
+foreach ($artifact in $artifactResponse.Items)
+{
+    $fileName = $artifact.Filename
+
+    if ($fileName.EndsWith($FileExtension))
+    {       
+        Write-Host "The artifact is a SQL Script, downloading"
+        $artifactId = $artifact.Id
+        $artifactContentUrl = "$OctopusUrl/api/$SpaceId/artifacts/$artifactId/content"
+        Write-Host "Pulling the content from $artifactContentUrl"
+        $fileContent += Invoke-RestMethod $artifactContentUrl -Headers $header
+        Write-Host "Finished downloading the file $fileName"
+
+        $sqlFileToCheck = @{
+            FileName = $fileName;
+            Content = $fileContent;
+        }
+
+        $fileListToCheck += $sqlFileToCheck                
+    }    
+}
+
+if ($fileListToCheck.Length -le 0)
+{
+    Write-Highlight "No sql files were found"
+
+    Exit 0
+}
+
+Write-Host "Looping through all commands"
+$commandsToCheck = $CommandsToLookFor -split ","
+foreach ($sqlFile in $fileListToCheck)
+{       
+    foreach ($command in $commandsToCheck)
+    {
+        Write-Host "Checking $($sqlFile.FileName) for command $command"
+        $foundCommand = $sqlFile.Content -match "$command"
+
+        if ($foundCommand)
+        {
+            Write-Highlight "$($sqlFile.FileName) has the command '$command'"            
+        }
+    }
+}
+</code></pre>
+
+<p>当找到某些命令时，脚本将利用Octopus Deploy提供的<code>Write-Highlight</code> <a href="https://octopus.com/docs/deployment-examples/custom-scripts/logging-messages-in-scripts">日志命令</a>。该消息将出现在部署日志中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/write-highlight-in-deployment.png" class="zoom" data-title=""><img src="../Images/7ebf85ae0c18367fe800dcc3d5ee1b61.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/write-highlight-in-deployment.png"/>T2】</a></p>
+
+<p>希望看到这些消息能让审批者轻松一点。</p>
+
+<h2 id="handling-errors-and-failures">处理错误和故障</h2>
+
+<p>错误和失败将会发生。其中许多是由于Octopus Deploy无法控制的情况而发生的，例如，网络故障、SQL Server重启、不正确的权限和帐户丢失是最常见的情况。问题解决后，最好再次尝试失败的步骤，避免不必要的返工。如果DBA已经批准了一个脚本，他们不需要再次批准它。</p>
+
+<p><a href="https://octopus.com/docs/managing-releases/guided-failures">引导性故障</a>就是为这样的场景设计的。可以为每个项目或每个环境启用引导式故障。对于本例，它是在项目级别启用的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/use-guided-failure-mode.png" class="zoom" data-title=""><img src="../Images/9a373645a1a1447da2f261fea2f42aa5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/use-guided-failure-mode.png"/>T2】</a></p>
+
+<p>就像手动干预一样，当检测到故障时，部署将暂停。Octopus Deploy提供了选择<code>Fail</code>、<code>Ignore</code>或<code>Retry</code>的步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/guided-failure-during-deployment.png" class="zoom" data-title=""><img src="../Images/5234c261dea9e8948c16acffd519374a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/guided-failure-during-deployment.png"/>T2】</a></p>
+
+<p>通过这个小小的改变，我们给了用户优雅地处理失败的机会。</p>
+
+<h2 id="separation-of-concerns">关注点分离</h2>
+
+<p>关注点分离是一种常见的做法。修改代码的人不应该是批准它或者将它部署到<code>Production</code>的人。请注意，开发人员应该能够部署到<code>Development</code>和<code>Test</code>，在Octopus Deploy中，可以配置团队来支持这一点。</p>
+
+<p>在Octopus Deploy中有五个角色可以帮助实现这一点。</p>
+
+<ul>
+<li>部署创建者:被分配到这个角色的人可以开始部署。在本例中，DBA将被分配到<code>Production</code>的这个角色。</li>
+<li><strong>项目参与者</strong>:被分配到这个角色的人可以编辑项目，但是不能创建或部署发布。在本例中，开发人员将被分配到<code>Production</code>的这个角色。</li>
+<li><strong>项目部署者</strong>:被分配到这个角色的人可以做项目贡献者可以做的任何事情，包括部署一个发布。在这个例子中，开发人员将被分配到较低环境的这个角色。</li>
+<li><strong>项目查看者</strong>:分配给这个角色的人对项目有一个只读视图。非常适合QA、企业主和其他没有权限更改流程但仍想查看状态的人。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/built-in-user-roles.png" class="zoom" data-title=""><img src="../Images/2995bea51985d092f091338ac7e930ef.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/built-in-user-roles.png"/>T2】</a></p>
+
+<p>开发团队用户角色将包括:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/developer-team-permissions.png" class="zoom" data-title=""><img src="../Images/a581de2e47c8fe51101a18913c2d119e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/developer-team-permissions.png"/>T2】</a></p>
+
+<p>DBA的权限包括:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/dba-permissions.png" class="zoom" data-title=""><img src="../Images/cb7f58c58977a9415e3416d1e46dea33.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/dba-permissions.png"/>T2】</a></p>
+
+<h2 id="adjusting-the-dbas-role-in-the-process">调整数据库管理员在流程中的角色</h2>
+
+<p>有了这些权限，DBA在这个过程中的角色仍然有点奇怪。是他们触发了对<code>Production</code>的部署。他们是否也必须手动批准部署？乍一看，很有道理。他们应该批准一个<code>Production</code>版本。</p>
+
+<p>真正的问题是:在<code>Production</code>部署期间，开发团队多久会因为DBA发现他们不喜欢的东西而改变一些东西？</p>
+
+<p>答案大概是永远不会。当中断窗口已经传达给用户和客户时，<code>Production</code>部署对于DBA来说已经太晚了，无法表达他们的担忧。除非数据库管理员能够100%确定某个问题将会发生，否则生产部署将会继续进行。</p>
+
+<p>对于DBA来说，部署已经太晚了。更好的方法是在<code>Staging</code>部署期间为<code>Production</code>创建一个增量脚本。这样，DBA就可以同时批准这两个项目。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/earlier-dba-approval.png" class="zoom" data-title=""><img src="../Images/0750557ed75932d697c8e8cdf50ae558.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/earlier-dba-approval.png"/>T2】</a></p>
+
+<p>当DBA创建<code>Production</code>部署时，他们还可以查看在<code>Staging</code>部署期间生成的增量报告。额外的好处是数据库管理员现在可以安排部署，他们不必在线。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/scheduled-deployment.png" class="zoom" data-title=""><img src="../Images/7a88a634f99f26b7f4bb2828d864a373.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/scheduled-deployment.png"/>T2】</a></p>
+
+<p>也就是说，不要期望DBA在开始时安排部署并且不在线。在他们信任团队、信任过程、信任自己理解工具之前，需要进行相当多的部署。</p>
+
+<h2 id="future-iterations">未来迭代</h2>
+
+<p>所有的人工批准和通知都会产生噪音。刚开始时，这种噪音是好的。团队仍在学习工具。最终，团队将会对工具感到满意，而手工批准和通知将会困扰并最终阻碍团队。</p>
+
+<p>取消这些通知和批准是不明智的。在拉取请求过程中可能会出现一些破坏性的东西。流程有一个自动发现潜在问题的步骤<code>Check SQL Artifacts for Schema Change Commands</code>。可以修改该脚本来设置<a href="https://octopus.com/docs/projects/variables/output-variables">输出变量</a>。如果发现潜在的破坏性命令，则部署必须经过批准过程:</p>
+
+<pre><code class="language-PowerShell">$ApprovalRequired = $false
+Write-Host "Looping through all commands"
+$commandListToCheck = $CommandsToLookFor -split ","
+foreach ($sqlFile in $fileListToCheck)
+{       
+    foreach ($command in $commandListToCheck)
+    {
+        Write-Host "Checking $($sqlFile.FileName) for command $command"
+        $foundCommand = $sqlFile.Content -match "$command"
+
+        if ($foundCommand)
+        {
+            Write-Highlight "$($sqlFile.FileName) has the command '$command'"
+            $ApprovalRequired = $true
+        }
+    }
+}
+
+if ($approvalRequired -eq $false)
+{
+    Write-Highlight "All scripts look good"
+}
+else
+{
+    Write-Highlight "One of the specific commands we look for has been found"
+}
+
+Set-OctopusVariable -name "DBAApprovalRequired" -value $ApprovalRequired
+</code></pre>
+
+<p>输出变量有点冗长。为了使它们更容易使用，为结果设置另一个变量。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/output-variable-reference.png" class="zoom" data-title=""><img src="../Images/5e4743a3bcfad0405cd2209362733da0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/output-variable-reference.png"/>T2】</a></p>
+
+<p>在通知和手动干预步骤中，变量运行条件可以设置为:</p>
+
+<pre><code>#{if Octopus.Deployment.Error == ""}#{Project.DBA.ApprovalRequired}#{/if}
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/variable-run-condition-set.png" class="zoom" data-title=""><img src="../Images/a15daebbdc3f9f8e3e27597564de8c27.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-05/building-trust-in-automated-db-deployments/variable-run-condition-set.png"/>T2】</a></p>
+
+<h2 id="preventing-bad-actors">防止坏演员</h2>
+
+<p>这个过程中的一个缺陷是，它假设开发人员不会进入部署过程并禁用或删除手动干预步骤。信任，但验证是我们推荐的方法。</p>
+
+<p>首先，我们正在开发一个与Git集成的代码为的<em>流程。如果它与Git集成，那么它可以通过一个拉请求过程。</em></p>
+
+<p><a href="https://www.youtube.com/watch?v=i4qYdsYyu9s&amp;list=PLAGskdGvlaw3-cd9rPiwhwfUo7kDGnOBh&amp;index=19&amp;t=0s" rel="nofollow">本视频</a>还概述了自动审计项目的流程。</p>
+
+<p>最后，您可以配置<a href="https://octopus.com/docs/administration/managing-infrastructure/subscriptions">订阅</a>以便在发生更改时通知管理员。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在文章的开头，我设定了这个目标:</p>
+
+<blockquote class="blockquote">
+<p>我需要向我自己和我团队中的每个人证明，特定的部署将<strong> <em>而不是</em> </strong>导致数据丢失或生产中断。</p>
+</blockquote>
+
+<p>本文中创建的流程通过执行以下操作来帮助实现这一目标:</p>
+
+<ol>
+<li>它生成一个delta报告，并将其作为Octopus工件发布，供任何人查看。</li>
+<li>跟踪谁触发了部署，谁批准了部署，以及一切发生的时间。</li>
+<li>一个脚本将下载增量报告并寻找潜在的问题命令。</li>
+<li>除了<code>Production</code>之外，部署将在每个环境中暂停，以便批准者审查和批准增量报告。</li>
+<li>通知会在流程的不同时间发送给关键人员。</li>
+<li>开发人员有权部署到<code>Development</code>、<code>Test</code>和<code>Staging</code>，但是数据库管理员必须批准部署到<code>Staging</code>。</li>
+<li>在<code>Staging</code>部署期间，DBA批准并审查<code>Staging</code>和<code>Production</code>的变更。这给了他们更多的时间来回顾变化，并在<code>Production</code>推动之前提出任何问题。</li>
+</ol>
+
+<p>我在以前的公司工作时也实现了类似的东西。这比之前的流程好多了，之前的流程是一封电子邮件，说“请运行这些SQL脚本。”我对即将进行的数据库更改充满信心，最终，DBA也是如此。他们会说“我会把它安排在晚上7点，我不会在线，但如果有任何问题，它会传呼我，我会跳上去。”</p>
+
+<p>我没有天真到相信这将解决所有潜在的信任问题。这个过程并不完美；例如，它没有与生产变更请求系统集成，也没有与问题跟踪器集成。虽然很重要，但我觉得这些东西把本文的水搅浑了。本文的目标是为您提供一些技巧和技术，让您有信心开始自己的POC或自动化数据库部署试点。</p>
+
+<p>本文中的部署过程可以在我们的<a href="https://samples.octopus.app/app#/Spaces-106/projects/dbup-sql-server/deployments" rel="nofollow">示例实例</a>中找到。</p>
+
+<p>下次再见，愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

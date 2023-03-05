@@ -1,0 +1,243 @@
+<html>
+<head>
+<title>Using build information for visibility across your CI/CD pipelines - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用构建信息实现CI/CD管道的可见性——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/build-information-and-your-ci-cd-pipeline#2022-12-20">https://octopus.com/blog/build-information-and-your-ci-cd-pipeline#2022-12-20</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/blogimage-build-info.png" class="zoom" data-title=""><img src="../Images/c730ee6458f6ccec9a2fd6440eb1c5a5.png" class="img-fluid center" alt="Octopus with build information" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/blogimage-build-info.png"/>T2】</a></p>
+
+<p>持续集成(CI)通常包括三个部分:</p>
+
+<ol>
+<li>源代码管理服务器</li>
+<li>问题跟踪</li>
+<li>构建服务器</li>
+</ol>
+
+<p>Azure DevOps等工具将所有组件组合成一个解决方案，而其他配置将它们分开。例如，您可以使用GitHub进行源代码控制，使用TeamCity进行构建，使用吉拉进行问题跟踪。当谈到连续交付(CD)时，提交和问题跟踪对于确保部署软件的正确版本是很重要的。使用Octopus Deploy，您可以将<a href="https://octopus.com/docs/packaging-applications/build-servers#build-information">构建信息</a>，比如提交和发布，作为您发布的一部分。</p>
+
+<p>值得注意的是，虽然提交在所有情况下都有效，但只有在Octopus Deploy中配置了以下集成之一时，问题跟踪才有效:</p>
+<ul>
+<li>Azure DevOps问题跟踪</li>
+<li>GitHub问题跟踪</li>
+<li>吉拉一体化</li>
+</ul>
+
+
+<p>在本文中，我将介绍如何配置TeamCity和Octopus Deploy以包含构建信息，以及如何在部署过程中使用这些信息。</p>
+
+<h2 id="example-scenario">示例场景</h2>
+
+<p>在这个演示中，我使用了上面描述的场景:GitHub ( <a href="https://github.com/OctopusSamples/OctoPetShop" rel="nofollow"> OctoPetShop </a>)、TeamCity和吉拉。我将介绍这些特定的技术，但是无论您使用哪种工具，整个过程都是相似的。</p>
+
+<p>这篇文章假设你已经知道如何在吉拉创建一个项目。</p>
+
+<h3 id="create-an-issue">制造一个问题</h3>
+
+<p>我们将从在吉拉为OctoPetShop应用程序记录一个bug开始。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/jira-issue.png" class="zoom" data-title=""><img src="../Images/0d4a3586a5e6c680f945f20c0c8285a3.png" class="img-fluid center" alt="The create an issue screen in Jira" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/jira-issue.png"/>T2】</a></p>
+
+<p>创建问题后，我们需要记下<code>key</code>值，因为我们需要它来正确标记我们的提交。在这种情况下，值为<code>OPS-1</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/jira-issue-ops-1.png" class="zoom" data-title=""><img src="../Images/5b062e6c5c05c3b260464ab9cbac6733.png" class="img-fluid center" alt="The Jira issue key" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/jira-issue-ops-1.png"/>T2】</a></p>
+
+<h3 id="connect-a-commit-to-an-issue">将提交与问题关联</h3>
+
+<p>如何将提交与问题关联取决于您使用的问题跟踪器。对于吉拉，您的提交消息需要使用以下格式:</p>
+
+<pre><code>git commit -m "[key-value] Commit message"
+</code></pre>
+
+<p>对于我们的例子，我们的提交消息看起来像这样:</p>
+
+<pre><code>git commit -m "[OPS-1] Fixed tax rate calculation.  Tax rate now pulled using new tax rate service"
+</code></pre>
+
+<h2 id="configure-the-build-to-push-build-information">配置生成以推送生成信息</h2>
+
+<p>Octopus Deploy提供官方插件来集成以下<a href="https://octopus.com/docs/packaging-applications/build-servers">构建服务器</a>:</p>
+
+<ul>
+<li>Azure DevOps</li>
+<li>团队城市</li>
+<li>詹金斯</li>
+<li>竹子</li>
+</ul>
+
+<p>除了可用的插件，还有一些社区支持的与在线构建服务器的集成:</p>
+
+<ul>
+<li>切尔莱西</li>
+<li>GitHub操作</li>
+<li>比特桶管道</li>
+<li>应用程序供应商</li>
+</ul>
+
+<p>在这个演示中，我们使用TeamCity。</p>
+
+<ol>
+<li>通过选择<strong>Octopus Deploy:Build Information</strong>runner，向构建定义添加一个新步骤。</li>
+<li>填写所需的值:</li>
+</ol>
+
+<ul>
+<li><strong>八达通网址</strong>:你的八达通服务器的网址</li>
+<li><strong> API键</strong>:具有推送构建信息权限的API键</li>
+<li><strong>空间名称</strong>:推送到的空间名称(默认为空)</li>
+<li><strong>包id</strong>:应用构建信息的包列表</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/teamcity-push-build-information.png" class="zoom" data-title=""><img src="../Images/06c87d4f72ea7db3a7d718bad5ca1676.png" class="img-fluid center" alt="TeamCity push build information step" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/teamcity-push-build-information.png"/>T2】</a></p>
+
+<p>发布一个构建，我们可以看到我们的变更已经被构建服务器接受了。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/teamcity-build-commit-message.png" class="zoom" data-title=""><img src="../Images/73a4d3f1c27dc72eb4a4a3c69c600628.png" class="img-fluid center" alt="TeamCity commit message" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/teamcity-build-commit-message.png"/>T2】</a></p>
+
+<h2 id="configure-the-issue-tracking-integration">配置问题跟踪集成</h2>
+
+<p>如前所述，在Octopus Deploy中配置相应的集成之前，构建信息的问题跟踪不会起作用。对于本演示，我们需要配置<a href="https://octopus.com/docs/releases/issue-tracking/jira">吉拉集成</a>。</p>
+
+<ol>
+<li>导航到Octopus Deploy中的<strong>配置</strong>选项卡，点击<strong>设置</strong>。</li>
+<li>点击<code>Jira</code>，填写所需信息:</li>
+</ol>
+
+<ul>
+<li><strong>吉拉实例类型</strong>:云还是服务器</li>
+<li><strong>吉拉基地网址</strong>:吉拉网址</li>
+<li><strong>吉拉连接App密码</strong>:连接的密码</li>
+<li><strong> Octopus安装ID </strong>:你在吉拉的Octopus部署插件中的Octopus安装ID</li>
+<li><strong>八达通服务器URL </strong>:你的八达通服务器的URL</li>
+<li><strong>启用</strong>:启用集成的复选框</li>
+</ul>
+
+<p>配置好我们的集成后，导航到<strong>库</strong>选项卡并选择<strong>构建信息</strong>。</p>
+
+<p>在这个页面上，我们可以看到Octopus Deploy已经为OctoPetShop的包上传了构建信息。单击其中一个将显示提交和与之相关的问题。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-build-information.png" class="zoom" data-title=""><img src="../Images/bd7674ba03b52aa22cc4ab8f37bd2f52.png" class="img-fluid center" alt="OctoPetShop build information" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-build-information.png"/>T2】</a></p>
+
+<p>构建信息包含:</p>
+
+<ul>
+<li>链接到它来自的版本。</li>
+<li>提交。</li>
+<li>它所关联的工作项(问题)。</li>
+</ul>
+
+<h3 id="release-note-prefix">发行说明前缀</h3>
+
+<p>你可能已经注意到了，我们还没有讨论<strong>的发布说明前缀</strong>。发行说明前缀提供了一种重写工作项标题的方法。Octopus Deploy将在工作项的注释中查找我定义为<code>Release note:</code>的指定前缀。当它找到带有前缀的注释时，它会用前缀后面的任何文本覆盖工作项的标题。</p>
+
+<p>所有Octopus部署问题集成都包含了<code>Release Note Prefix</code>特性。</p>
+
+
+<p>我们这期的标题是<code>Incorrect tax calculated</code>，这并不是一个非常有用的发行说明。相反，我们希望它显示为<code>Improved tax rate calculation based on location.</code></p>
+
+<p>为此，我们使用我们定义的前缀向吉拉问题添加一条注释:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/jira-issue-comment.png" class="zoom" data-title=""><img src="../Images/f77624ca9560a3972389e8e057380e9a.png" class="img-fluid center" alt="Jira issue comment" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/jira-issue-comment.png"/>T2】</a></p>
+
+<p>在Octopus中，我们可以看到工作项的标题已经更新为所需的值。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-build-information-comment.png" class="zoom" data-title=""><img src="../Images/d78d524fcea414d3dff493bce2e653e0.png" class="img-fluid center" alt="Work item with the comment" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-build-information-comment.png"/>T2】</a></p>
+
+<h2 id="keeping-everyone-informed">让每个人都知道</h2>
+
+<p>到目前为止，我们已经展示了如何通过Octopus Deploy Web门户访问构建信息。然而，并不是组织中每个人都能访问Octopus Deploy，例如质量保证(QA)团队。Octopus Deploy有一些内置变量，可以用来共享构建信息。</p>
+
+<h3 id="project-release-notes-template">项目发布说明模板</h3>
+
+<p>在项目的设置中，你可以定义一个<a href="https://octopus.com/docs/releases/release-notes#Release-Notes-Templates">发布说明模板</a>。该模板允许您定制与包相关的构建信息的显示。下面是一个示例模板:</p>
+
+<pre><code>#{each workItem in Octopus.Release.WorkItems}#{if Octopus.Template.Each.First == "True"}WorkItems:#{/if}
+- [#{workItem.Id}](#{workItem.LinkUrl}) - #{workItem.Description}
+#{/each}
+
+Packages:
+#{each package in Octopus.Release.Package}
+- #{package.PackageId} #{package.Version}
+#{each commit in package.Commits}
+    - [#{commit.CommitId}](#{commit.LinkUrl}) - #{commit.Comment}
+#{/each}
+#{/each}
+</code></pre>
+
+<p><code>Octopus.Release.Package</code>变量是<em>版本说明模板中唯一可用的</em>。它在部署过程中不可用，例如<strong>运行脚本</strong>步骤。</p>
+
+
+<p>有了定义的模板，在部署期间可以通过<code>Octopus.Release.Notes</code>变量访问发行说明。使用类似Slack的东西，您可以在通知消息中包含构建信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-process-slack.png" class="zoom" data-title=""><img src="../Images/189d3f485f7bd734d697d628a98f7397.png" class="img-fluid center" alt="Slack notification step" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-process-slack.png"/>T2】</a></p>
+
+<p>因为每个包都标记了构建信息，所以消息看起来像这样:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/slack-message.png" class="zoom" data-title=""><img src="../Images/194ab64d10ea6b87875d592507791a62.png" class="img-fluid center" alt="Slack message" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/slack-message.png"/>T2】</a></p>
+
+<p>如果没有发行说明模板(或者手动输入的发行说明)，<code>Octopus.Release.Notes</code>变量为空。</p>
+
+<h3 id="octopus.deployment.changes">章鱼。部署.变化</h3>
+
+<p>另一种访问构建信息的方法是<code>Octopus.Deployment.Changes</code>变量。使用<strong>运行脚本</strong>步骤，您可以迭代修改，构造一条消息并设置一个<a href="https://octopus.com/docs/projects/variables/output-variables">输出变量</a>:</p>
+
+<pre><code class="language-PowerShell">$changeListRaw = $OctopusParameters["Octopus.Deployment.Changes"]
+$changeList = $changeListRaw | ConvertFrom-Json
+
+foreach ($change in $changeList)
+{
+    $emailBody = "Release Number: $($change.Version)`r`n"
+
+    $emailBody += "    Build Information`r`n"
+    foreach ($buildInformation in $change.BuildInformation)
+    {
+        $emailBody += "        Package: $($buildInformation.PackageId)`r`n"
+        $emailBody += "        Version: $($buildInformation.Version)`r`n"
+        $emailBody += "        BuildUrl: $($buildInformation.BuildUrl)`r`n"
+        $emailBody += "        VCSRoot: $($buildInformation.VcsRoot)`r`n"
+        $emailBody += "        VCSCommitNumber: $($buildInformation.VcsCommitNumber)`r`n"
+    }
+
+    $emailBody += "    Commit Information`r`n"
+    foreach ($commit in $change.Commits)
+    {
+        $emailBody += "        Git Hash: $($Commit.Id)`r`n"
+        $emailBody += "        Git Comment: $($Commit.Comment)`r`n"
+        $emailBody += "        Git Link: $($Commit.LinkUrl)`r`n"
+    }
+
+    $emailBody += "    Work Items`r`n"
+    foreach ($workItem in $change.WorkItems)
+    {
+        $emailBody += "        Id: $($WorkItem.Id)`r`n"
+        $emailBody += "        Link Url: $($WorkItem.LinkUrl)`r`n"
+        $emailBody += "        Source: $($WorkItem.Source)`r`n"
+        $emailBody += "        Description: $($WorkItem.Description)`r`n"
+    }
+}
+
+Set-OctopusVariable -name "EmailBody" -value $emailBody
+</code></pre>
+
+<p>使用<strong>发送电子邮件</strong>模板，您可以将电子邮件的<strong>正文</strong>设置为输出变量的值。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-send-email.png" class="zoom" data-title=""><img src="../Images/438ca882a41e6ddc63d877496c1d7527.png" class="img-fluid center" alt="An Octopus email step" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/octopus-send-email.png"/>T2】</a></p>
+
+<p>这将允许您向风险承担者发送电子邮件，通知他们部署的进度。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/email-message.png" class="zoom" data-title=""><img src="../Images/e88a142fb7b7cbee8be45ee246f9e1ac.png" class="img-fluid center" alt="Email message" data-original-src="https://i.octopus.com/blog/2021-03/build-information-and-your-ci-cd-pipeline/email-message.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在Octopus Deploy中包含构建信息是一个非常强大的通信工具。我希望这篇文章展示了它在您的CI/CD管道中的不同使用方式。</p>
+
+<p>浏览<a href="https://octopus.com/devops/"> DevOps工程师手册</a>了解更多关于DevOps和CI/CD的信息。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

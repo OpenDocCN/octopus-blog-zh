@@ -1,0 +1,563 @@
+<html>
+<head>
+<title>Better release management with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>通过Octopus Deploy实现更好的发布管理</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/release-management-with-octopus#2021-08-12">https://octopus.com/blog/release-management-with-octopus#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/blogimage-deploy-release-step.png" class="zoom" data-title=""><img src="../Images/626b2017ffde50aac86155e9ac775d3b.png" class="img-fluid center" alt="Better Release Management with Octopus Deploy" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/blogimage-deploy-release-step.png"/>T2】</a></p>
+
+<p>客户经常问我们，他们是应该为每个应用程序准备一个Octopus部署项目，还是为每个组件(如WebUI、API、数据库等)准备一个Octopus部署项目。).对于一些项目来说，部署一两个部分是有意义的，也许是为了修复一个小的bug，而不是一次部署所有的东西。</p>
+
+<p>让Octopus为每个组件部署项目解决了许多问题；代价是，部署整个应用程序堆栈更加复杂。</p>
+
+<p>在这篇文章中，我将介绍如何使用一个新的步骤模板<a href="https://library.octopus.com/step-templates/0dac2fe6-91d5-4c05-bdfb-1b97adf1e12e/actiontemplate-deploy-child-octopus-deploy-project" rel="nofollow"> Deploy子Octopus Deploy项目</a>来简化Octopus Deploy中的发布管理。</p>
+
+<h2 id="why-a-project-per-component">为什么每个组件一个项目</h2>
+
+<p>每个组件使用一个项目的常见原因是:</p>
+
+<ul>
+<li>通过仅部署已更改的内容，最大限度地减少停机时间。</li>
+<li>通过只构建已更改的内容来最小化构建时间。</li>
+<li>尽量减少一个人必须做出的决定。</li>
+<li>单一责任原则，每个项目尽其所能部署一件事。</li>
+</ul>
+
+<p>简而言之，每个组件一个项目减少了部署软件的时间。然而，缺点是更难协调发布。</p>
+
+<h2 id="the-sample-application">示例应用程序</h2>
+
+<p>对于本文，我使用一个包含四个组件的示例应用程序:</p>
+
+<ul>
+<li>数据库ˌ资料库</li>
+<li>调度服务</li>
+<li>Web API</li>
+<li>Web用户界面</li>
+</ul>
+
+<p>您可以在我们的<a href="https://samples.octopus.app/app#/Spaces-603" rel="nofollow"> samples实例</a>上找到它(作为来宾登录)。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-sample-application-overview.png" class="zoom" data-title=""><img src="../Images/e57051cbe52a957aa152ad2b6acfb899.png" class="img-fluid center" alt="Sample application overview" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-sample-application-overview.png"/>T2】</a></p>
+
+<p>每个项目的设计都允许它独立于其他项目进行部署；以至于每个项目都有自己的人工干预。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-sample-project-steps.png" class="zoom" data-title=""><img src="../Images/67e22cd41b7903949946dd839cd2a054.png" class="img-fluid center" alt="Sample application process" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-sample-project-steps.png"/>T2】</a></p>
+
+<p>本例对组件<code>Year.Minor.Patch.Build</code>或<code>2021.1.0.1</code>使用了<a href="https://semver.org/" rel="nofollow"> SemVer </a>的修改版本。编排项目将更接近标准<a href="https://semver.org" rel="nofollow">永远</a>、<code>Year.Minor.Patch</code>或<code>2021.1.0</code>。</p>
+
+<p>我不会花太多时间讨论源代码控制库和构建配置。这个例子应该足够灵活，可以考虑各种配置，无论是单个git回购/单个构建，每个组件一个git回购/构建，还是每个组件一个git回购/构建。每种方法都有优点和缺点，但是讨论它们超出了本文的范围。</p>
+
+<p>对于这个例子，我们假设构建服务器将:</p>
+
+<ul>
+<li>构建每个组件。</li>
+<li>为该组件的项目创建一个版本。</li>
+<li>自动将其部署到<strong>开发</strong>环境中。</li>
+</ul>
+
+<p>当部署完成时，它将运行一批集成测试。如果测试通过，它将推动发布到<strong>测试</strong>。</p>
+
+<p>2021年的第一批工作将是这样的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-first-yearly-release-to-test.png" class="zoom" data-title=""><img src="../Images/9e1c8a91f30e75bb3a8737db1272b036.png" class="img-fluid center" alt="Sample deployment" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-first-yearly-release-to-test.png"/>T2】</a></p>
+
+<h2 id="the-roadblocks">路障</h2>
+
+<p>通常，在QA流程中，变更会在<strong>测试</strong>环境中停留1到N天。bug被发现并解决，每个组件可能会有不同的内部版本号。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-ready-for-staging.png" class="zoom" data-title=""><img src="../Images/099e75c29cac8344379edd00f9ea96a4.png" class="img-fluid center" alt="Release management ready for staging" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-ready-for-staging.png"/>T2】</a></p>
+
+<p>在QA完成对<code>2021.1.0.x</code>发布的组件项目的测试后，可以开始升级到<strong>阶段</strong>。</p>
+
+<p>对于当前的配置，这意味着一个接一个地提升每个项目的每个版本。我已经做了上百次这样的推广，虽然还可以忍受，但是很乏味。</p>
+
+<p>当这种模式开始遇到问题时，将所有组件项目提升到生产阶段。其中包括:</p>
+
+<ul>
+<li>如果一个组件有多个补丁被推送到<strong>测试</strong>，那么它可能需要至少一个补丁被推送到<strong>测试</strong>。通常要批准的组件项目的发布号直到批准的那天才知道。</li>
+<li>所有的项目都需要质量保证部的批准。</li>
+<li>多个项目需要得到网站管理员和企业所有者的批准。</li>
+<li>通常，应用程序需要按照特定的顺序进行部署。首先部署数据库，然后是API，然后是调度服务，最后是UI。部署期间的任何问题都应该停止一切。</li>
+<li>如何以及何时批准变更因公司而异。对于周四晚上的部署来说，周二发布的批准并不少见。</li>
+</ul>
+
+<p>为了解决这些问题，我们需要一个<em>父项目</em>来协调所有这些<em>子项目</em>。与子项目不同，父项目只需要部署到<strong>暂存</strong>和<strong>生产</strong>。</p>
+
+<h2 id="introducing-the-deploy-child-octopus-deploy-project-step-template">介绍部署子Octopus部署项目步骤模板</h2>
+
+<p>父项目需要一种方法来调用子项目的部署。这由新的<a href="https://library.octopus.com/step-templates/0dac2fe6-91d5-4c05-bdfb-1b97adf1e12e/actiontemplate-deploy-child-octopus-deploy-project" rel="nofollow">部署子Octopus部署项目</a>步骤模板处理。</p>
+
+<p>在这个例子中，父项目被称为“Release Orchestration ”,并多次使用该步骤模板。</p>
+
+<p>您可以为父项目选择任何您喜欢的名称，例如，“交通警察”，应用程序的名称，甚至Voltron。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-release-orchestration-dashboard.png" class="zoom" data-title=""><img src="../Images/cd036308c847dd78e63ae0a39209765d.png" class="img-fluid center" alt="Release Orchestration Dashboard" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-release-orchestration-dashboard.png"/>T2】</a></p>
+
+<p>在提供步骤模板的使用示例之前，我想演示一下步骤模板是如何工作的。</p>
+
+<h3 id="how-releases-are-chosen">如何选择版本</h3>
+
+<p>父项目部署子项目还有另外两种选择:</p>
+
+<ol>
+<li><a href="https://octopus.com/docs/projects/coordinating-multiple-projects/deploy-release-step">部署发布步骤</a>:Octopus Deploy中内置的一个步骤，旨在解决特定的用例。</li>
+<li><a href="https://library.octopus.com/step-templates/18392835-d50e-4ce9-9065-8e15a3c30954/actiontemplate-chain-deployment" rel="nofollow">链部署步骤模板</a>:社区步骤模板，是部署发布步骤的前身。</li>
+</ol>
+
+<p>这两个步骤通过使用最近为通道创建的版本来选择要部署的版本。<strong>部署子Octopus部署项目步骤模板</strong>选择了不同的发布方式。</p>
+
+<p>您提供:</p>
+
+<ul>
+<li>频道名称。如果没有提供通道，则选择默认通道。</li>
+<li>版本号模式(<code>2021.1.0.*</code>)或特定版本号(<code>2021.1.0.15</code>)。如果没有提供版本号，它将使用所能找到的该通道的最新版本。</li>
+<li>目的地环境。</li>
+</ul>
+
+<p>有了这三段数据，步骤模板将:</p>
+
+<ul>
+<li>基于信道和目的地环境计算先前的环境。例如，如果您输入<strong> Staging </strong>作为目标环境，它将选择<strong> Test </strong>，因为它是渠道生命周期中<strong> Staging </strong>的优先环境。</li>
+<li>查找所有与该渠道提供的模式相匹配的版本。</li>
+<li>查找上次成功部署到先前环境的版本；不是部署到先前环境的最近创建的版本，而是最后一个<em>成功</em>部署的版本。例如，如果您将<code>2021.1.0.15</code>部署到<strong>测试</strong>，然后意识到不应该推送发布，并将<code>2021.1.0.14</code>重新部署到<strong>测试</strong>，那么当它升级到<strong>登台</strong>时，步骤模板将选择<code>2021.1.0.14</code>，因为那是部署到<strong>测试</strong>的最后一个发布。</li>
+</ul>
+
+<p>如果没有找到发布，它将退出该步骤，并进入部署流程的下一步。</p>
+
+<p>例如，在将<code>2021.1.0</code>升级到<strong>生产</strong>后不久，报告了一个错误，需要修复Web API和Web UI项目。您为子项目创建带有<code>2021.1.1.*</code>模式的<code>2021.1.1</code>版本。数据库和调度服务项目没有匹配的版本，因为它们没有更新，所以被跳过。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-how-releases-are-picked.png" class="zoom" data-title=""><img src="../Images/2da3fb629e8ed9dc8e751980e72bb635.png" class="img-fluid center" alt="How step template picks releases" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-how-releases-are-picked.png"/>T2】</a></p>
+
+<p>这个步骤模板的基本设计规则之一是定制。例如，您可以将该步骤配置为在没有找到发布时抛出错误，而不是退出该步骤并继续。</p>
+
+
+<p>步骤模板还检查所选版本是否已经部署到目标环境，如果已经部署，则跳过部署。但是，您可以将其配置为始终重新部署。</p>
+
+<h3 id="easier-approvals">更轻松的审批</h3>
+
+<p>当涉及到父/子项目关系时，批准似乎是最有问题的。</p>
+
+<p>在Octopus Deploy中，<a href="https://octopus.com/docs/deployment-process/steps/manual-intervention-and-approvals">手动干预步骤</a>负责批准。您应该注意到，在这个步骤中，部署必须开始才能获得批准。但通常情况下，批准过程发生在发布前几个小时或几天。</p>
+
+<p>此外，子项目有自己的批准来处理只部署一个子项目的用例。一般来说，批准者喜欢一次批准一个发布，而不是针对每个子项目。当他们批准一个版本时，将所有相关的发布信息放在一个地方进行批准是非常有用的。</p>
+
+<p>步骤模板通过提供假设标志来帮助批准过程，假设标志在开始部署之前退出步骤。当使用该标志时，步骤模板将填充手动干预步骤指令的输出变量<code>ReleaseToPromote</code>。</p>
+
+<p>step模板还将收集每个子项目的发布说明，并填充输出变量<code>ReleaseNotes</code>。如果您使用的是Octopus中的构建信息和发布跟踪特性，step模板将收集发布的提交和发布信息，其中包括汇总的发布说明。您可以将发行说明保存为工件，以便于批准者和后来的审计者在一个地方审查部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-easier-approvals.png" class="zoom" data-title=""><img src="../Images/6ca5f7c4886bbff7d00838408b99c87b.png" class="img-fluid center" alt="Release management easier approvals" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-easier-approvals.png"/>T2】</a></p>
+
+<p>工作原理:</p>
+
+<ul>
+<li>步骤模板将获取父项目发布的所有部署。然后，它将根据所需的环境过滤该列表。默认情况下，它将使用当前部署的环境，但是您可以提供不同的环境，例如，<strong> Staging </strong>或<strong> Prod Approval </strong>来获取批准信息。</li>
+<li>步骤模板从选定的部署中提取所有批准者。</li>
+<li>步骤模板存储批准者及其团队成员。</li>
+<li>当步骤模板等待部署完成时，它将寻找手动干预。</li>
+<li>当在子项目的部署过程中发生手动干预时，它将查看哪个(哪些)团队有批准它的权限。</li>
+<li>它会将手动干预团队列表与其之前为用户创建的列表进行比较。如果找到匹配，步骤模板将提交批准。</li>
+</ul>
+
+<p>这个步骤模板使用Octopus Deploy API，并且需要一个API密钥。这个特定的功能基于附加到API密钥的用户提交批准。</p>
+
+
+<p>当此步骤模板批准子项目的手动干预时，您将看到类似以下内容的消息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/approval-message.png" class="zoom" data-title=""><img src="../Images/b9656cf3e8fdd7ce2e7a3e35591b813d.png" class="img-fluid center" alt="manual approval message" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/approval-message.png"/>T2】</a></p>
+
+<h3 id="release-scheduling">发布计划</h3>
+
+<p>在实际部署前几小时或几天获得<strong>生产</strong>部署的批准是很常见的。审批流程的一部分是安排停机时间。根据您的应用程序，子项目的部署顺序可能是不必要的，只要它们在几分钟内部署完毕。</p>
+
+<p>步骤模板支持这种用例，允许您将未来的时间和/或日期作为参数发送。它使用。NET的<a href="https://docs.microsoft.com/en-us/dotnet/api/system.datetime.tryparse" rel="nofollow">日期时间。TryParse </a>解析日期。支持的格式包括:</p>
+
+<ul>
+<li><code>7:00 PM</code>将于今天晚上7点部署</li>
+<li><code>21:00</code>将于今天21:00或晚上9点部署</li>
+<li><code>YYYY-MM-DD HH:mm:ss</code>或<code>2021-01-14 21:00:00</code>将于2021年1月14日晚9点部署</li>
+<li><code>YYYY/MM/DD HH:mm:ss</code>或<code>2021/03/20 22:00:00</code>将于2021年3月20日晚上10点部署</li>
+<li><code>MM/DD/YYYY HH:mm:ss</code>或<code>06/25/2021 19:00:00</code>将于2021年6月25日晚7点部署</li>
+<li><code>DD MMM YYYY HH:mm:ss</code>或<code>01 Jan 2021 18:00:00</code>将于2021年1月1日下午6点部署</li>
+</ul>
+
+<p>您可以利用<a href="https://octopus.com/docs/projects/variables/prompted-variables">提示变量</a>让用户在部署到<strong>生产</strong>时发送一个日期/时间。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-deploy-scheduled-release.png" class="zoom" data-title=""><img src="../Images/7684a52d787515ce8062633eb2743af7.png" class="img-fluid center" alt="schedule the release" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-deploy-scheduled-release.png"/>T2】</a></p>
+
+<p>在其他情况下，您可以批准一个版本，然后安排它在以后进行部署。请参阅本文后面的<a href="#approve-today-deploy-tomorrow">场景:今天批准明天部署</a>一节，了解如何利用<strong>产品批准</strong>环境。</p>
+
+<h3 id="parameters">因素</h3>
+
+<p>在设计这个步骤模板时，我试图让用户容易地调整它来匹配他们的用例。一些用户会发现自动批准功能很有用，并立即实施，而其他用户的业务规则不允许该功能。这是可以理解的。</p>
+
+<p>我已经尝试添加尽可能多的参数来调整步骤模板，以匹配您的用例。可以想象，这个步骤模板中有很多参数:</p>
+
+<ul>
+<li><strong> Octopus API Key </strong>:使用自动批准功能时，有权部署和批准人工干预的用户的API Key。</li>
+<li><strong> Octopus子空间</strong>:子项目所在空间的名称。默认为当前空间。除非有令人信服的理由，否则不要更改这一点。</li>
+<li><strong>子项目名称</strong>:子项目的名称。</li>
+<li><strong>子项目通道</strong>:特定通道的名称。如果留空，它将选择子项目的默认通道。</li>
+<li><strong>子项目发布号</strong>:要部署的发布号。默认值为空；它将在源环境中获取最新版本。您可以提供一个特定的数字，例如<code>2021.1.0.14</code>或一个模式，例如<code>2021.1.1.*</code>。<code>.*</code>很重要。如果没有提供周期<code>.</code>，你可能会以从<code>2021.1.10.x</code>或<code>2021.1.15.x</code>发布结束。</li>
+<li><strong>未找到子项目发布错误句柄</strong>:如果子项目没有匹配的发布号，该步骤应该做什么。默认情况下，它会跳过这一步并记录一个警告。您可以将其更改为停止出现错误的部署，或者不记录警告。我建议把它作为一个警告。</li>
+<li><strong>目标环境名</strong>:部署到的环境名，默认设置为当前环境名。我建议让它保持原样，除非你在<strong>试运行</strong>和<strong>生产</strong>之间实现一个“仅批准”的环境(稍后会有更多介绍)。</li>
+<li><strong>源环境名称</strong>:源环境的名称。如果留空，步骤模板将查看渠道的生命周期，确定目标环境处于哪个阶段，然后查找之前的环境。Octopus Deploy <a href="https://octopus.com/docs/releases/lifecycles">生命周期</a>在一个阶段可以有1到N个环境。如果发布必须来自特定的源环境，请输入特定的环境。我建议您将此留空。</li>
+<li><strong>子项目提示变量</strong>:为子项目提供提示变量值。</li>
+<li><strong>强制重新部署</strong>:这告诉步骤模板要么重新部署一个发布，要么跳过它(如果它已经被部署的话)。如果您为父项目配置了一个部署目标触发器，那么您会希望将值更改为<code>When deploying to specific machines</code>。否则就让它保持原样。</li>
+<li><strong>忽略特定机器不匹配</strong>:这仅在您部署到特定机器时才会考虑，这种情况会在部署目标触发时发生。这一步将确定子项目是否与这些机器中的任何一个相关联，并在找不到匹配时退出。我建议保持现状，除非有特殊的原因需要改变。</li>
+<li><strong>将发布说明保存为工件</strong>:step模板将从子项目中提取所有的发布说明和构建信息，并将其保存在输出变量<code>ReleaseNotes</code>中。部署后不容易访问输出变量。如果您想要在父项目中持久化收集的发行说明，将它设置为<code>Yes</code>。</li>
+<li><strong> What If </strong>:告诉步骤模板做除部署之外的所有事情。设置为<code>Yes</code>以在实际部署前批准发布。</li>
+<li><strong>等待完成</strong>:等待展开完成后再继续。将假设参数设置为<code>Yes</code>将导致该参数被忽略。</li>
+<li><strong>等待部署</strong>:步骤模板等待部署完成的最长时间。超过超时时间后，子项目的部署将被取消。如果部署在限制之前完成，它将停止等待。将该参数保持在1800秒(30分钟)，除非有令人信服的理由改变它。</li>
+<li><strong>计划</strong>:允许您计划将来的部署。使用<a href="https://docs.microsoft.com/en-us/dotnet/api/system.datetime.tryparse" rel="nofollow">日期时间。TryParse </a>解析日期。我建议将它与一个提示变量一起使用。</li>
+<li><strong>自动批准子项目手动干预</strong>:这使用父项目的手动干预批准来进行子项目的手动干预。</li>
+<li><strong>审批环境</strong>:父项目人工干预所在环境的名称。默认为当前环境。如果您正在实施“生产批准”环境，请更改此设置。</li>
+<li><strong>审批租户</strong>:父项目人工干预所在租户的名称。默认为当前租户。如果您正在为单个租户实施“生产审批”环境，请更改。</li>
+</ul>
+
+<h2 id="using-the-deploy-child-octopus-deploy-project-step-template">使用部署子Octopus部署项目步骤模板</h2>
+
+<p>本节将介绍如何为不同的场景配置步骤模板。这些场景从简单开始，然后慢慢增加更多的功能。</p>
+
+<h3 id="scaffolding">脚手架</h3>
+
+<p>首先，需要配置一些脚手架。</p>
+
+<h4 id="create-a-service-account">创建服务帐户</h4>
+
+<p>我们必须创建一个<a href="https://octopus.com/docs/security/users-and-teams/service-accounts">服务帐户</a>，并将该帐户分配给一个团队。这是因为步骤模板使用了Octopus Deploy API。</p>
+
+<p>我建议将服务帐户命名为<code>Release Conductor</code>。</p>
+
+<p>为用户创建一个API密钥，并将其保存在安全的位置。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-conductor-service-account.png" class="zoom" data-title=""><img src="../Images/a4e998e09cac63b7f55de2ee338baf24.png" class="img-fluid center" alt="release conductor service account" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-conductor-service-account.png"/>T2】</a></p>
+
+<p>创建一个名为<code>Release Management</code>的新团队，并将该用户分配给它。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-team.png" class="zoom" data-title=""><img src="../Images/6e900e478c9d90db8fae612cb2e27256.png" class="img-fluid center" alt="release management team" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-team.png"/>T2】</a></p>
+
+<p>给团队分配角色<code>Deployment Creator</code>、<code>Project Viewer</code>和<code>Environment Viewer</code>。分配这些角色将允许服务帐户创建部署并查看项目和环境，但不能编辑它们。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-user-roles.png" class="zoom" data-title=""><img src="../Images/68d95b8100c148bd32496fa4d9b74b64.png" class="img-fluid center" alt="release management user roles" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-user-roles.png"/>T2】</a></p>
+
+<p>如果您想要利用自动批准功能，那么在子项目中进行每个手动干预，并添加发布管理团队。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/adding-release-management-team-to-manual-intervention.png" class="zoom" data-title=""><img src="../Images/87c1aa7179424db3861ad19e89950d96.png" class="img-fluid center" alt="add release management team to each manual intervention" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/adding-release-management-team-to-manual-intervention.png"/>T2】</a></p>
+
+<h4 id="create-a-unique-lifecycle">创造独特的生命周期</h4>
+
+<p>父项目只需要部署到<strong>暂存</strong>和<strong>生产</strong>。不要使用包含所有四种环境的默认生命周期。创建一个新的生命周期，只包括<strong>准备</strong>和<strong>生产</strong>。</p>
+
+<p>父项目和子项目的生命周期和渠道<em>不需要</em>匹配。步骤模板将决定从子项目中选择的发布是否可以升级到目标环境。</p>
+
+
+<p>【T2 <img src="../Images/4f4b6b822c5f56df9543dd6a6e7cd7ae.png" class="img-fluid center" alt="release management staging production only lifecycle" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-staging-production-only-lifecycle.png"/></p>
+
+<h4 id="create-the-project">创建项目</h4>
+
+<p>接下来，我们创建项目。创建项目时，请记住选择您在上面创建的新生命周期。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-create-project.png" class="zoom" data-title=""><img src="../Images/80bbdb01a77ac1425366f70063989466.png" class="img-fluid center" alt="release management create project" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-create-project.png"/>T2】</a></p>
+
+<p>创建项目后，导航到variables屏幕，添加API键和发布模式。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-variables.png" class="zoom" data-title=""><img src="../Images/6e625b7945979d3ddd2042848ae280d4.png" class="img-fluid center" alt="parent project variables" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-variables.png"/>T2】</a></p>
+
+<h3 id="scenario-deploying-the-latest-release-from-test-to-staging">场景:将最新版本从测试部署到试运行</h3>
+
+<p>在这个场景中，我们将回到示例应用程序。如果您还记得，发布<code>2021.1.0</code>已经准备好从<strong>测试</strong>部署到<strong>准备</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-ready-for-staging.png" class="zoom" data-title=""><img src="../Images/099e75c29cac8344379edd00f9ea96a4.png" class="img-fluid center" alt="Release management ready for staging" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-ready-for-staging.png"/>T2】</a></p>
+
+<p>转到新创建的<strong>发布编排</strong>项目中的部署流程，并为每个子项目添加一个<code>Deploy Child Octopus Deploy Project</code>步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-deploy-release-steps-added.png" class="zoom" data-title=""><img src="../Images/cb6cdf451ebb81e2da1d8e3d7cff9a83.png" class="img-fluid center" alt="parent project deploy child octopus deploy project steps added" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-deploy-release-steps-added.png"/>T2】</a></p>
+
+<p>您可以将参数的大部分值保留为默认值。现在只更改以下内容:</p>
+
+<ul>
+<li><strong>Octopus API Key</strong>:API Key变量，<code>#{Project.ChildProjects.ReleaseAPIKey}</code></li>
+<li><strong>子项目名称</strong>:子项目的名称。</li>
+<li><strong>子项目发布号</strong>:发布模式变量，<code>#{Project.ChildProjects.ReleasePattern}</code></li>
+</ul>
+
+<p>在添加和配置这些步骤之后，是时候创建一个发布了。</p>
+
+<p>在本文中，我将对父项目进行许多修改；你可能会看到<code>2021.1.0-RCx</code>的版本号。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-create-release.png" class="zoom" data-title=""><img src="../Images/696d734903e991917d3b361b0ef2581a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-create-release.png"/>T2】</a></p>
+
+<p>等待部署完成所有子项目的部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-wait-for-release.png" class="zoom" data-title=""><img src="../Images/c421bd2a44723cd3e9d3dda5a2b10f70.png" class="img-fluid center" alt="wait for the release to finish" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-wait-for-release.png"/>T2】</a></p>
+
+<h3 id="scenario-approvals-in-parent-project-only">场景:仅父项目中的审批</h3>
+
+<p>部署到<strong>暂存区</strong>非常简单，因为不需要批准。</p>
+
+<p>部署到<strong>生产</strong>更加复杂。这个新步骤模板的一个关键特性是使用父项目的批准来自动批准子项目。</p>
+
+<p>要对此进行配置，您需要克隆这四个步骤。点击每个步骤旁边的溢出菜单(三个垂直省略号)并点击<strong>克隆</strong>按钮，即可完成克隆。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-clone-steps.png" class="zoom" data-title=""><img src="../Images/18ae083cbe8f5444ea76930c45062009.png" class="img-fluid center" alt="release management clone steps" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-clone-steps.png"/>T2】</a></p>
+
+<p>重命名每个克隆的步骤。克隆步骤中的参数是:</p>
+
+<ul>
+<li><strong>将发行说明保存为工件</strong>:设置为<code>Yes</code>。</li>
+<li><strong>如果</strong>怎么办:设置为<code>Yes</code>。</li>
+</ul>
+
+<p>最后，点击<strong>按名称过滤</strong>文本框旁边的溢出菜单(三个垂直省略号)重新排序步骤，并点击<strong>重新排序</strong>。</p>
+
+<p>将所有设置为“假设”的步骤移到“非假设”步骤之上。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-updated-reorder.png" class="zoom" data-title=""><img src="../Images/a8e69acbab64d62b549b5320eabe18bb.png" class="img-fluid center" alt="release management after reorder" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-updated-reorder.png"/>T2】</a></p>
+
+<p>接下来，添加手动干预步骤。手动干预步骤的特征之一是指令。新的步骤模板将设置我们可以访问的输出变量。例如:</p>
+
+<pre><code>Please approve releases for:
+
+**Database: #{Octopus.Action[Get Database Release].Output.ReleaseToPromote}**
+#{Octopus.Action[Get Database Release].Output.ReleaseNotes}
+
+**Web API: #{Octopus.Action[Get Web API Release].Output.ReleaseToPromote}**
+#{Octopus.Action[Get Web API Release].Output.ReleaseNotes}
+
+**Scheduling Service: #{Octopus.Action[Get Scheduling Service Release].Output.ReleaseToPromote}**
+#{Octopus.Action[Get Scheduling Service Release].Output.ReleaseNotes}
+
+**Web UI: #{Octopus.Action[Get Web UI Release].Output.ReleaseToPromote}**
+#{Octopus.Action[Get Web UI Release].Output.ReleaseNotes}
+</code></pre>
+
+<p>我喜欢避免重复劳动。让我们把它作为一个变量。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/manual-intervention-instructions.png" class="zoom" data-title=""><img src="../Images/34e88f7861d417743ecb022339bb8329.png" class="img-fluid center" alt="manual intervention instructions" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/manual-intervention-instructions.png"/>T2】</a></p>
+
+<p>现在为每个审批者组添加一个手动干预。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-add-manual-intervention.png" class="zoom" data-title=""><img src="../Images/9a53e06914b801ccbd468dc77592b9a4.png" class="img-fluid center" alt="manual intervention approval" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-add-manual-intervention.png"/>T2】</a></p>
+
+<p>再次对部署流程进行重新排序，使新步骤介于“假设”步骤和“非假设”步骤之间。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-with-manual-interventions.png" class="zoom" data-title=""><img src="../Images/7f996778cd949fc7b6e3d5c4da131280.png" class="img-fluid center" alt="manual intervention in approvals" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-with-manual-interventions.png"/>T2】</a></p>
+
+<p>接下来，创建一个新的版本，并将其部署到<strong> Staging </strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-second-release.png" class="zoom" data-title=""><img src="../Images/2f7b3086e186e393c9a227553cc6cab5.png" class="img-fluid center" alt="release management second release" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-second-release.png"/>T2】</a></p>
+
+<p>当您部署到<strong> Staging </strong>时，您将看到此消息。这是意料之中的，尤其是对于这个示例项目。重新部署参数被设置为<code>No</code>，我们还没有创建任何新的版本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-skip-already-installed-release.png" class="zoom" data-title=""><img src="../Images/6101420b144d1651ecf1157255b9aac8.png" class="img-fluid center" alt="release management second deployment" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-skip-already-installed-release.png"/></a>T2】</p>
+
+<p>促进发布到<strong>生产</strong>。在此部署过程中，您将看到手动干预和自动批准在起作用。</p>
+
+<p>首先，手动干预应该有随发行说明一起部署的版本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/manual-intervention-rendered-release-notes.png" class="zoom" data-title=""><img src="../Images/1e40a57dec4a6346b0ef07b57863007a.png" class="img-fluid center" alt="manual intervention with rendered release notes" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/manual-intervention-rendered-release-notes.png"/>T2】</a></p>
+
+<p>在每个组都批准发布之后，部署将开始。如果与API相关联的用户没有获得手动干预所有权的权限，您将会看到这样的警告。</p>
+
+<blockquote class="blockquote">
+<p>您将有30分钟的时间来解决此问题，否则部署将被取消。</p>
+</blockquote>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-warning.png" class="zoom" data-title=""><img src="../Images/95b2d2d4f9e30c7d08d1011beccb3516.png" class="img-fluid center" alt="manual intervention permission warning" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-warning.png"/>T2】</a></p>
+
+<p>修复之后，您应该会在子项目中看到类似如下的消息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-auto-approval-message.png" class="zoom" data-title=""><img src="../Images/c97dbd486fa42b5f1ecb9e7ecfb6e73d.png" class="img-fluid center" alt="manual intervention auto-approval message" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-auto-approval-message.png"/>T2】</a></p>
+
+<p>至此，<strong>生产</strong>发布完成。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-release-to-production.png" class="zoom" data-title=""><img src="../Images/47aa20779c934f84c0b8888c305fd0a9.png" class="img-fluid center" alt="release management deploy to Production" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-orchestration-release-to-production.png"/>T2】</a></p>
+
+<h3 id="approve-today-deploy-tomorrow">场景:今天批准，明天部署</h3>
+
+<p>对于我们的许多用户来说，部署是在非工作时间进行的。如果批准者的唯一任务是批准部署，则他们在部署期间不必在线。理想情况下，部署应该在非工作时间自动运行，无需用户干预，并在出现问题时提醒相关人员。我们可以通过添加一个<strong>产品批准</strong>环境来完成该功能，该环境位于<strong>准备</strong>和<strong>生产</strong>之间。这个环境将<em>只</em>用于父项目。</p>
+
+<p>首先，添加<strong>产品批准</strong>环境。您会注意到这个环境位于本页上的<strong>暂存</strong>和<strong>生产</strong>之间。我单击溢出菜单来重新排序该页面上的环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-add-prod-approval.png" class="zoom" data-title=""><img src="../Images/48c1027382886c942fcf2aa87e42e1e0.png" class="img-fluid center" alt="add prod approval" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-add-prod-approval.png"/>T2】</a></p>
+
+<p>添加新环境后，更新此父项目使用的生命周期。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-updated-lifecycles.png" class="zoom" data-title=""><img src="../Images/4715322bd368a6bda67f754fafaaf695.png" class="img-fluid center" alt="prod approval in the parent project lifecycle" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-updated-lifecycles.png"/>T2】</a></p>
+
+<p>关注<strong>默认生命周期。</strong>默认情况下，生命周期没有明确定义的阶段。相反，它使用整个环境列表自动生成阶段。要从<strong>默认生命周期</strong>中删除<strong>产品批准</strong>，您需要添加显式阶段。</p>
+
+
+<p>接下来，更新批准步骤，使其仅在<strong>产品批准</strong>环境中运行。同时，配置非假设步骤以跳过<strong>生产审批</strong>环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-deployment-process-with-prod-approval.png" class="zoom" data-title=""> T31 </a></p>
+
+<p>接下来，导航到变量屏幕并添加两个新变量:</p>
+
+<ul>
+<li><strong>项目。child project . Approval . environment . name</strong>:存储<strong> Prod Approval </strong>环境名。</li>
+<li><strong>项目。child project . deployment . environment . name</strong>:存储子项目应该部署到的环境的名称。对于除<strong>产品批准</strong>之外的所有环境，该名称将与当前环境相匹配。当它在<strong>产品批准</strong>环境中运行时，部署环境名为<strong>生产</strong>。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-new-variables.png" class="zoom" data-title=""><img src="../Images/25e13a54a5963342d56db15a0fde076d.png" class="img-fluid center" alt="prod approval new variables" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-new-variables.png"/>T2】</a></p>
+
+<p>进入执行<code>Deploy Child Octopus Deploy Project</code>的每个步骤，并更新以下参数:</p>
+
+<ul>
+<li><strong>目的地环境名称</strong>:更新为<code>#{Project.ChildProject.Deployment.Environment.Name}</code></li>
+<li><strong>审批环境</strong>:更新至<code>#{Project.ChildProject.Approval.Environment.Name}</code></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-using-the-new-variables.png" class="zoom" data-title=""><img src="../Images/a5b6deb4333ba08efd433113d57b4c11.png" class="img-fluid center" alt="Using the new variables in the new steps" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-using-the-new-variables.png"/>T2】</a></p>
+
+<p>这告诉步骤模板在<strong>生产</strong>部署期间从<strong>生产审批</strong>环境而不是<strong>生产</strong>环境中获取审批。这意味着我们可以在上午11点批准，并安排在下午7点部署。</p>
+
+
+<p>现在，让我们来看看实际情况。对于示例应用程序，让我们假设在API和数据库中发现了一个bug。创建一个补丁<code>2021.1.1.1</code>来修复这个错误，并部署到<strong>开发</strong>和<strong>测试</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-bugs.png" class="zoom" data-title="">T35【T36】T1】</a></p>
+
+<p>让我们假设一切都成功通过了QA，是时候将这两个组件提升到<strong> Staging </strong>了。</p>
+
+<p>首先，我们希望将发布模式更新为<code>2021.1.*</code>。你会注意到它不是<code>2021.1.1.*</code>。仔细想想，只有在创建新的次要版本时才进行更新才有意义，而不是对每个补丁版本都进行更新。它不会重新部署现有的代码，因为步骤模板将跳过已经部署的版本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-update-release-pattern.png" class="zoom" data-title=""><img src="../Images/8bdee28e678df22dcb8b79d766ce5dd6.png" class="img-fluid center" alt="update release pattern" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-update-release-pattern.png"/></a>T2】</p>
+
+<p>接下来，为<strong>发布编排</strong>项目创建一个新的发布，并将其部署到<strong> Staging </strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-prod-approval-post-staging.png" class="zoom" data-title=""><img src="../Images/1da329cccd9e015cad7ea6b07d7566e9.png" class="img-fluid center" alt="dashboard after deployment to Staging" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-prod-approval-post-staging.png"/>T2】</a></p>
+
+<p>将发布提交给<strong> Prod Approval </strong>并完成每个批准步骤。您会注意到，对于已经部署的版本，批准消息略有不同。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/approval-message-with-release-already-in-environment.png" class="zoom" data-title=""><img src="../Images/9ec8ae16fb399f944372408ef817d826.png" class="img-fluid center" alt="releases already deployed messages" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/approval-message-with-release-already-in-environment.png"/>T2】</a></p>
+
+<p>现在是时候安排发布部署到<strong>生产</strong>了。使用内置工具，我们可以安排它在今晚7点运行。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/schedule-release-to-production.png" class="zoom" data-title=""><img src="../Images/f7aa084f43c46f394e81201023a988f7.png" class="img-fluid center" alt="schedule release to deploy to Production" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/schedule-release-to-production.png"/>T2】</a></p>
+
+<p>当发布被部署时，它将从<strong>产品批准</strong>环境中获取批准。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-approval-from-prod-approval.png" class="zoom" data-title=""><img src="../Images/2ff112cf11c834a533568c3ec191807b.png" class="img-fluid center" alt="the approval came from an earlier environment" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-approval-from-prod-approval.png"/>T2】</a></p>
+
+<h3 id="scenario-redeploy-on-demand">场景:按需重新部署</h3>
+
+<p>默认情况下，步骤模板将跳过任何已经部署到目标环境中的版本。对于许多用例来说，这是首选行为。但是，有几个需要重新部署的用例。其中包括:</p>
+
+<ul>
+<li>环境刷新:当从<strong>生产</strong>中刷新<strong>登台</strong>环境时，将最新的代码重新部署到<strong>登台</strong>以获取最新的位进行测试是有意义的。</li>
+<li>服务器重置:如果其中一个服务器遇到问题，解决方案是重新部署，以确保所有代码和配置值都是最新的。</li>
+<li>新服务器:如果一个新的服务器被添加到网络场中，重新部署一切以确保网络场在所有节点上具有相同的代码和配置。</li>
+</ul>
+
+<p>为此，我们将使用<a href="https://octopus.com/docs/projects/variables/prompted-variables"> Octopus Deploy的提示变量功能</a>。</p>
+
+<p>首先，我们将向项目添加一个新变量:</p>
+
+<ul>
+<li>名称:<code>Project.ChildProject.ForceRedeployment</code></li>
+<li>默认值:<code>No</code></li>
+<li>标签:<code>Force Redeployment</code></li>
+<li>控制类型:下拉列表</li>
+<li>选项:<code>Yes</code>和<code>No</code></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/force-redeployment-prompted-variables.png" class="zoom" data-title=""><img src="../Images/f2b164600b3961cca7b9b40ac40e4c1d.png" class="img-fluid center" alt="variable to allow for forcing redeployment" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/force-redeployment-prompted-variables.png"/>T2】</a></p>
+
+<p>接下来，更新<strong>强制重新部署</strong>参数以使用这个新变量。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/force-redeployment-update-step.png" class="zoom" data-title=""><img src="../Images/1e9f079b0f9a657b8ef912efd7055aca.png" class="img-fluid center" alt="updating the step to force redeployment" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/force-redeployment-update-step.png"/>T2】</a></p>
+
+<p>现在，当您进行部署时，系统会提示您强制重新部署。默认为<code>No</code>，如果用户不做任何更改，将使用默认功能。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/force-redeployment-when-deploying-release.png" class="zoom" data-title=""><img src="../Images/ee898bf9820c5b565ff7cef87965a3b2.png" class="img-fluid center" alt="seeing the force redeployment prompted variable" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/force-redeployment-when-deploying-release.png"/>T2】</a></p>
+
+<p>当它被设置为<code>Yes</code>时，您将看到所有的子项目都被重新部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-redeploy-inaction.png" class="zoom" data-title=""><img src="../Images/41362c686471138df100d343933e1afb.png" class="img-fluid center" alt="seeing the redeploy in action" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-redeploy-inaction.png"/></a>T2】</p>
+
+<p>目前，提示变量使重新部署全部或没有。您可能希望每个组件项目都有一个唯一的变量，或者将它们逻辑地组合在一起。</p>
+
+<h2 id="alternatives">可供选择的事物</h2>
+
+<p>你可能认为这很复杂，但我相信这是有益的。让我们重新检查一下为什么您可能希望每个组件都有一个项目:</p>
+
+<ul>
+<li>通过仅部署已更改的内容，最大限度地减少停机时间。</li>
+<li>通过只构建已更改的内容来最小化构建时间。</li>
+<li>尽量减少一个人必须做出的决定。</li>
+<li>单一责任原则；每个项目都尽其所能部署一件事情。</li>
+</ul>
+
+<p>此时，每个组件一个Octopus项目是满足这些要求的最佳解决方案。</p>
+
+<p>每个组件都有项目的替代方案。本节将介绍这些备选方案，以便更好地理解为什么每个组件一个Octopus项目最有效地解决了这个问题。</p>
+
+<h3 id="single-project-with-multiple-channels">具有多个频道的单个项目</h3>
+
+<p>可以有一个单独的项目，并使用<a href="https://octopus.com/docs/releases/channels"> Octopus Deploy channels </a>特性和范围步骤在特定的通道上运行。创建发行版时会选择频道。通常，版本由构建服务器创建，并自动部署到<strong>开发</strong>环境中。</p>
+
+<p>第一个问题是所有可能的组件组合。对于四个分量，将有15个通道:</p>
+
+<ul>
+<li>WebUI</li>
+<li>WebAPI</li>
+<li>数据库ˌ资料库</li>
+<li>服务</li>
+<li>WebUI WebAPI</li>
+<li>WebUI数据库</li>
+<li>WebUI服务</li>
+<li>WebAPI数据库</li>
+<li>WebAPI服务</li>
+<li>服务数据库</li>
+<li>WebUI WebAPI数据库</li>
+<li>WebUI WebAPI服务</li>
+<li>WebAPI服务数据库</li>
+<li>WebUI服务数据库</li>
+<li>WebUI WebAPI数据库服务</li>
+</ul>
+
+<p>增加第五个组件将意味着36个通道。第六个分量意味着63个通道。如此所示，每个组件组合的通道不可扩展。</p>
+
+<p>第二个问题是当一个版本被创建时，某些人或某些事必须决定使用哪个通道。做出错误的决策会导致部署错误的组件，从而导致人为错误。</p>
+
+<h3 id="single-project-with-disabling-steps-at-deployment-time">部署时带有禁用步骤的单个项目</h3>
+
+<p>另一种方法是使用单个项目，但是不使用通道，而是禁用部署屏幕上的步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-disable-steps-during-deployment.png" class="zoom" data-title=""><img src="../Images/62876ae7f9bfb2b8695010b044d3d1c8.png" class="img-fluid center" alt="disable steps during deployments" data-original-src="https://i.octopus.com/blog/2021-02/release-management-with-octopus/release-management-disable-steps-during-deployment.png"/>T2】</a></p>
+
+<p>此选项的主要问题是涉及到手动过程。必须有人选择禁用哪些步骤。步骤越多，出错的机会就越大，并且在每次部署期间必须禁用这些步骤，这进一步增加了出错的机会。</p>
+
+<h3 id="the-project-package-redeployment-setting">项目包重新部署设置</h3>
+
+<p>在项目设置页面中有一个<a href="https://octopus.com/docs/projects#deployment-settings">包重新部署选项</a>。你可以把它设置为<code>Skip any package that is already installed</code>。</p>
+
+<p>这种设置有几个障碍:</p>
+
+<ul>
+<li>通常，部署不仅仅是推出一个包。还有其他步骤来配置数据库或网络服务器。也许有一些步骤可以在部署之后运行健全性检查测试。该设置仅适用于部署包步骤，不适用于任何脚本步骤。</li>
+<li>该设置适用于部署过程中的所有包。您不能选择应用该设置的包。</li>
+<li>该设置不适用于回滚或重新部署。它会导致包在错误的时间被跳过。</li>
+</ul>
+
+<h2 id="conclusion">结论</h2>
+
+<p>虽然这个过程感觉很复杂，但我相信这是值得努力的。</p>
+
+<p>部署需要时间，即使使用最好的机器和最快的连接。部署时间也因应用程序而异。一些应用程序部署可能需要超过12个小时，其中大部分时间由一两个组件负责。有些部署必须在半夜进行，因为那是唯一允许停机的时间。除非我们能够通过跳过没有变化的组件来找到最大限度减少停机时间的方法，否则进行更频繁部署的机会就会减少。</p>
+
+<p>我希望这个新的步骤模板能够解决您遇到的一些发布管理问题，并使未来的部署更加可靠。</p>
+
+<p>愉快的部署！</p>
+
+<p>本系列还有两个指南:</p>
+
+
+
+                    
+                    
+</body>
+</html>

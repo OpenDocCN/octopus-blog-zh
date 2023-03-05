@@ -1,0 +1,297 @@
+<html>
+<head>
+<title>Database deployment automation using state-based Redgate SQL Change Automation - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用基于状态的Redgate SQL变更自动化- Octopus Deploy实现数据库部署自动化</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/database-deployment-automation-using-redgate-sql-change-automation#2022-08-08">https://octopus.com/blog/database-deployment-automation-using-redgate-sql-change-automation#2022-08-08</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/blogimage-redgate-database.png" class="zoom" data-title=""><img src="../Images/23600589295705637049c8a1a355d510.png" class="img-fluid center" alt="Database deployment automation using state-based Redgate SQL Change Automation" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/blogimage-redgate-database.png"/>T2】</a></p>
+
+<p>我之前的博客文章讨论了为什么<a href="/blog/why-consider-database-deployment-automation">您应该考虑自动化数据库部署</a>和<a href="/blog/database-deployment-automation-approaches">入门技巧</a>。</p>
+
+<p>本文将使用<a href="https://www.red-gate.com/products/sql-development/sql-change-automation/approaches" rel="nofollow">基于状态的方法</a>为<a href="https://www.red-gate.com/products/sql-development/sql-change-automation/" rel="nofollow"> Redgate的SQL变更自动化</a>建立一个数据库部署自动化管道。我选择这个工具是因为它易于设置，可以与SSMS集成，而且我已经有了一个演示设置。我也<a href="https://www.red-gate.com/hub/events/friends-of-rg/friend/BobWalker" rel="nofollow">偏向【Redgate的工装。</a></p>
+
+<p>在本文结束时，您将拥有一个可以演示的概念证明。</p>
+
+
+
+<h2 id="prep-work">准备工作</h2>
+
+<p>对于这个演示，您需要一个正在运行的SQL Server实例、一个Octopus Deploy实例和一个CI服务器。我建议使用一个开发环境或您的本地机器来进行概念验证。</p>
+
+
+
+<p>你需要以下工具。给出的例子使用了团队城市和VSTS/TFS，但是即使你使用不同的工具，所有CI工具的核心概念和用户界面都是非常相似的。</p>
+
+<ul>
+<li>八达通部署:</li>
+<li>Redgate SQL工具带</li>
+<li>构建服务器/持续集成(CI)工具(选择一项):</li>
+<li>SQL Server Management Studio (SSMS):</li>
+<li>SQL Server:</li>
+</ul>
+
+<h2 id="installing-the-software">安装软件</h2>
+
+<p>如果您在安装这些工具时遇到问题，请访问供应商网站寻求帮助。如果您在安装Octopus Deploy时需要任何帮助，请从我们的<a href="https://octopus.com/docs/installation">文档</a>开始，或者联系<a href="mailto:support@octopus.com" rel="nofollow">支持</a>。</p>
+
+<h3 id="developer-workstation">开发者工作站</h3>
+
+<p>这是您将用来进行模式更改并将它们签入源代码控制的机器。当你安装Redgate的SQL Tool-belt时，会提示你安装相当多的软件。您只需要安装以下软件:</p>
+
+<ul>
+<li>SQL源代码管理。</li>
+<li>SQL提示符(这不是必需的，但它使事情变得容易得多)。</li>
+<li>SSMS集成包。</li>
+</ul>
+
+
+
+<p>Octopus Deploy和Redgate都有主要构建服务器/持续集成工具的插件:</p>
+
+<ul>
+<li>詹金斯:</li>
+<li>团队城市:</li>
+<li>VSTS/TFS:</li>
+<li>竹子:</li>
+</ul>
+
+<h3 id="deployment-target-or-database-worker">部署目标或数据库工作者</h3>
+
+<p>在SQL Server上安装Octopus触手是一个大禁忌。我们的<a href="https://octopus.com/docs/deployment-examples/sql-server-databases#SQLServerdatabases-Tentacles">文档</a>会更详细地解释为什么。</p>
+
+<p>首选的解决方案是在Octopus Deploy和SQL Server之间配置一个跳转框。Octopus为此支持两个选项:</p>
+
+<ul>
+<li>部署目标</li>
+<li>数据库工作者</li>
+</ul>
+
+<p>在这篇文章中，我将添加一个部署目标，但是我想提到workers也是一个不错的选择。它们对于进行大量数据库部署的团队特别有用。</p>
+
+<p>Workers使您能够将部署工作转移到在池中运行的其他机器上，数据库部署是一个常见的用例。您可以创建一个专门的工作人员池，供多个项目和团队用于数据库部署。</p>
+<p>更多信息见<a href="https://octopus.com/docs/infrastructure/workers" class="alert-link">我们的文档</a>。</p>
+
+
+<p>出于安全考虑，我建议以特定用户帐户运行触手/Worker。这样，您可以利用集成的安全性。您可以配置<a href="https://octopus.com/docs/infrastructure/windows-targets/running-tentacle-under-a-specific-user-account">活动目录</a>或者使用SQL用户来代替。</p>
+
+<p>对于跳线盒，您需要安装以下项目:</p>
+
+<ul>
+<li>SQL变更自动化PowerShell 3.0。</li>
+<li>SQL变更自动化。</li>
+</ul>
+
+<h2 id="sample-project">示例项目</h2>
+
+<p>对于这个演练，我修改了RandomQuotes项目。这个示例的源代码可以在这个<a href="https://github.com/OctopusDeploy/AutomatedDatabaseDeploymentsSamples" rel="nofollow"> GitHub repo </a>中找到。派生存储库，以便在阅读本文时可以进行修改。</p>
+
+<h2 id="configuring-the-cicd-pipeline">配置CI/CD管道</h2>
+
+<p>您需要的一切都已经签入到源代码控制中。我们需要做的就是构建它并将其推送到SQL Server。</p>
+
+<h3 id="octopus-deploy-configuration">Octopus部署配置</h3>
+
+<p>您需要从Redgate到<a href="https://library.octopus.com/step-templates/c20b70dc-69aa-42a1-85db-6d37341b63e3/actiontemplate-redgate-create-database-release" rel="nofollow">创建数据库版本</a>和<a href="https://library.octopus.com/step-templates/7d18aeb8-5e69-4c91-aca4-0d71022944e8/actiontemplate-redgate-deploy-from-database-release" rel="nofollow">部署数据库版本</a>的步骤模板。当您浏览步骤模板时，您可能会注意到步骤模板直接从包中<a href="https://library.octopus.com/step-templates/19f750fb-2ce8-4361-859e-2dfcdf08a952/actiontemplate-redgate-deploy-from-package" rel="nofollow">部署。SQL变更自动化的基于状态的功能通过比较存储在NuGet包中的数据库的状态和目标数据库来工作。每次运行时，它都会创建一组新的增量脚本来应用。推荐的流程是:</a></p>
+
+<ol>
+<li>将数据库包下载到跳转框中。</li>
+<li>通过将跳转框上的包与SQL Server上的数据库进行比较来创建增量脚本。</li>
+<li>查看delta脚本(这在dev中可以跳过)。</li>
+<li>使用跳转框上的触手在SQL Server上运行脚本。</li>
+</ol>
+
+<p>使用步骤模板从包中部署会阻止查看脚本的能力。</p>
+
+<p>这是我为部署数据库而组织的流程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-deployment-overview.png" class="zoom" data-title=""><img src="../Images/7a25e667bd7aea5077e681561516e406.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-deployment-overview.png"/></a>T2】</p>
+
+<p>该过程执行以下操作:</p>
+
+<ul>
+<li>数据库的主要SQL用户。</li>
+<li>数据库。</li>
+<li>将SQL用户添加到数据库中。</li>
+<li>将用户添加到角色中。</li>
+</ul>
+
+<p>如果您希望您的流程这样做，您可以从<a href="https://library.octopus.com/listing" rel="nofollow"> Octopus社区步骤模板库</a>下载这些步骤模板。</p>
+
+<p>如果这是自动化数据库部署之旅的开始，您不必添加所有这些功能。上面截图中需要的主要步骤是:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-required-steps.png" class="zoom" data-title=""><img src="../Images/46204fec58f7c14c81cab29615946ac9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-required-steps.png"/>T2】</a></p>
+
+<p>让我们逐一介绍一下。下载包的步骤非常简单，除了选择包名之外没有自定义设置:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-download-package.png" class="zoom" data-title=""><img src="../Images/7578d34071fa324d0b6fa85cee5b40c0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-download-package.png"/>T2】</a></p>
+
+<p>Redgate - Create数据库发布步骤更有趣一些。<strong>导出路径</strong>是增量脚本将被导出到的位置。这必须是Octopus Deploy触手文件夹之外的目录，因为<strong>Redgate-Deploy from Database Release</strong>步骤需要访问该路径，而触手文件夹对于每个步骤都是不同的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-create-database-release-step.png" class="zoom" data-title=""><img src="../Images/8d356c30c62faff796aa4fcc33a8c278.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-create-database-release-step.png"/>T2】</a></p>
+
+<p>我喜欢使用项目变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-project-variables.png" class="zoom" data-title=""><img src="../Images/e8fdf68837fa77caf9f5c52c3cad973a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-project-variables.png"/>T2】</a></p>
+
+<p>该变量的完整值为:</p>
+
+<pre><code>    C:\RedGate\#{Octopus.Project.Name}\#{Octopus.Release.Number}\Database\Export
+</code></pre>
+
+<p>该屏幕上的其他建议:</p>
+
+<ul>
+<li>我已经提供了用户名和密码。我建议使用集成安全性，并让触手作为一个特定的服务帐户运行。我的测试机器上没有配置Active Directory，所以我在这个演示中使用了SQL用户。</li>
+<li>查看一下<a href="https://documentation.red-gate.com/sr1/using-sql-compare-options-in-sql-release/default-sql-compare-options-used-by-sql-release" rel="nofollow">默认SQL比较选项</a>，确保它们符合您的需求。如果没有，您需要在<code>SQL Compare Options (optional)</code>变量中提供您想要的。你可以在这里查看文档<a href="https://documentation.red-gate.com/sc11/using-the-command-line/options-used-in-the-command-line" rel="nofollow">。如果您决定使用定制选项，我建议在</a><a href="https://octopus.com/docs/deployment-process/variables/library-variable-sets">库变量集</a>中创建一个变量，这样这些选项可以在许多项目中共享。</li>
+<li>如果您希望限制部署过程可以更改的内容，请使用自定义过滤器。我写了一篇关于如何做到这一点的博文。我个人倾向于过滤掉所有用户，让DBA管理他们。更好的是，让章鱼来管理它们，因为它可以处理环境差异。</li>
+</ul>
+
+<p>下一步是批准数据库发布。我建议创建一个定制团队来负责此事，但我更喜欢在开发和QA中跳过这一步:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-approve-database-changes.png" class="zoom" data-title=""><img src="../Images/c7f69c447cd6573910792c261ef450e3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-approve-database-changes.png"/></a>T2】</p>
+
+<p>创建数据库发布步骤利用了Octopus Deploy中内置的工件功能。这允许批准者下载文件并检查它们:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-artifacts.png" class="zoom" data-title=""><img src="../Images/3a670066c265866e2ab85a1b9fb895d3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-database-artifacts.png"/>T2】</a></p>
+
+<p>最后一步是部署数据库版本。这一步将delta脚本放在导出数据路径中，并在目标服务器上运行它，这就是为什么我建议将导出路径放在一个变量中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-deploy-database-release.png" class="zoom" data-title=""><img src="../Images/2dc5929e4d06df77bccb34901ea5250d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-deploy-database-release.png"/>T2】</a></p>
+
+<p>这就是Octopus部署配置。现在是时候转移到构建服务器了。</p>
+
+<h3 id="build-server-configuration">构建服务器配置</h3>
+
+<p>在这篇博文中，我使用了VSTS/TFS和团队城市。至少，构建应该做到以下几点:</p>
+
+<ol>
+<li>使用Redgate插件构建一个包含数据库状态的NuGet包。</li>
+<li>使用Octopus Deploy插件将包推送到Octopus Deploy。</li>
+<li>为刚刚使用Octopus Deploy插件推出的包创建一个发布版本。</li>
+<li>使用Octopus Deploy插件部署该版本。</li>
+</ol>
+
+<h4 id="vsts-tfs-build">VSTS / TFS大楼</h4>
+
+<p>在VSTS/TFS，构建和部署数据库只需三个步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-build-database-overview.png" class="zoom" data-title=""><img src="../Images/9585f026b1d140627e81023c7b0e62d1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-build-database-overview.png"/>T2】</a></p>
+
+<p>第一步将从源代码控制构建数据库包。突出显示的项目是您需要更改的项目。子文件夹路径变量是相对的。我正在使用一个示例Git repo，这就是为什么<em>redgatesqlchangeautomationstate based</em>文件夹位于路径:</p>
+
+<p>【T2 <img src="../Images/4b557a4627b492b9af3d9a66805e6825.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-build-database-package.png"/></p>
+
+<p>push package to Octopus步骤要求您知道上一步生成的工件的完整路径。我不能100%确定不经过反复试验你怎么会知道:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-push-database-package.png" class="zoom" data-title=""><img src="../Images/8ebfd48989041a81a252274d9136744b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-push-database-package.png"/>T2】</a></p>
+
+<p>这是全部价值，如果你想复制的话:</p>
+
+<pre><code>    $(Build.Repository.Localpath)\RandomQuotes-SQLChangeAutomation.1.0.$(Build.BuildNumber).nupkg
+</code></pre>
+
+<p>必须在VSTS/TFS配置Octopus Deploy服务器。你可以在我们的<a href="https://octopus.com/docs/packaging-applications/build-servers/tfs-azure-devops/using-octopus-extension">文档</a>中看到如何操作。</p>
+
+<p>最后一步是创建一个发布，并将其部署到dev。用Octopus Deploy连接VSTS/TFS后，您可以读取所有项目名称。您还可以配置这个步骤，将发布部署到dev。单击<strong>显示部署进度</strong>将停止构建并强制等待Octopus完成:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-create-octopus-database-release.png" class="zoom" data-title=""><img src="../Images/2bb5949ebc148996f1fe45196e7fa905.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-create-octopus-database-release.png"/>T2】</a></p>
+
+<h4 id="teamcity">团队城市</h4>
+
+<p>团队城市的设置与VSTS/TFS的设置非常相似。只需要三个步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-build-sql-automation-overview.png" class="zoom" data-title=""><img src="../Images/6340815758f6808918a153c76f33e924.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-build-sql-automation-overview.png"/>T2】</a></p>
+
+<p>第一步是构建数据库包步骤，它有类似于VSTS/TFS的选项。您需要输入文件夹以及包的名称:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-redgate-build-database.png" class="zoom" data-title=""><img src="../Images/c0ccf5f1d9d8ad9b9facc96332cefcff.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-redgate-build-database.png"/></a>T2】</p>
+
+<p>您必须在高级选项中输入一个包版本，否则您将从Redgate工具中得到一个关于无效包版本的错误:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-redgate-build-advanced-options.png" class="zoom" data-title=""><img src="../Images/270c257759958d659a4d2a311d2795cd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-redgate-build-advanced-options.png"/>T2】</a></p>
+
+<p>发布包步骤需要填充所有三个选项。默认情况下，Redgate工具将在根工作目录中创建NuGet包:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-publish-package.png" class="zoom" data-title=""><img src="../Images/b2c584c586f24ba52111047fc7dc2b00.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-publish-package.png"/>T2】</a></p>
+
+<p>最后一步是创建和部署版本。提供项目名称、版本号和您要部署到的环境:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-create-database-release.png" class="zoom" data-title=""><img src="../Images/a797dfe93567a949961351ebe6b11b56.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/teamcity-create-database-release.png"/>T2】</a></p>
+
+<h2 id="see-the-cicd-pipeline-in-action">查看CI/CD管道的运行情况</h2>
+
+<p>现在是时候看看这一切是如何运作的了。对于这个演示，我创建了一个新的数据库，<em>RandomQuotes _ BlogPost _ Dev</em>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-first-database-release-variables.png" class="zoom" data-title=""><img src="../Images/2e5f5bff54f28cdb8826cc0f2aff8411.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-first-database-release-variables.png"/></a>T2】</p>
+
+<p>如您所见，我没有任何同名的数据库。我将该SQL Server用作自动化部署的测试平台:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-before-deployment.png" class="zoom" data-title=""><img src="../Images/6f25d46de05262c113f55a30d4d004ba.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-before-deployment.png"/>T2】</a></p>
+
+<p>让我们快速看一下存储在源代码控制中的表:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/github-tables-to-be-created.png" class="zoom" data-title=""><img src="../Images/99c5426ef461094e4b7b20b4ab6e3f64.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/github-tables-to-be-created.png"/>T2】</a></p>
+
+<p>如果我们打开其中一个文件，我们可以看到由Redgate的SQL源代码控制生成的创建脚本:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/github-database-quote-table.png" class="zoom" data-title=""><img src="../Images/59af25365b07f0434e7887ba7beaf4f9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/github-database-quote-table.png"/>T2】</a></p>
+
+<p>启动一个构建，让我们看看整个管道运行情况。构建看起来很成功:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-build-first-time.png" class="zoom" data-title=""><img src="../Images/2899c9a07117c08820f02596ebc85c83.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/vsts-build-first-time.png"/>T2】</a></p>
+
+<p>毫无疑问，在Octopus Deploy中部署是成功的。VSTS/TFS版本被设置为等待Octopus Deploy完成数据库部署。如果部署失败，构建也会失败:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-first-database-release.png" class="zoom" data-title=""><img src="../Images/a8cb897828018f043e0fc17e9ca8cd6a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/octopus-first-database-release.png"/></a>T2】</p>
+
+<p>回到SSMS，我们现在可以看到数据库和表已经创建:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/database-successful-deployment-ssms.png" class="zoom" data-title=""><img src="../Images/29612f7d2694be41726a78aa0f066ce4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/database-successful-deployment-ssms.png"/>T2】</a></p>
+
+<h2 id="changing-the-database-schema">更改数据库模式</h2>
+
+<p>这适用于现有的项目，但是让我们对数据库模式做一个小的更改，并测试这个过程。这涉及到更多的设置:</p>
+
+<ol>
+<li>将分叉的回购克隆到本地机器上。</li>
+<li>打开SSMS，在你的本地机器上创建一个随机报价数据库。</li>
+<li>在SSMS，将受源代码管理的数据库绑定到新创建的数据库。你可以在<a href="https://www.red-gate.com/products/sql-development/sql-source-control/resources/how-to-set-up-sql-source-control" rel="nofollow">文档</a>中阅读如何操作。</li>
+</ol>
+
+<p>将数据库链接到源代码管理时，需要提供存储源代码管理的文件夹的完整路径。我将所有代码存储在一个名为C:\Code.git的文件夹中。</p>
+
+<pre><code>C:\Code.git\AutomatedDatabaseDeploymentsSamples\RedGateSqlChangeAutomationStateBased\db\src\
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-redgate-successful-link.png" class="zoom" data-title=""><img src="../Images/a06feed4f7a172478dc9123c7bf10e39.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-redgate-successful-link.png"/>T2】</a></p>
+
+<p>现在我们可以对数据库进行更改了。对于这个测试，让我们添加一个将返回值的存储过程:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-sample-sproc.png" class="zoom" data-title=""><img src="../Images/51ba3f1f70c5c8bff57379e29898bb45.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-sample-sproc.png"/>T2】</a></p>
+
+<p>现在我们可以将更改提交到源代码控制:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-sample-commit.png" class="zoom" data-title=""><img src="../Images/a2111e5eb64f0f855986188723574554.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/database-deployment-automation-using-redgate-sql-change-automation/ssms-sample-commit.png"/></a>T2】</p>
+
+<p>假设CI/CD管道被设置为在提交时触发，您应该看到新的存储过程出现在dev中。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>数据库部署自动化确实需要一些准备工作，但是付出的努力是值得的。光是审计就值得了。有了这个工具，我现在可以看到谁做了更改，何时做了更改，以及更改何时投入生产。过去，它保存在另一个位置，有50%的更新机会。</p>
+
+<p>当您开始这一旅程时，我的建议是将手动验证步骤添加到所有环境中，直到建立信任为止。这将确保您不会意外地签入一个会吹走团队一半数据库变更的变更。</p>
+
+<p>下次再见，愉快的部署！</p>
+
+<hr/>
+
+<p>数据库部署自动化系列文章:</p>
+
+
+
+                    
+                    
+</body>
+</html>

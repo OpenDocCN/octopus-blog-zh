@@ -1,0 +1,228 @@
+<html>
+<head>
+<title>Installing Tomcat From Scratch - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从头开始安装Tomcat-Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/installing-tomcat-from-scratch#2022-07-15">https://octopus.com/blog/installing-tomcat-from-scratch#2022-07-15</a></blockquote>
+                        <p>Tomcat是目前最流行的Java web服务器，对于任何希望托管Java web应用程序的人来说都是一个可靠的选择。</p>
+
+<p>Tomcat的一个优点是它非常容易上手，通常只需要下载和解压部署档案。但是有几个步骤是每个Tomcat管理员都应该知道的，以便充分利用他们的Tomcat安装。</p>
+
+<p>在这篇博客文章中，我们将介绍设置Tomcat服务器的过程。</p>
+
+<h2 id="install-java">安装Java</h2>
+
+<p>作为一个Java web服务器，Tomcat需要安装Java才能运行。</p>
+
+<p><a href="http://tomcat.apache.org/whichversion.html" rel="nofollow"> Tomcat 7至少需要Java 6，Tomcat 8至少需要Java 7，Tomcat 9至少需要Java 8 </a>。</p>
+
+<p>请记住，您需要安装一个既支持Tomcat本身又支持Tomcat将要托管的应用程序的Java版本。如果您的应用程序是为Java 8编译的，那么Tomcat也需要与Java 8一起运行。</p>
+
+<h3 id="jre-or-jdk">杰尔还是JDK？</h3>
+
+<p>Java安装以Java运行时环境(JRE)或Java开发工具包(JDK)的形式提供。</p>
+
+<p>JRE提供了运行Java应用程序所需的所有功能，包括Tomcat。JDK提供了JRE，以及一些开发人员用来编译和管理Java应用程序的附加工具。</p>
+
+<p>Tomcat可以和JRE或者JDK一起工作。开发人员通常使用JDK，它是一个较大的软件包，所以如果您有疑问，请安装JRE。</p>
+
+<h3 id="openjdk-or-oracle-jdk">OpenJDK还是甲骨文JDK？</h3>
+
+<p>OpenJDK是Java平台的开源实现。它通常包含在Linux包管理器中，包名类似于<code>openjdk-8-jre</code>或<code>openjdk-8-jdk</code>。</p>
+
+<p>OpenJDK是项目的名称，虽然它的名称中包含缩写“JDK ”,但OpenJDK项目同时提供了JRE和JDK。</p>
+
+<p>Oracle JDK是Oracle提供的Java实现。通常，您必须从<a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html" rel="nofollow"> Oracle网站</a>手动下载并安装Oracle JDK。</p>
+
+<p>使用OpenJDK还是Oracle JDK是个人选择的问题。我将在Linux发行版中使用OpenJDK，因为使用包管理器安装很容易。在Windows或MacOS中，我会安装Oracle JDK。</p>
+
+<h2 id="download-tomcat">下载Tomcat</h2>
+
+<p>Tomcat可以从<a href="https://tomcat.apache.org/index.html" rel="nofollow"> Apache Tomcat </a>主页下载。</p>
+
+<p>Tomcat可以作为zip、tar.gz、Windows zip或Windows exe下载。</p>
+
+<p>在写这篇博文的时候，Tomcat 8.5是最新的官方版本，Tomcat 9接近最终版本。仍然支持Tomcat 7，所有以前的版本都被认为是过时的。</p>
+
+<h3 id="download-tomcat-for-linux">下载Tomcat for Linux</h3>
+
+<p>如果你在Linux中运行Tomcat，那么tar.gz包就是你需要的。这比zip包更可取，因为tar.gz格式保留了shell脚本上的可执行标志。</p>
+
+<p>如果你在Linux中下载zip包，你需要用命令<code>chmod +x &lt;scriptname&gt;</code>在脚本<code>bin/startup.sh</code>和<code>bin/shutdown.sh</code>上手动设置可执行标志。</p>
+
+<h3 id="download-tomcat-for-windows">下载Tomcat for Windows</h3>
+
+<p>如果你在Windows中运行Tomcat，那么你可以下载任何格式的文件。但是，我建议Windows用户下载Windows zip或exe包。</p>
+
+<p>这些包包括<code>tcnative-1.dll</code>库，它是<a href="https://tomcat.apache.org/native-doc/" rel="nofollow"> Tomcat本地</a>库的一部分。Tomcat Native用于让Tomcat访问<a href="https://apr.apache.org/" rel="nofollow"> Apache可移植运行时</a> (APR)。APR反过来用于通过OpenSSL提供HTTPS等功能，这比使用原生Java HTTPS实现(也称为JSSE实现)可以提供更好的性能。</p>
+
+<p>此外，Windows软件包还包括用于将Tomcat安装为Windows服务的可执行文件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/tomcat-native-windows.png" class="zoom" data-title=""><img src="../Images/efb5db4978ae15e6ce02509fb224c488.png" class="img-fluid center" alt="Tomcat Windows Files" data-original-src="https://i.octopus.com/blog/2017-10/tomcat-native-windows.png"/>T2】</a></p>
+
+<h2 id="configuring-the-java_home-environment-variable">配置JAVA_HOME环境变量</h2>
+
+<p>Tomcat脚本使用<code>JAVA_HOME</code>环境变量来查找将用于启动Tomcat web服务器的Java可执行文件。</p>
+
+<h3 id="configuring-the-java_home-environment-variable-in-windows">在Windows中配置JAVA_HOME环境变量</h3>
+
+<p>Windows在系统属性中定义环境变量。</p>
+
+<p>打开<code>System</code>控制面板小程序内的<code>Advanced System Settings</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/windows-system-settings-1.png" class="zoom" data-title=""><img src="../Images/643c006a8de6831b762742eee15181b1.png" class="img-fluid center" alt="Windows Environment Variables 1" data-original-src="https://i.octopus.com/blog/2017-10/windows-system-settings-1.png"/>T2】</a></p>
+
+<p>点击<code>Environment Variables...</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/windows-system-settings-2.png" class="zoom" data-title=""><img src="../Images/873b8deae1681b09ee0f7d28ddf2cc78.png" class="img-fluid center" alt="Windows Environment Variables 2" data-original-src="https://i.octopus.com/blog/2017-10/windows-system-settings-2.png"/>T2】</a></p>
+
+<p>在<code>System Variables</code>下，点击<code>New...</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/windows-system-settings-3.png" class="zoom" data-title=""><img src="../Images/e7e538e8eae2243aef6b789bd74b40ed.png" class="img-fluid center" alt="Windows Environment Variables 3" data-original-src="https://i.octopus.com/blog/2017-10/windows-system-settings-3.png"/>T2】</a></p>
+
+<p>输入<code>JAVA_HOME</code>作为<code>Variable name</code>，输入Java安装目录作为<code>Variable value</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/windows-system-settings-4.png" class="zoom" data-title=""><img src="../Images/bbd9be05009117a0417dcbd6799d4b2a.png" class="img-fluid center" alt="Windows Environment Variables 4" data-original-src="https://i.octopus.com/blog/2017-10/windows-system-settings-4.png"/>T2】</a></p>
+
+<p>点击<code>OK</code>按钮保存您的更改。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/windows-system-settings-5.png" class="zoom" data-title=""><img src="../Images/18ff08ddde38284bb7712c23a82e7296.png" class="img-fluid center" alt="Windows Environment Variables 5" data-original-src="https://i.octopus.com/blog/2017-10/windows-system-settings-5.png"/>T2】</a></p>
+
+<p>打开Powershell并键入<code>Write-Host $env:JAVA_HOME</code>来查看环境变量的值。</p>
+
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/windows-system-settings-6.png" class="zoom" data-title=""><img src="../Images/72c4ba7f52a32f21c75b096c6232e3a6.png" class="img-fluid center" alt="Windows Environment Variables 6" data-original-src="https://i.octopus.com/blog/2017-10/windows-system-settings-6.png"/>T2】</a></p>
+
+<h3 id="configuring-the-java_home-environment-variable-in-linux">在Linux中配置JAVA_HOME环境变量</h3>
+
+<p>在Linux中有多种方法来定义环境变量。最常见的是将环境变量添加到<code>/etc/environment</code>文件中。</p>
+
+<p>例如，您可以配置<code>JAVA_HOME</code>环境变量来引用Oracle JRE 8安装，代码如下:</p>
+
+<pre><code>JAVA_HOME="/usr/lib/jvm/java-8-oracle/jre"
+</code></pre>
+
+<p>Java安装的位置取决于您使用的Linux发行版以及Java发行版。例如，如果您使用包管理器安装了Java，那么您很可能安装了OpenJDK。OpenJDK将被安装到与Oracle JDK不同的目录中。</p>
+
+
+<h2 id="manually-running-tomcat">手动运行Tomcat</h2>
+
+<p>要手动启动Tomcat，您需要为Windows运行<code>bin\startup.bat</code>批处理文件，或者为Linux运行<code>bin/startup.sh</code> shell脚本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/tomcat-windows-running.png" class="zoom" data-title=""><img src="../Images/67c0c6ac72f060a2a457e75b1f9d23d8.png" class="img-fluid center" alt="Tomcat running in Windows" data-original-src="https://i.octopus.com/blog/2017-10/tomcat-windows-running.png"/>T2】</a></p>
+
+<h2 id="installing-tomcat-as-a-service">将Tomcat安装为服务</h2>
+
+<p>生产Tomcat实例通常作为服务启动。这允许Tomcat在操作系统启动时启动，在操作系统关闭时关闭，并使用操作系统内置的服务管理工具进行管理。</p>
+
+<h3 id="installing-tomcat-as-a-windows-service">将Tomcat安装为Windows服务</h3>
+
+<p>将Tomcat作为Windows服务安装的最简单方法是运行<code>Windows Service Installer</code> exe，这是Tomcat下载包选项之一。该安装程序提供了一个向导，将Tomcat配置为Windows服务。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/tomcat-windows-install-1.png" class="zoom" data-title=""><img src="../Images/020c10cb8fc383603491eb7fb5fec0c9.png" class="img-fluid center" alt="Tomcat Windows Install 1" data-original-src="https://i.octopus.com/blog/2017-10/tomcat-windows-install-1.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/tomcat-windows-install-2.png" class="zoom" data-title=""><img src="../Images/c3d48937974d0d85e038c3ffd72226dd.png" class="img-fluid center" alt="Tomcat Windows Install 2" data-original-src="https://i.octopus.com/blog/2017-10/tomcat-windows-install-2.png"/>T2】</a></p>
+
+<p>或者，您可以使用<code>bin\service.bat</code>脚本将Tomcat手动配置为Windows服务。例如，运行命令<code>service.bat install MyService</code>将在名为<code>MyService</code>的Windows服务下配置Tomcat。</p>
+
+<p>有关手动配置Tomcat Windows服务的更多信息，请参见<a href="https://tomcat.apache.org/tomcat-9.0-doc/windows-service-howto.html#Installing_services" rel="nofollow">文档</a>。</p>
+
+<p>我测试的Tomcat版本附带的<code>service.bat</code>文件在Java 9 JDK上不能很好地工作。我在Java 9 JDK上运行<code>service.bat</code>时收到了错误<code>The JAVA_HOME environment variable is not defined correctly</code>。</p>
+<p>这是因为Java 9已经取消了<code>jre</code>文件夹，但是<code>service.bat</code>批处理文件希望这个文件夹存在。</p>
+<p>参见<a href="https://stackoverflow.com/a/46388190" class="alert-link" rel="nofollow">这个StackOverflow的回答</a>，了解Java 9中新文件夹结构的更多细节。</p>
+<p>解决方法是将Java 8 JDK与Java 9一起安装，并在运行<code>service.bat</code>时覆盖<code>JAVA_HOME</code>环境变量，或者使用<code>Windows Service Installer</code> exe来创建服务。</p>
+
+
+<h3 id="installing-tomcat-as-a-linux-service">将Tomcat安装为Linux服务</h3>
+
+<p>不幸的是，Tomcat没有为Linux操作系统提供服务定义文件。这些服务定义文件根据您运行的Linux发行版以及您使用的是init.d还是systemd而有所不同。</p>
+
+<p>然而，定义自己的服务是相当容易的。</p>
+
+<p>首先，我喜欢将Tomcat解压到<code>/opt</code>目录中。<code>/opt</code>目录<a href="http://www.tldp.org/LDP/Linux-Filesystem-Hierarchy/html/opt.html" rel="nofollow">是为所有不属于默认安装</a>的软件和附加包保留的，这很好地描述了我们的Tomcat安装。</p>
+
+<p>Linux发行版太多了，无法为所有发行版提供服务脚本。然而，我提供了一个initd脚本示例，它是基于我在网上找到的例子。</p>
+
+<p>该脚本假设在Linux中已经配置了一个名为<code>tomcat</code>的用户，并且Tomcat已经提取到了<code>/opt/apache-tomcat-9</code>目录中。您需要调整脚本以匹配您的本地环境。</p>
+
+<p>该文件将保存在<code>/etc/init.d/tomcat</code>下。您还需要通过运行命令<code>chmod +x /etc/init.d/tomcat</code>来确保该文件是可执行的。如果您的Linux发行版使用systemd，那么可以使用命令<code>systemctl enable tomcat</code>启用这个遗留的initd脚本。</p>
+
+<pre><code>#!/bin/bash
+### BEGIN INIT INFO
+# Provides:          tomcat
+# Required-Start:    $local_fs $remote_fs $network
+# Required-Stop:     $local_fs $remote_fs $network
+# Should-Start:      $named
+# Should-Stop:       $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start Tomcat.
+# Description:       Start the Tomcat servlet engine.
+### END INIT INFO
+
+## run as a different user
+TOMCAT_USER=tomcat
+
+export CATALINA_HOME="/opt/apache-tomcat-9"
+export CATALINA_PID="$CATALINA_HOME/bin/tomcat.pid"
+
+start() {
+ echo "Starting Tomcat..."
+ /bin/su -s /bin/bash ${TOMCAT_USER} -c $CATALINA_HOME/bin/startup.sh
+}
+stop() {
+ echo "Stopping Tomcat..."
+ /bin/su -s /bin/bash ${TOMCAT_USER} -c "$CATALINA_HOME/bin/shutdown.sh -force"
+}
+case $1 in
+  start|stop) $1;;
+  restart) stop; start;;
+  *) echo "Usage : $0 &lt;start|stop|restart&gt;"; exit 1;;
+esac
+
+exit 0
+</code></pre>
+
+<p>Linux标准库(LSB)定义了initd脚本中使用的约定。<code>### BEGIN INIT INFO</code>和<code>### END INIT INFO</code>之间的注释记录在初始化脚本的<a href="http://refspecs.linuxbase.org/LSB_2.0.1/LSB-PDA/LSB-PDA/initscrcomconv.html" class="alert-link" rel="nofollow">注释约定中。</a></p>
+
+
+<h2 id="configuring-users">配置用户</h2>
+
+<p>Tomcat内置了许多管理工具。这些管理工具的链接在默认的Tomcat欢迎页面上以名为<code>Server Status</code>、<code>Manager App</code>和<code>Host Manager</code>的链接形式提供。默认情况下，一旦使用<code>bin\startup.bat</code>或<code>bin/startup.sh</code>脚本或者通过启动服务手动启动了Tomcat，就可以在<a href="http://localhost:8080" rel="nofollow"> http://localhost:8080 </a>查看欢迎页面。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/tomcat-welcome.png" class="zoom" data-title=""><img src="../Images/89f85598ca2c1b19fd039fe2b215cbd1.png" class="img-fluid center" alt="Tomcat Welcome" data-original-src="https://i.octopus.com/blog/2017-10/tomcat-welcome.png"/>T2】</a></p>
+
+<p>在使用这些管理工具之前，您必须首先在Tomcat中配置用户。</p>
+
+<p>用户在<code>conf/tomcat-users.xml</code>文件中定义。</p>
+
+<p>用户被分配到组中。Tomcat定义了一些授予管理工具访问权限的标准组。<code>manager-gui</code>组用于允许访问基于浏览器的管理工具，即您将通过点击欢迎页面上的<code>Server Status</code>、<code>Manager App</code>和<code>Host Manager</code>链接来访问的工具。</p>
+
+<p>下面是一个<code>conf/tomcat-users.xml</code>文件的例子，它定义了一个名为<code>tomcat</code>的用户，其密码为<code>adminpass</code>，并被分配给<code>manager-gui</code>角色。</p>
+
+<pre><code class="language-xml">&lt;tomcat-users xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              
+              xsi:schemaLocation="http://tomcat.apache.org/xml tomcat-users.xsd"
+              version="1.0"&gt;
+    &lt;role rolename="manager-gui"/&gt;
+    &lt;user username="tomcat" password="adminpass" roles="manager-gui"/&gt;
+&lt;/tomcat-users&gt;
+</code></pre>
+
+<p>当您尝试打开其中一个管理工具时，系统会提示您输入用户名和密码。在这个提示符下，您可以输入<code>tomcat</code>用户名和<code>adminpass</code>提示符。</p>
+
+<p>要了解Tomcat用来管理对管理工具的访问的组的更多信息，请参见标题为“配置管理器应用程序访问”的<a href="https://tomcat.apache.org/tomcat-9.0-doc/manager-howto.html#Configuring_Manager_Application_Access" rel="nofollow"> Tomcat管理器文档</a>。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇博客文章中，我们已经看到了许多需要做出的决定，包括运行什么版本的Java，如何将Tomcat配置为一个服务，以及如何将用户添加到Tomcat的安装中。</p>
+
+<p>如果您对将Java应用程序自动部署到Tomcat感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看我们的文档。</p>
+
+                    
+                    
+</body>
+</html>

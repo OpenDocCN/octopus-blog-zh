@@ -1,0 +1,137 @@
+<html>
+<head>
+<title>Variable use in Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus部署中的变量使用- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/variable-use#2022-10-07">https://octopus.com/blog/variable-use#2022-10-07</a></blockquote>
+                        <p>许多客户要求能够看到变量在Octopus Deploy中的使用位置。</p>
+
+<p>在这篇文章中，我探讨了寻找所有可能使用变量的地方的一些挑战。</p>
+
+<h2 id="why-people-want-to-see-variable-use">为什么人们希望看到变量的使用</h2>
+
+<p>人们希望看到变量使用的原因有很多:</p>
+
+<ul>
+<li>确定变量的用途。从变量名来看可能不明显。</li>
+<li>更改变量值。确定变量的使用位置有助于确定值更改的影响以及更改是否安全。</li>
+<li>删除未使用的变量。识别所有潜在的变量用途将有助于确定变量是否未被使用并且可以被安全地删除。</li>
+</ul>
+
+<p>这些用例涉及到<em> if </em>和<em> where </em>变量的值被实际使用。当你改变一个变量的值或者删除未使用的变量时，识别出所有的潜在用途<em>是非常重要的。</em></p>
+
+<p>人们希望看到变量使用的相关原因:</p>
+
+<ul>
+<li>识别重复变量(通过名称或值)。这允许将重复变量提取到库变量集中，并在使用它们的项目之间共享。</li>
+<li>识别冲突范围问题，例如，生命周期中环境的不确定性结果或缺失值。</li>
+<li>识别应该敏感的纯文本变量，例如，包含<code>password</code>、<code>pwd</code>、<code>token</code>或<code>apikey</code>的变量名，或者包含看起来像API键的值的变量名，并建议将它们更改为sensitive。</li>
+</ul>
+
+<p>这些用例关心哪些变量<em>存在</em>以及它们的<em>值</em>是什么。他们不关心它们到底用在哪里。虽然支持这些用例可能有价值，但我们不会在本文中考虑它们，因为它们与变量<em>使用</em>没有直接关系。</p>
+
+<p>让我们看看如何找到变量的用法，以及在这个过程中遇到的一些挑战。</p>
+
+<h2 id="static-search">静态搜索</h2>
+
+<p>静态搜索将使用当前的API来收集关于变量使用位置的信息。可以搜索项目变量和库变量集。使用当前API可以确定以下用途:</p>
+
+<ul>
+<li>可变值</li>
+<li>项目部署流程或任何操作手册中的步骤参数</li>
+<li>在步骤脚本中使用</li>
+</ul>
+
+<p>对于变量值，我们在试图找到所有的用法时会遇到问题。乍一看，在变量值中寻找变量的用途应该很容易——只需搜索<code>#{variablename}</code>。然而，变量值可以使用<a href="https://github.com/OctopusDeploy/Octostache" rel="nofollow"> Octostache </a>表达式来定义，这是Octopus Deploy的变量替换语法。表达式非常灵活，允许一些奇怪和奇妙的边界情况，特别是当使用扩展语法时。例如，考虑这些变量及其值:</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>可变的</th>
+<th>价值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Greeting.English</code></td>
+<td><code>Hello</code></td>
+</tr>
+<tr>
+<td><code>Greeting.Māori</code></td>
+<td><code>Kia ora</code></td>
+</tr>
+<tr>
+<td><code>Language</code></td>
+<td><code>English</code></td>
+</tr>
+<tr>
+<td><code>Greeting</code></td>
+<td><code>#{Greeting.#{Language}}</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>在这个例子中，没有简单的方法来确定在哪里使用了<code>Greeting.English</code>变量。Step属性也支持<strong> Octostache </strong>表达式，因此也有同样的问题。</p>
+
+<p>还有许多其他的八分音符表达式会使任何寻找变量用法的尝试出错。表达式允许灵活和创造性地使用变量，但是它们很难找到所有变量的用法。</p>
+
+<p>步骤脚本中的变量使用(例如，<strong>运行脚本</strong>步骤的内联源代码属性)也会导致问题。变量名几乎可以是任何东西，并且可以动态访问。例如，我们有以下变量名:</p>
+
+<ul>
+<li><code>*(_🤦_*(&amp; KL" P{}$^[p]'!</code>(这确实是一个有效的变量名)</li>
+<li><code>FrankieSay"Relax"</code></li>
+<li><code>PowerMax</code></li>
+</ul>
+
+<p>这个PowerShell脚本:</p>
+
+<pre><code class="language-PowerShell"># *(_🤦_*(&amp; KL" P{}$^[p]'! is a silly variable name.
+Write-Host $OctopusParameters["FrankieSay""Relax"""]
+$powerLevel = 'Max'
+Write-Host $OctopusParameters["Power" + $powerLevel]
+</code></pre>
+
+<p>对变量名进行直接文本搜索会对<code>*(_🤦_*(&amp; KL" P{}$^[p]'!</code>产生误报，因为它在注释中。它还遗漏了<code>FrankieSay"Relax"</code>和<code>PowerMax</code>，因为它们被运行时生成的名称引用。也许可以使用更智能的搜索来处理上面的一些问题，但就像<strong> Octostache </strong>表达式一样，还有许多(也许是无穷无尽的)变体也会导致问题。想把他们都抓起来感觉是不可能的。</p>
+
+<h2 id="other-static-searching-options">其他静态搜索选项</h2>
+
+<p>目前，如果一个项目使用Config作为代码进行版本控制，那么部署过程和变量是在文本文件中定义的。在任何文本编辑器中，通过简单的文本搜索都可以找到变量的用法(受上述限制)。我们计划将来将run book作为代码添加到Config中，这意味着文本搜索也可以在run book中找到类似的变量用法。</p>
+
+<p>非版本控制项目的另一个选择是使用PowerShell脚本来查询当前的API并搜索变量用途。下面是两个示例脚本。它们只执行直接的文本搜索，所以它们受到上述所有限制的约束，并且不能保证找到所有变量的用法。</p>
+
+
+
+<h2 id="deployment-time-search">部署时搜索</h2>
+
+<p>这种类型的搜索会在部署过程中捕获变量使用。在所有部署步骤中，有3种功能可以使用变量来执行各种类型的替换:</p>
+
+<ul>
+<li>结构化配置变量</li>
+<li>。净配置变量</li>
+<li>模板中的替代变量</li>
+</ul>
+
+<p>每次变量匹配和替换完成后，详细信息会被发送回Octopus服务器并存储起来。这种方法的一个优点是，它可以从Octopus Deploy之外的文件中捕获替换。将基础设施构建到Octopus Deploy中以支持这种类型的搜索并不简单。</p>
+
+<p>考虑这种类型的搜索如何工作是很有趣的。例如，步骤可以是有条件的，并且可能只在生产部署期间执行。因此，可能需要多次部署来捕获所有可变用途。Octopus Deploy应该尝试从多个部署中获取不同的用途，并以某种方式整理它们吗？应该在什么时候重置它们？用户如何确信已经捕获了所有可能部署类型的使用？</p>
+
+<p>最终，无论这个特性是如何实现的，它都需要用户仔细设置和输入，以捕捉不同的用途。这不会像点击一下就能得到所有的用途那么简单。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>静态搜索和部署时搜索都会捕获不同类型的变量使用。两者都不能保证涵盖所有的用途，但它们在大多数情况下会涵盖大多数用途。遗漏的用途大多是变量被不寻常或创造性地使用的地方。</p>
+
+<p>现在的问题是，我们应该建造它吗？一个特性是否有足够的价值让<em>可能</em>在大部分时间<em>都能工作</em>？为了确信一个变量真的没有被使用并且可以被安全地移除，<em>所有的</em>变量使用都需要被识别——这是不能保证的。即使这种限制在用户界面中表现得非常明显，也不可避免地会让一些用户感到困惑。</p>
+
+<p>由于构建部署时搜索需要大量的工作，并且不容易使用，我们应该只构建静态搜索吗？这感觉像是一个解决方案的一半。当已经可以用PowerShell脚本实现相同的功能时，向UI添加静态搜索有多大价值？</p>
+
+<p>你怎么想呢?我们希望在下面的评论中听到你的想法。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

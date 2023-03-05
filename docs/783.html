@@ -1,0 +1,146 @@
+<html>
+<head>
+<title>Using the Ubuntu Docker image - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Ubuntu Docker镜像- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/using-ubuntu-docker-image#2022-09-12">https://octopus.com/blog/using-ubuntu-docker-image#2022-09-12</a></blockquote>
+                        <p>Ubuntu Docker官方图片是Docker Hub下载最多的图片。超过10亿的下载量证明了Ubuntu是一个受欢迎和可靠的基础映像，你可以在它的基础上构建自己的定制Docker映像。</p>
+
+<p>在这篇文章中，我将向你展示如何在构建你自己的Docker映像时充分利用基本的Ubuntu映像。</p>
+
+<h2 id="an-example-dockerfile">Dockerfile文件示例</h2>
+
+<p>这是一个例子<code>Dockerfile</code>,包括在这篇文章中讨论的调整。我仔细检查了每个设置，以解释它们增加了什么价值:</p>
+
+<pre><code class="language-Dockerfile">FROM ubuntu:22.04
+RUN echo 'APT::Install-Suggests "0";' &gt;&gt; /etc/apt/apt.conf.d/00-docker
+RUN echo 'APT::Install-Recommends "0";' &gt;&gt; /etc/apt/apt.conf.d/00-docker
+RUN DEBIAN_FRONTEND=noninteractive \
+  apt-get update \
+  &amp;&amp; apt-get install -y python3 \
+  &amp;&amp; rm -rf /var/lib/apt/lists/*
+RUN useradd -ms /bin/bash apprunner
+USER apprunner
+</code></pre>
+
+<p>使用以下命令构建映像:</p>
+
+<pre><code class="language-bash">docker build . -t myubuntu
+</code></pre>
+
+<p>现在你已经看到了如何从Ubuntu基础映像构建一个自定义映像，让我们仔细检查每一个设置来理解为什么要添加它们。</p>
+
+<h2 id="selecting-a-base-image">选择基础图像</h2>
+
+<p>Docker映像适用于所有版本的Ubuntu，包括长期支持(LTS)版本，如20.04和22.04，以及普通版本，如19.04、19.10、21.04和21.10。</p>
+
+<p>LTS版本支持5年，在此期间相关的Docker映像也由Canonical维护，如<a href="https://ubuntu.com/about/release-cycle" rel="nofollow"> Ubuntu发布周期页面</a>所述:</p>
+
+<blockquote class="blockquote">
+<p>这些映像也会随着安全更新映像的定期发布而保持更新，您应该自动使用最新的映像，以确保为您的用户提供一致的安全保护。</p>
+</blockquote>
+
+<p>当创建托管生产软件的Docker映像时，以最新的LTS版本为基础是有意义的。这允许开发运维团队在最新的LTS基础映像的基础上重建他们的定制映像，该映像自动包括所有更新，但也不太可能包括主要操作系统版本之间可能引入的那种重大更改。</p>
+
+<p>我使用了Ubuntu 22.04 LTS Docker图像作为这个图像的基础:</p>
+
+<pre><code class="language-Dockerfile">FROM ubuntu:22.04
+</code></pre>
+
+<h2 id="not-installing-suggested-or-recommended-dependencies">没有安装建议或推荐的依赖项</h2>
+
+<p>一些软件包有一个建议或推荐的依赖项列表，这些依赖项不是必需的，但在默认情况下是安装的。这些额外的依赖会不必要地增加最终Docker图像的大小，正如Ubuntu在他们关于减小Docker图像大小的<a href="https://ubuntu.com/blog/we-reduced-our-docker-images-by-60-with-no-install-recommends" rel="nofollow">博客文章中提到的</a>。</p>
+
+<p>为了禁用对所有<code>apt-get</code>调用的这些可选依赖项的安装，在<code>/etc/apt/apt.conf.d/00-docker</code>处用以下设置创建配置文件:</p>
+
+<pre><code class="language-Dockerfile">RUN echo 'APT::Install-Suggests "0";' &gt;&gt; /etc/apt/apt.conf.d/00-docker
+RUN echo 'APT::Install-Recommends "0";' &gt;&gt; /etc/apt/apt.conf.d/00-docker
+</code></pre>
+
+<h2 id="installing-additional-packages">安装附加软件包</h2>
+
+<p>大多数基于Ubuntu的定制镜像需要你安装额外的包。例如，要运行用Python、PHP、Java、Node.js或DotNET编写的自定义应用程序，您的自定义映像必须安装与这些语言相关的包。</p>
+
+<p>在典型的工作站或服务器上，使用简单的命令安装软件包，如:</p>
+
+<pre><code class="language-bash">apt-get install python3
+</code></pre>
+
+<p>在Docker映像中安装新软件的过程是非交互式的，这意味着您没有机会响应提示。这意味着您必须添加<code>-y</code>参数，以便在提示继续安装软件包时自动回答“是”:</p>
+
+<pre><code class="language-Dockerfile">RUN apt-get install -y python3
+</code></pre>
+
+<h2 id="preventing-prompt-errors-during-package-installation">防止软件包安装过程中出现提示错误</h2>
+
+<p>一些软件包的安装试图打开额外的提示，以进一步自定义安装选项。在非交互环境中，例如在Docker映像的构建过程中，试图打开这些对话框会导致如下错误:</p>
+
+<pre><code>unable to initialize frontend: Dialog
+</code></pre>
+
+<p>这些错误可以忽略，因为它们不会阻止软件包的安装。但是可以通过将<code>DEBIAN_FRONTEND</code>环境变量设置为<code>noninteractive</code>来防止这些错误:</p>
+
+<pre><code class="language-Dockerfile">RUN DEBIAN_FRONTEND=noninteractive apt-get install -y python3
+</code></pre>
+
+<p>Docker网站提供了关于DEBIAN _ FRONTEND环境变量使用的官方指导。他们认为这是一种装饰性的改变，并建议不要永久设置环境变量。上面的命令为单个<code>apt-get</code>命令的持续时间设置了环境变量，这意味着对<code>apt-get</code>的任何后续调用都不会定义<code>DEBIAN_FRONTEND</code>。</p>
+
+<h2 id="cleaning-up-package-lists">清理包列表</h2>
+
+<p>在安装任何软件包之前，您需要通过调用以下命令来更新软件包列表:</p>
+
+<pre><code class="language-Dockerfile">RUN apt-get update
+</code></pre>
+
+<p>但是，在安装了所需的软件包之后，软件包列表就没有什么价值了。最佳实践是从Docker映像中删除任何不必要的文件，以确保生成的映像尽可能小。安装完所需的软件包后，为了清理软件包列表，删除了<code>/var/lib/apt/lists/</code>下的文件。</p>
+
+<p>在这里，您可以更新软件包列表，安装所需的软件包，并作为一个命令的一部分清理软件包列表，该命令分为多行，每行末尾有一个反斜杠:</p>
+
+<pre><code class="language-Dockerfile">RUN DEBIAN_FRONTEND=noninteractive \
+  apt-get update \
+  &amp;&amp; apt-get install -y python3 \
+  &amp;&amp; rm -rf /var/lib/apt/lists/*
+</code></pre>
+
+<h2 id="run-as-non-root-user">以非超级用户身份运行</h2>
+
+<p>默认情况下，root用户在Docker容器中运行。root用户通常拥有比运行自定义应用程序所需更多的权限，因此创建没有root权限的新用户可以提供更好的安全性。</p>
+
+<p><code>useradd</code>命令<a href="https://manpages.ubuntu.com/manpages/jammy/en/man8/useradd.8.html" rel="nofollow">提供了创建新用户</a>的非交互方式。</p>
+
+<p>这不要与<code>adduser</code>命令混淆，后者是比<code>useradd</code>更高级别的<a href="https://manpages.ubuntu.com/manpages/jammy/en/man8/adduser.8.html" rel="nofollow">包装器</a>。</p>
+
+<p>在编辑了所有配置文件并安装了软件包之后，您创建了一个名为<code>apprunner</code>的新用户:</p>
+
+<pre><code class="language-Dockerfile">RUN useradd -ms /bin/bash apprunner
+</code></pre>
+
+<p>然后，该用户将被设置为任何进一步操作的默认用户:</p>
+
+<pre><code class="language-Dockerfile">USER apprunner
+</code></pre>
+
+<h2 id="conclusion">结论</h2>
+
+<p>除了安装任何需要的额外的软件包之外，很少定制就可以使用基本的Ubuntu Docker镜像。但是，通过一些调整来限制安装可选软件包，在软件包安装后清理软件包列表，并创建具有有限权限的新用户来运行自定义应用程序，您可以为您的自定义应用程序创建更小、更安全的映像。</p>
+
+<p>了解如何使用其他流行的容器图像:</p>
+
+
+
+<h2 id="resources">资源</h2>
+
+
+
+<h2 id="learn-more">了解更多信息</h2>
+
+<p>如果您想在AWS平台(如EKS和ECS)上构建和部署容器化的应用程序，请尝试使用<a href="https://octopusworkflowbuilder.octopus.com/#/" rel="nofollow"> Octopus Workflow Builder </a>。构建器使用GitHub Actions工作流构建的示例应用程序填充GitHub存储库，并使用示例部署项目配置托管的Octopus实例，这些项目展示了最佳实践，如漏洞扫描和基础架构代码(IaC)。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

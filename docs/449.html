@@ -1,0 +1,28 @@
+<html>
+<head>
+<title>OctoPack now supports assembly versions - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>OctoPack现在支持汇编版本- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopack-supports-assembly-version#2022-07-21">https://octopus.com/blog/octopack-supports-assembly-version#2022-07-21</a></blockquote>
+                        <p>当使用<a href="https://github.com/OctopusDeploy/OctoPack" title="OctoPack on GitHub"> OctoPack </a>时，构建的NuGet包将默认为版本1.0.0。这可以通过传递以下命令从MSBuild命令行重写:</p>
+
+<pre><code>/p:OctopusPackageVersion=2.0.0
+</code></pre>
+
+<p>这在使用生成版本号的构建工具时工作得很好，因为您通常可以将参数传递给MSBuild。</p>
+
+<p>前段时间在GitHub上开了一个问题来增加对此的支持:</p>
+
+<pre><code>[assembly: AssemblyVersion("1.0.*")]
+</code></pre>
+
+<p>我不知道不添加自定义任务来解决这个问题的方法，但是<a href="https://github.com/andrebires" title="André">安德烈</a>发布了一个使用<a href="http://msdn.microsoft.com/en-us/library/ms164296.aspx" title="GetAssemblyIdentity">getassemblyideentity</a>MSBuild任务的例子。感谢André，OctoPack 1.0.99现在将从主输出程序集读取版本号，如果它没有被从命令行传递的<code>/p:OctopusPackageVersion</code>覆盖的话。</p>
+
+<p>你可以在GitHub上<a href="https://github.com/OctopusDeploy/OctoPack/commit/83a65458478a9bbf8807b27ab464d7fe24f0387c" title="Diff">查看差异</a>。</p>
+
+                    
+                    
+</body>
+</html>

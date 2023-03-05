@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>Using a Nexus Docker registry with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用带有Octopus Deploy - Octopus Deploy的Nexus Docker注册表</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/nexus-docker-external-feed-with-octopus#2021-08-12">https://octopus.com/blog/nexus-docker-external-feed-with-octopus#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/octopus-docker.png" class="zoom" data-title=""><img src="../Images/750878a53bc42a3f28efced10b99f07a.png" class="img-fluid center" alt="Using a Nexus Docker registry with Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/octopus-docker.png"/>T2】</a></p>
+
+<p>将<a href="https://hub.docker.com" rel="nofollow"> Docker Hub </a>连接到Octopus Deploy非常简单，然而，并不是每个人都想使用公开可用的Docker注册中心。在这些情况下，您可以使用存储库软件，如<a href="https://jfrog.com/artifactory" rel="nofollow"> JFrog Artifactory </a>或<a href="https://www.sonatype.com/product-nexus-repository" rel="nofollow"> Sonatype Nexus </a>。JFrog和Sonatype都有开源软件(OSS)版本，但是，JFrog的OSS版本中没有Docker registry repository类型。在这篇文章中，我演示了如何在Nexus中创建Docker注册表并将其连接到Octopus Deploy。</p>
+
+<h2 id="nexus">关系</h2>
+
+<p>付费版本包括高可用性(HA)、动态存储和更好的身份验证集成等功能，但总体操作功能在OSS版本中全部开启。</p>
+
+<h3 id="create-a-docker-registry">创建Docker注册表</h3>
+
+<p>在Nexus中创建Docker注册库非常容易。登录Nexus并导航至<strong>服务器管理</strong>选项卡(齿轮图标):</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/nexus-server-administration.png" class="zoom" data-title=""><img src="../Images/234fd2fd5f50007bde7d98218dab46cc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/nexus-server-administration.png"/>T2】</a></p>
+
+<p>从这里，点击左边的<strong>存储库</strong>选项卡，然后点击<strong>创建存储库</strong>。</p>
+
+<p>选择<strong> docker(托管)</strong>仓库类型:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/nexus-docker-hosted.png" class="zoom" data-title=""><img src="../Images/7d5f5dd0cdef6a2aad0ca3690f8e3f73.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/nexus-docker-hosted.png"/>T2】</a></p>
+
+<p>这部分流程不同于其他存储库类型，比如NuGet和Maven 2。而其他两个使用<code>https://ServerUrl/repository/RepositoryName</code>，Nexus Docker注册表需要一个端口分配。在这个例子中，我使用了端口<code>8443</code>，这将在我们标记图像时变得很重要。</p>
+
+<p>您可以接受其余选项的默认值。完成后，单击页面底部的<strong>创建存储库</strong>按钮。</p>
+
+<h3 id="tagging-images">标记图像</h3>
+
+<p>为了将docker图像上传到我们的Nexus Docker注册表，我们必须对图像进行适当的标记。这是通过以下标记方案实现的:<code>ServerUrl:Port/ImageName:Version</code>。例如:</p>
+
+<pre><code>nexus.octopusdemos.app:8443/pitstop-auditlogservice:1.0.0.0
+</code></pre>
+
+<p>注意标签中没有存储库名称<code>nexus-docker</code>。这就是端口名称很重要的地方，因为它标识了上传到Nexus时它将属于哪个注册表。</p>
+
+<h2 id="connect-to-octopus-deploy">连接到Octopus部署</h2>
+
+<p>当将其他存储库类型连接到Octopus Deploy时，只需通过Nexus中的Copy URL按钮提供URL:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/nexus-copy-url.png" class="zoom" data-title=""><img src="../Images/030b8c16bf74fc95006960328933ff61.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/nexus-copy-url.png"/>T2】</a></p>
+
+<p>虽然我们的Docker注册中心有这个按钮，但这不是我们用Octopus Deploy连接到存储库的方式。</p>
+
+<p>当在Octopus Deploy中创建外部feed并测试它时，使用该页面的URL会产生误报。端点将响应一条成功消息，甚至提供搜索结果，但是当您试图在部署过程中使用它时，它将失败。</p>
+
+
+<h3 id="create-the-external-feed">创建外部提要</h3>
+
+<p>要在Octopus Deploy中创建外部提要，请单击<strong>库</strong>选项卡，然后单击<strong>外部提要</strong>，并单击<strong>添加提要</strong>按钮。</p>
+
+<p>为外部馈送输入以下信息:</p>
+
+<ul>
+<li>提要类型:Docker容器注册表。</li>
+<li>名称:给它一个描述性的名称。</li>
+<li>URL: https://ServerUrl:Port(例如https://nexus . octopus demos . app:8443)。</li>
+<li>注册表路径:留空。</li>
+<li>凭据:如果需要，请输入凭据:</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/octopus-docker-external-feed.png" class="zoom" data-title=""><img src="../Images/f9c41fc292fee860f2b208860e0e6859.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/nexus-docker-external-feed-with-octopus/octopus-docker-external-feed.png"/>T2】</a></p>
+
+<p>完成后点击<strong>保存并测试</strong>。</p>
+
+<p>输入图像名称(支持部分名称)并点击<strong>搜索</strong>以验证连接是否正常工作。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Nexus有一种独特的方式将Docker注册中心作为存储库类型来处理。在这篇文章中，我演示了创建注册中心并将其连接到Octopus Deploy的必要性。</p>
+
+                    
+                    
+</body>
+</html>

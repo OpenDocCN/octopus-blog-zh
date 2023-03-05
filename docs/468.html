@@ -1,0 +1,235 @@
+<html>
+<head>
+<title>Integration 101: Octopus and Build Servers - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>集成101: Octopus和构建服务器- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-build-server-integration-101#2022-07-15">https://octopus.com/blog/octopus-build-server-integration-101#2022-07-15</a></blockquote>
+                        <p>自从这篇文章首次发表以来，我们已经重新命名了Octo.exe，现在它是Octopus CLI，更多信息，请参见这篇文章:<a href="https://www.octopus.com/blog/octopus-release-2020-1" class="alert-link" rel="nofollow"> Octopus release 2020.1 </a>。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/octopus-build-server-integration-101/blogimage-integration101.png" class="zoom" data-title=""><img src="../Images/7e75c6cc28d00c21bb0ad29eb2edf8f7.png" class="img-fluid center" alt="Build Server and Octopus Integration Introduction" data-original-src="https://i.octopus.com/blog/2018-03/octopus-build-server-integration-101/blogimage-integration101.png"/>T2】</a></p>
+
+<p>在我为Octopus的客户提供支持的三年中，<em>“将Octopus与构建服务器集成”</em>可能是我回答最多的问题。在这篇博文中，我将向您提供一些关于如何完成这项任务的技巧，如果您是从零开始，不管您使用的是什么构建服务器技术。</p>
+
+<p>这篇博文的目标读者是那些刚刚开始将Octopus集成到他们的持续集成(CI)管道中的用户。如果你已经建立并运行了这个系统，它对你来说可能没有太大的价值😃</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="separation-of-concerns">关注点分离</h2>
+
+<p>在某种程度上，Octopus和所有的构建服务器技术乍一看都非常相似。它们的一些共同点是:</p>
+
+<ul>
+<li>这两个工具都属于CI管道，旨在帮助开发团队更快、更可靠地获得代码。</li>
+<li>两者基本上都是流程运行者。你定义一个充满步骤的过程，你执行它，奇迹就发生了。</li>
+</ul>
+
+<p>但相似之处也就到此为止了。如果您想要集成任何两个工具，您需要清楚地了解每个工具负责哪个任务。</p>
+
+<p>下面是两个(非常简单的)列表，列出了每个工具在理想CI流程中应该扮演的角色。</p>
+
+<h3 id="what-should-the-build-server-do">构建服务器应该做什么？</h3>
+
+<ul>
+<li><strong>编译你的二进制文件</strong>。这意味着运行<code>MSBuild</code>、<code>NPM</code>、<code>javac</code>、<code>dotnet.exe</code>等。，并将编译后的应用程序放到构建代理上的文件夹中。</li>
+<li><strong>运行测试</strong>。</li>
+<li><strong>打包并推送你的应用到一个存储库</strong>。一旦测试通过，用您的构建的输出创建一个包，并将其推送到您的存储库。</li>
+<li><strong>调用CI管道中的下一个工具</strong>。在我们的例子中，我们将调用Octopus来告诉它创建和部署一个发布。</li>
+</ul>
+
+<h3 id="what-should-octopus-do">章鱼该怎么办？</h3>
+
+<ul>
+<li><strong>提供/更新基础设施(可选)</strong>。如果你需要创建一个<code>Azure WebApp</code>、一个<code>Elastic Beanstalk</code>实例、扩展一个虚拟机集、创建一个IIS/Tomcat网站或者任何与设置<em>相关的东西，也就是你将放置编译好的代码的地方</em>，把这个任务作为你的Octopus部署过程的第一步是一个非常好的主意。Octopus目前支持<a href="https://octopus.com/docs/deployments/terraform"> Terraform </a>、<a href="https://octopus.com/docs/deployments/aws/cloudformation"> AWS CloudFormation </a>和<a href="https://octopus.com/docs/runbooks/runbook-examples/azure/resource-groups"> Azure RM模板</a>。</li>
+<li><strong>在部署之前在您的应用程序中设置配置值</strong>。理想情况下，您的包的内容应该可以部署到您生命周期中的任何环境中，唯一不同的是特定于环境的配置值，比如连接字符串、密码/API密钥等。Octopus有<a href="https://octopus.com/docs/projects/steps/configuration-features">多种特性</a>可以在部署时修改配置值。</li>
+<li><strong>部署您的应用</strong>。</li>
+</ul>
+
+<h2 id="so-how-should-i-start-integrating-octopus-into-my-ci-pipeline">那么，我应该如何开始将Octopus整合到我的CI渠道中呢？</h2>
+
+<p>我见过的人们在开始这项任务时最常犯的一个错误是，在没有完全理解每个工具能带来什么的情况下，同时配置太多的东西。在这篇博文中，我不会分享任何关于如何设置的细节(我们有很好的文档)。相反，我希望这篇文章能作为一个指南/清单，帮助你有条不紊地完成这项任务。</p>
+
+<p>我们将这个任务分成三个界限分明的阶段:<strong>构建</strong>、<strong>部署</strong>、&amp;、T24】集成。每个阶段都有自己的目标，我们将会关注这些目标。</p>
+
+<p>与队友一起工作？ <br/>阶段<strong> 1 </strong>和<strong> 2 </strong>可以按任何顺序进行，因为它们不会相互接触，直到我们到达阶段<strong> 3 </strong>。这意味着，如果你和一个队友一起工作，他可以专注于阶段<strong> 1 </strong>，而你专注于阶段<strong> 2 </strong>(你甚至可以打赌看谁先完成)。</p>
+
+
+<h3 id="stage-1-the-build">阶段1 -构建</h3>
+
+<p><strong>目标:</strong>在这一阶段结束时，您应该能够运行一个成功的应用程序构建，因此您应该有一个包含任何受支持格式<a href="https://octopus.com/docs/packaging-applications/supported-packages" class="alert-link">的包</a>，其中包含被推送到包存储库的构建输出。</p>
+
+
+<h4 id="get-your-project-building-successfully">1.1 -成功构建您的项目</h4>
+
+<p>我见过许多开发人员害怕这一步，主要是因为这迫使他们处理他们已经使用了一段时间的黑箱，称为“构建配置”。在开发团队中，只有1-2个开发人员真正知道他们的构建是如何工作的，其他人只是简单地点击“运行”,希望一切顺利。如果你是后一种人，这可能是一个改变这种情况的好时机，你可以和队友一起学习你的构建过程是如何工作的。</p>
+
+<p>要完成这一步，您应该有一个遵循以下两条准则的成功构建:</p>
+
+<ul>
+<li>生成输出必须发送到固定文件夹。每个构建工具都有一个参数，允许您将输出发送到自己选择的目录中。我建议你把它发送到一个叫做<code>Build</code>或<code>Output</code>的文件夹，它位于你的构建的<code>WorkDir</code>的根目录下。</li>
+<li>该文件夹中的内容应该完全按照您期望它被部署到目的地的方式进行组织。例如，如果你的网站/PAAS期望一个<code>web.config</code>和一个<code>index.html</code>文件在根目录下，那么这两个文件也应该在这个文件夹的根目录下。</li>
+</ul>
+
+<h4 id="get-your-build-output-packaged-up-and-pushed-to-a-repository">1.2 -将您的构建输出打包并推送到存储库</h4>
+
+<p>在这一步中，您将把上一步中提到的<code>output folder</code>的内容打包到一个<a href="https://octopus.com/docs/packaging-applications/supported-packages">包中，其中包含任何受支持的格式</a>。然后你将把这个包推到一个仓库，Octopus将在那里提取它。</p>
+
+<p>根据你是否使用我们的插件中的<a href="#a-few-words-about-build-server-plugins-and-octo.exe">，以及你是否使用</a><a href="https://octopus.com/docs/packaging-applications/package-repositories#Packagerepositories-Usingthebuilt-inrepository">Octopus内置库</a>来存储你的包，你将需要使用下面的方法之一:</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>使用插件</th>
+<th>使用内置存储库</th>
+<th>包装方法</th>
+<th>推动方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>是</td>
+<td>是</td>
+<td>使用插件提供的名称中带有单词“Pack”的步骤</td>
+<td>使用插件提供的名称中带有“推送包”字样的步骤</td>
+</tr>
+<tr>
+<td>是</td>
+<td>不</td>
+<td>使用插件提供的名称中带有单词“Pack”的步骤</td>
+<td>使用<a href="https://docs.microsoft.com/en-us/nuget/tools/cli-ref-push" rel="nofollow">Nuget.exe推动</a></td>
+</tr>
+<tr>
+<td>不</td>
+<td>是</td>
+<td>使用<a href="https://docs.microsoft.com/en-us/nuget/tools/cli-ref-pack" rel="nofollow">Nuget.exe包</a></td>
+<td>使用<a href="https://docs.microsoft.com/en-us/nuget/tools/cli-ref-push" rel="nofollow">Nuget.exe推</a>或<a href="https://octopus.com/docs/octopus-rest-api/examples/feeds/push-package-to-builtin-feed">Octo.exe推</a></td>
+</tr>
+</tbody>
+</table>
+
+<p>如果使用TeamCity，步骤<code>Octopus Deploy: Push Package</code>将<em>打包</em>和<em>推动</em>一步完成</p>
+
+
+<p>完成后，检查您的存储库以确保包在那里。下面的截屏显示了如果您使用内置的存储库该如何做。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/octopus-build-server-integration-101/package-in-repository.png" class="zoom" data-title=""><img src="../Images/c0234a1255288438584650ba7b1995aa.png" class="img-fluid center" alt="Package in built-in repository" data-original-src="https://i.octopus.com/blog/2018-03/octopus-build-server-integration-101/package-in-repository.png"/>T2】</a></p>
+
+<p>这里唯一的关键建议是，您应该使用与创建它的构建版本相同的版本号来版本化这个包。所以如果你正在构建项目<code>SupportFlow</code>并且你正在运行构建<code>1.0.78</code>，你的包应该以<code>SupportFlow.1.0.78.zip</code>结束</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/octopus-build-server-integration-101/package-version.png" class="zoom" data-title=""><img src="../Images/6c300d9042017e95a730b363d2eeeecc.png" class="img-fluid center" alt="Package version == build version" data-original-src="https://i.octopus.com/blog/2018-03/octopus-build-server-integration-101/package-version.png"/>T2】</a></p>
+
+<h3 id="stage-2-the-deployment">第2阶段-部署</h3>
+
+<p><strong>目标:</strong>在本阶段结束时，您应该能够在Octopus中创建一个发布，并使用<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli" class="alert-link">Octo.exe</a>从命令行触发应用程序的成功部署。</p>
+
+
+<h4 id="upload-a-test-package-to-your-repository">2.1 -将测试包上传到您的存储库中</h4>
+
+<p>如果您已经完成了步骤<code>1.2</code>，这意味着您的存储库中已经有了一个包，所以您可以跳到下一步。如果你还没有完成这一步，只需在本地编译你的应用程序，并使用<a href="https://octopus.com/docs/packaging-applications/create-packages/nuget-packages/using-octo.exe">Octo.exe包</a>打包输出。一旦你有了一个包，就把它推到<a href="https://octopus.com/docs/packaging-applications/package-repositories/pushing-packages-to-the-built-in-repository#PushingpackagestotheBuilt-Inrepository-UsingtheOctopuswebportal"> Octopus内置库</a>并确保你能在<code>Library -&gt; Packages</code>下的门户网站中看到它。</p>
+
+<p>下一步您只需要一个包，您将反复使用它，直到您正确完成部署过程。如果你的部署过程使用了不止一个包(也许是分别部署一个<em> WebApp </em>和一个<em>云服务</em>，对你需要的每个包重复这个过程。</p>
+
+<h4 id="design-your-deployment-process-and-run-it">2.2 -设计您的部署流程并运行它</h4>
+
+<p>现在，您终于可以开始在Octopus中做事了。我们在这里不会涉及太多的细节，因为<a href="https://octopus.com/docs/deploying-applications">是我们的文档为</a>准备的。但是这一步的总体思路是在Octopus中设置您的部署过程，以部署<code>2.1</code>中提到的包。一旦您完成了这些，您应该能够从Octopus web门户手动触发成功的部署。</p>
+
+<p>如果这是你第一次建立你的Octopus项目，这可能是你花费大部分时间的步骤。此时，不要太在意您正在使用的包的版本号或Octopus中的发布号。这一步的唯一目的是让您熟悉您的部署过程，并完全理解每一步会带来什么。</p>
+
+<p>因此，您可以高枕无忧，根据需要触发任意多的部署😃</p>
+
+<h4 id="create-a-release-and-trigger-a-deployment-using-octo.exe">2.3 -使用Octo.exe创建发布并触发部署</h4>
+
+<p>在上一步中，您学习了如何从Web门户创建发布和触发部署。这一步的目标是你学习做同样的事情，但是使用<code>Octo.exe</code>。</p>
+
+<p>如果你不知道这个CLI工具，这里有TL；DR，这是一个命令行应用程序，它与<a href="https://octopus.com/docs/octopus-rest-api"> Octopus API </a>对话，并帮助您对Octopus实例执行一些最常用的操作。您可以在本文档中了解它提供的所有功能。</p>
+
+<p>您应该注意的命令是<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli/create-release">创建-释放</a>。关于此命令的一些提示:</p>
+
+<ul>
+<li>如果您使用<code>--deployTo</code>参数，它不仅会创建发布，还会将它部署到环境中。它基本上结合了命令<code>create-release</code>和<code>deploy-release</code>。</li>
+<li>使用<code>--progress</code>在控制台中查看执行时的部署日志。否则，该命令只会在Octopus中创建一个任务，您将被迫转到Web门户来查看部署情况。</li>
+<li>使用<code>--whatIf</code>来看看如果运行这个命令会发生什么，而实际上没有触发Octopus中的任何东西。</li>
+</ul>
+
+<p>每一个构建服务器集成(至少是Octopus团队构建的)都只是这个CLI工具的UI包装器。所以你从这一步学到的知识将在下一阶段派上用场。</p>
+
+
+<h3 id="stage-3-the-integration">第三阶段-整合</h3>
+
+<p><strong>目标</strong>:在这个阶段结束时，您应该能够向您的构建流程添加一个新的步骤，该步骤触发Octopus中的部署。</p>
+
+
+<p>现在，在这个阶段，我们将把前两个阶段的所有东西放在一起。因此，你有必要成功地完成这两项任务。</p>
+
+<h4 id="create-a-releasedeployment-in-octopus-from-the-build">3.1 -从构建中在Octopus中创建一个发布/部署</h4>
+
+<p>如果你正在使用我们的一个构建服务器插件，在它的名字上寻找一个带有“创建发布”字样的步骤。</p>
+
+<p>如果你没有使用我们的插件，不要担心！您在<code>2.3</code>中获得的知识应该足够让您在构建过程中添加一个PowerShell/Bash脚本步骤，运行您已经使用过的相同的<code>Octo.exe</code>命令。为此，您将需要<code>Octo.exe</code>在构建时驻留在您的构建代理上。你可以通过添加<a href="https://www.nuget.org/packages/OctopusTools/" rel="nofollow">这个NuGet包</a>或者<a href="https://chocolatey.org/packages/octopustools" rel="nofollow">这个Chocolatey包</a>作为依赖来实现。</p>
+
+<p>不管怎样，如果您使用插件步骤，或者原始的<code>Octo.exe</code>调用，您需要传递的主要值是:</p>
+
+<ul>
+<li><p><code>Release Version</code>。我们强烈建议您使用您的内部版本号来设置这个值，这样您总是知道哪个内部版本触发了Octopus中的哪个版本。</p>
+</li>
+<li><p>您要部署到的<code>Environment</code>。</p>
+</li>
+</ul>
+
+<p><strong> Pro提示</strong> <br/>插件/扩展提供的每一个“创建发布”步骤都会有一个名为<code>Show Deployment Progress</code>或类似的复选框。如果您选中该框，您的构建服务器将保持与您的Octopus部署的连接，并在您的构建日志中实时显示它的输出。此外，如果部署失败，构建过程中的该步骤也将失败。这最后一点非常方便，只要看看你的构建就知道在Octopus中的部署是否失败了。</p>
+<p>如果您正在使用一个原始的<code>Octo.exe</code>调用，那么这个特性的等价物就是<code>--progress</code>参数。</p>
+
+
+<p>如果您在这一步遇到问题，请查看我们的<a href="https://octopus.com/docs/packaging-applications/build-servers/troubleshooting-integrations-with-build-servers" class="alert-link">故障排除指南</a>,了解如何解决问题，或者学习如何在我们的论坛中寻求帮助。</p>
+
+
+<h2 id="a-few-words-about-build-server-plugins-and-octo.exe">关于构建服务器插件和Octo.exe的几句话</h2>
+
+<p>如果你查看我们的<a href="https://octopus.com/docs/octopus-rest-api"> API </a>和<a href="https://octopus.com/docs/packaging-applications/build-servers">构建服务器</a>文档，你会注意到我们的团队为一些最流行的构建服务器构建了一些插件。这些插件扩展了构建服务器的功能，通过添加一些自定义步骤来完成Octopus的功能，比如触发部署和推送包。下面的列表链接到每个插件的文档，以及每个插件提供的步骤列表。</p>
+
+<ul>
+<li><strong><a href="https://octopus.com/docs/packaging-applications/build-servers/tfs-azure-devops">VSTS/TFS</a>T3】</strong><ul>
+<li>创建八达通释放</li>
+<li>部署八达通释放</li>
+<li>促进章鱼释放</li>
+<li>包装应用</li>
+<li>将包推给八达通</li>
+</ul>
+</li>
+<li><strong> <a href="https://octopus.com/docs/packaging-applications/build-servers/teamcity">团队合作</a> </strong>          <ul>
+<li>创建发布</li>
+<li>部署发布</li>
+<li>促进释放</li>
+<li>推送包装(也称为包装)</li>
+</ul>
+</li>
+<li><strong> <a href="https://octopus.com/docs/packaging-applications/build-servers/bamboo">竹子</a> </strong>          <ul>
+<li>创建发布</li>
+<li>部署发布</li>
+<li>打包包装</li>
+<li>推送包</li>
+</ul>
+</li>
+<li><strong>供应商</strong>(即将推出)</li>
+</ul>
+
+<p>在幕后，这些步骤实际上只是围绕<code>Octo.exe</code>的UI包装器。因此，如果您没有使用上面的任何构建服务器，您可以简单地在构建过程的脚本步骤中使用<code>Octo.exe</code>来获得相同的结果。</p>
+
+<hr/>
+
+<p>就是这样！我真的希望这个指南能帮助你以一种更有条理的方式将Octopus整合到你的CI渠道中。</p>
+
+<p>请记住，本指南做了很多假设，主要针对真正基本的CI渠道。如果您觉得这里描述的步骤不适合您的流程，<a href="https://octopus.com/docs/packaging-applications/build-servers/troubleshooting-integrations-with-build-servers#Octopus-Steps-Ask-for-help">请联系我们的支持论坛</a>，我们会帮您一把。</p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

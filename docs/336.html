@@ -1,0 +1,295 @@
+<html>
+<head>
+<title>Installing WildFly From Scratch - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从头开始安装wild fly-Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/installing-wildfly-from-scratch#2022-08-09">https://octopus.com/blog/installing-wildfly-from-scratch#2022-08-09</a></blockquote>
+                        <p>WildFly和Red Hat JBoss Enterprise Application Platform是目前最流行的Java EE应用服务器之一。WildFly可免费用于开发和生产目的，这篇博客文章介绍了WildFly启动和运行所需的步骤。</p>
+
+<h2 id="relationship-between-wildfly-and-jboss-eap">WildFly和JBoss EAP的关系</h2>
+
+<p>WildFly和Red Hat JBoss企业应用平台(简称JBoss EAP)都是开源的Java EE应用服务器。</p>
+
+<p>WildFly在WildFly网站的社区支持下免费开放。WildFly相当频繁地发布重大更新，并且发布的支持窗口很短。</p>
+
+
+
+<p>JBoss EAP是作为Red Hat订阅的一部分提供的。JBoss EAP基于与WildFly相同的技术，尽管在JBoss EAP版本和WildFly版本之间没有一对一的映射。JBoss EAP版本的支持窗口比WildFly长得多，并且由Red Hat支持。</p>
+
+<p>我还没有找到任何关于WildFly支持窗口的官方文档，尽管<a href="https://developer.jboss.org/thread/267585" class="alert-link" rel="nofollow">这个论坛帖子</a>确实表明只有当前的主要版本是“受支持的”，所有以前的版本都被认为是遗留版本。</p>
+
+
+<h2 id="java-ee-terminology">Java EE术语</h2>
+
+<p>围绕企业Java平台的术语在过去几年中发生了变化，这是一个非常混乱的来源，尤其是对于非开发人员来说。</p>
+
+<p>Java 2平台企业版(J2EE)是在1999年与J2EE 1.2一起推出的，J2EE的名字一直使用到2003年J2EE 1.4。</p>
+
+<p>在2005年，随着Java EE 5的发布，这个名称被改为Java企业版(Java EE)。Java EE名称一直使用到2017年的Java EE 8。</p>
+
+<p>2017年，甲骨文开源了Java EE平台，现在由Eclipse Foundation以Eclipse Enterprise for Java (EE4J)的名字管理。</p>
+
+<h2 id="servlet-only-vs-java-ee">纯Servlet与Java EE</h2>
+
+<p>WildFly作为一个纯Servlet或完整的Java EE应用服务器发行版提供。</p>
+
+<p>对于那些希望部署不依赖于Java EE标准的应用程序的人来说，Serlvet-Only发行版是一个不错的选择。例如，用Spring库编写的应用程序只需要一个servlet应用服务器就可以运行。</p>
+
+<p>完整的应用服务器发行版包括对完整的Java EE规范的支持，并且是纯Servlet发行版的超集。</p>
+
+<p>旧的Java EE应用服务器会因为加载可能没有被任何已部署的应用程序使用的库而产生内存开销，但是现在WildFly只加载所需的库做得很好。因此，尽管完整的应用服务器发行版是一个更大的包，但这并不一定意味着它在运行时会消耗更多的内存。</p>
+
+
+<p>对于这篇博文，我们将使用完整的应用服务器发行版。</p>
+
+<h2 id="install-java">安装Java</h2>
+
+<p>作为一个Java web服务器，WildFly需要安装Java才能运行。</p>
+
+<p>WildFly 11至少需要Java 8才能运行。</p>
+
+<h3 id="jre-or-jdk">杰尔还是JDK？</h3>
+
+<p>Java安装以Java运行时环境(JRE)或Java开发工具包(JDK)的形式提供。</p>
+
+<p>JRE提供了运行Java应用程序所需的所有功能，包括WildFly。JDK提供了JRE，以及一些开发人员用来编译和管理Java应用程序的附加工具。</p>
+
+<p>野花可以和JRE或者JDK一起工作。开发人员通常使用JDK，它是一个较大的软件包，所以如果您有疑问，请安装JRE。</p>
+
+<h3 id="openjdk-or-oracle-jdk">OpenJDK还是甲骨文JDK？</h3>
+
+<p>OpenJDK是Java平台的开源实现。它通常包含在Linux包管理器中，包名类似于<code>openjdk-8-jre</code>或<code>openjdk-8-jdk</code>。</p>
+
+<p>OpenJDK是项目的名称，虽然它的名称中包含缩写“JDK ”,但OpenJDK项目同时提供了JRE和JDK。</p>
+
+<p>Oracle JDK是Oracle提供的Java实现。通常，你必须从<a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html" rel="nofollow">甲骨文网站</a>手动下载并安装甲骨文JDK。</p>
+
+<p>使用OpenJDK还是Oracle JDK是个人的选择。我将在Linux发行版中使用OpenJDK，因为使用包管理器安装很容易。在Windows或MacOS中，我会安装Oracle JDK。</p>
+
+<h2 id="downloading-wildfly">疯狂下载</h2>
+
+<p>野花有zip或tar.gz包装。对于Windows用户来说，两者都可以。对于Linux用户来说，tar.gz包是首选，因为它将保留shell脚本的可执行标志。</p>
+
+<p>在写这篇博文的时候，WildFly 11.0.0是最后一个主要版本，这也是这篇博文将要提到的版本。</p>
+
+<h2 id="standalone-vs-domain">独立与域</h2>
+
+<p>WildFly可以在两种不同的模式下运行:独立模式或域模式。</p>
+
+<p>当运行管理自己的配置和部署的WildFly实例时，使用独立模式。</p>
+
+<p>域模式用于将应用程序配置和部署到多个WildFly实例。在域模式下，域控制器将配置和应用程序分发给域从属设备。</p>
+
+<p>不应将域与集群混淆。域的存在只是为了分发设置和应用程序，这些设置可能会也可能不会构建集群环境。同样，如果单独配置了所需的设置，独立实例也可以加入集群。</p>
+
+
+<h2 id="manually-running-wildfly">手动运行WildFly</h2>
+
+<p>WildFly可以在域或独立模式下启动。每种模式都有单独的脚本启动。</p>
+
+<p>要在独立模式下启动WildFly，请在Windows中运行<code>bin\standalone.bat</code>脚本，在Linux中运行<code>bin/standalone.sh</code>脚本。</p>
+
+<p>要在域模式下启动WildFly，在Windows中运行<code>bin\domain.bat</code>脚本，在Linux中运行<code>bin/domain.sh</code>脚本。</p>
+
+<h2 id="configuring-wildfly-memory-settings">配置WildFly内存设置</h2>
+
+<p>WildFly使用的内存设置在<code>JAVA_OPTS</code>环境变量中定义。如果没有这个环境变量，缺省值在Windows的<code>bin/standalone.conf.bat</code>和<code>bin/domain.conf.bat</code>文件中定义，或者在Linux的<code>bin/standalone.conf</code>和<code>bin/domain.conf</code>文件中定义。</p>
+
+<p>在Windows配置文件中，您会看到如下命令:</p>
+
+<pre><code>if not "x%JAVA_OPTS%" == "x" (
+  echo "JAVA_OPTS already set in environment; overriding default settings with values: %JAVA_OPTS%"
+  goto JAVA_OPTS_SET
+)
+rem # ...
+set "JAVA_OPTS=-Xms64M -Xmx512M -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m"
+</code></pre>
+
+<p>在Linux配置文件中，您会看到如下命令:</p>
+
+<pre><code>if [ "x$JAVA_OPTS" = "x" ]; then
+   JAVA_OPTS="-Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
+   JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS -Djava.awt.headless=true"
+else
+   echo "JAVA_OPTS already set in environment; overriding default settings with values: $JAVA_OPTS"
+fi
+</code></pre>
+
+<p>要覆盖这些配置文件中分配给<code>JAVA_OPTS</code>的默认值，您可以定义<code>JAVA_OPTS</code>环境变量。环境变量优先于默认值。否则，您可以直接编辑配置文件中的默认值。</p>
+
+<p>通过查看Oracle文档，可以找到关于此处显示的设置的更多信息。例如，<a href="https://docs.oracle.com/javase/8/docs/technotes/tools/windows/java.html" rel="nofollow">这个文档</a>列出了Java 8的选项。</p>
+
+<p>一些Java设置是特定于版本的。确保使用特定于你正在运行的Java版本的设置。</p>
+
+
+<h2 id="configuring-admin-users">配置管理员用户</h2>
+
+<p>为了登录到管理控制台或将WildFly配置为Windows服务，您首先需要定义一个管理用户。为Windows添加了<code>bin\add-user.bat</code>脚本，为Linux添加了<code>bin/add-user.sh</code>脚本。</p>
+
+<p>你可以运行add-user脚本WildFly正在运行。新用户将被自动挑选。</p>
+
+
+<p>一旦脚本运行，您将会被询问一些问题:</p>
+
+<ul>
+<li>添加什么类型的用户-管理用户</li>
+<li>用户名</li>
+<li>密码</li>
+<li>用户将属于什么组-留空</li>
+<li>用户是否用于AS过程互连-否</li>
+</ul>
+
+<p>我在下面粘贴了<code>add-user</code>脚本的输出。请注意，我用新密码更新了现有的禁用用户<code>admin</code>。</p>
+
+<pre><code>$ ./add-user.sh
+
+What type of user do you wish to add?
+ a) Management User (mgmt-users.properties)
+ b) Application User (application-users.properties)
+(a): a
+
+Enter the details of the new user to add.
+Using realm 'ManagementRealm' as discovered from the existing property files.
+Username : admin
+User 'admin' already exists and is disabled, would you like to...
+ a) Update the existing user password and roles
+ b) Enable the existing user
+ c) Type a new username
+(a): a
+Password recommendations are listed below. To modify these restrictions edit the add-user.properties configuration file.
+ - The password should be different from the username
+ - The password should not be one of the following restricted values {root, admin, administrator}
+ - The password should contain at least 8 characters, 1 alphabetic character(s), 1 digit(s), 1 non-alphanumeric symbol(s)
+Password : &lt;enter password&gt;
+Re-enter Password : &lt;enter password&gt;
+What groups do you want this user to belong to? (Please enter a comma separated list, or leave blank for none)[  ]:
+Updated user 'admin' to file '/Users/matthewcasperson/Downloads/wildfly-11.0.0.CR1/standalone/configuration/mgmt-users.properties'
+Updated user 'admin' to file '/Users/matthewcasperson/Downloads/wildfly-11.0.0.CR1/domain/configuration/mgmt-users.properties'
+Updated user 'admin' with groups  to file '/Users/matthewcasperson/Downloads/wildfly-11.0.0.CR1/standalone/configuration/mgmt-groups.properties'
+Updated user 'admin' with groups  to file '/Users/matthewcasperson/Downloads/wildfly-11.0.0.CR1/domain/configuration/mgmt-groups.properties'
+Is this new user going to be used for one AS process to connect to another AS process?
+e.g. for a slave host controller connecting to the master or for a Remoting connection for server to server EJB calls.
+yes/no? no
+</code></pre>
+
+<p>该脚本将修改域和独立模式的<code>mgmt-users.properties</code>和<code>mgmt-groups.properties</code>文件(即<code>standalone\configuration</code>和<code>domain\configuration</code>目录下的属性文件)。这意味着无论你打算在哪个模式下使用WildFly，用户都是可用的。</p>
+
+<h2 id="installing-wildfly-as-a-service">将WildFly安装为服务</h2>
+
+<p>生产WildFly实例通常作为服务启动。这允许WildFly在操作系统启动时启动，在操作系统关闭时关闭，并使用操作系统内置的服务管理工具进行管理。</p>
+
+<h3 id="installing-wildfly-as-a-windows-service">将WildFly安装为Windows服务</h3>
+
+<p>WildFly附带了一个名为<code>service.bat</code>的脚本，可以用来添加Windows服务。这些服务通过WildFly管理接口进行管理，默认情况下该接口监听端口<code>9990</code>。<code>jbossuser</code>和<code>jbosspass</code>字段需要匹配用<code>add-user.bat</code>脚本创建的凭证。</p>
+
+<p>此命令会将独立实例配置为Windows服务。</p>
+
+<pre><code>bin\service\service.bat install /jbossuser admin /jbosspass password /controller localhost:9990 /startup /name "WildFly 11 Standalone"
+</code></pre>
+
+<p>此命令会将域控制器配置为Windows服务。</p>
+
+<pre><code>bin\service\service.bat install /jbossuser admin /jbosspass password /controller localhost:9990 /startup /host /hostconfig host-master.xml /name "WildFly 11 Domain Controller"
+</code></pre>
+
+<p>此命令会将域从属配置为Windows服务。</p>
+
+<pre><code>bin\service\service.bat install /jbossuser admin /jbosspass password /controller localhost:9990 /startup /host /hostconfig host-slave.xml /name "WildFly 11 Domain Slave"
+</code></pre>
+
+<h3 id="installing-wildfly-as-a-linux-service">将WildFly安装为Linux服务</h3>
+
+<p>WildFly在<code>docs/contrib/scripts/init.d</code>和<code>docs/contrib/scripts/systemd</code>目录中附带了init.d和systemd服务定义文件。</p>
+
+<p>在我们配置任何Linux服务之前，我们需要添加一个将运行WildFly的用户。这个用户将被称为<code>wildfly</code>，可以通过运行命令<code>sudo useradd wildfly</code>来创建。</p>
+
+<p>接下来确保野花已经被提取到<code>/opt/wildfly</code>。<code>/opt</code>目录<a href="http://www.tldp.org/LDP/Linux-Filesystem-Hierarchy/html/opt.html" rel="nofollow">是为所有不属于默认安装</a>的软件和附加包保留的，这很好地描述了我们的WildFly安装(也是所提供的服务脚本中的默认路径)。</p>
+
+<p>最后，使用命令<code>sudo chown wildfly:wildfly -R /opt/wildfly</code>确保<code>wildfly</code>用户是<code>/opt/wildfly</code>目录的所有者。</p>
+
+<h4 id="configuring-the-systemd-service">配置systemd服务</h4>
+
+<p>以下步骤将配置WildFly由systemd管理。</p>
+
+<ol>
+<li>用命令<code>cp /opt/wildfly/docs/contrib/scripts/systemd/launch.sh /opt/wildfly/bin</code>将<code>launch.sh</code>脚本复制到<code>bin</code>目录中。</li>
+<li>用命令<code>sudo cp /opt/wildfly/docs/contrib/scripts/systemd/wildfly.service /etc/systemd/system</code>将WildFly systemd单元复制到<code>/etc/systemd/system</code>中。</li>
+<li>用命令<code>sudo mkdir /etc/wildfly</code>创建<code>/etc/wildfly</code>目录。</li>
+<li>用命令<code>sudo cp /opt/wildfly/docs/contrib/scripts/systemd/wildfly.conf /etc/wildfly</code>将配置文件复制到<code>/etc/wildfly</code>中。</li>
+<li>使用命令<code>sudo systemctl enable wildfly</code>启用WildFly服务。</li>
+<li>用命令<code>sudo systemctl start wildfly</code>启动WildFly服务。</li>
+</ol>
+
+<p>此时WildFly将会运行，您可以使用命令<code>sudo systemctl status wildfly</code>来验证这一点。</p>
+
+<pre><code>$sudo systemctl status wildfly
+● wildfly.service - The WildFly Application Server
+   Loaded: loaded (/etc/systemd/system/wildfly.service; enabled; vendor preset: enabled)
+   Active: active (running) since Tue 2017-10-24 16:48:53 AEST; 1min 38s ago
+ Main PID: 5448 (launch.sh)
+    Tasks: 68 (limit: 4915)
+   CGroup: /system.slice/wildfly.service
+           ├─5448 /bin/bash /opt/wildfly/bin/launch.sh standalone standalone.xml 0.0.0.0
+           ├─5449 /bin/sh /opt/wildfly/bin/standalone.sh -c standalone.xml -b 0.0.0.0
+           └─5502 java -D[Standalone] -server -Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true -Djboss.
+
+Oct 24 16:48:53 matthew-VirtualBox systemd[1]: Started The WildFly Application Server.
+</code></pre>
+
+<h4 id="configuring-the-init.d-service">配置init.d服务</h4>
+
+<p>以下步骤将配置WildFly由init.d管理。</p>
+
+<ol>
+<li>将适当的初始化脚本从<code>wildfly-init-redhat.sh</code>或<code>wildfly-init-debian.sh</code>复制到<code>/etc/init.d/wildfly</code>。例如，如果您有一个基于Red Hat的发行版，您可以使用命令<code>sudo cp /opt/wildfly/docs/contrib/scripts/init.d/wildfly-init-redhat.sh /etc/init.d/wildfly</code>来复制文件。如果你有基于Debian的发行版，用命令<code>sudo cp /opt/wildfly/docs/contrib/scripts/init.d/wildfly-init-debian.sh /etc/init.d/wildfly</code>复制文件。</li>
+<li>用命令<code>sudo cp /opt/wildfly/docs/contrib/scripts/init.d/wildfly.conf /etc/default</code>将文件<code>wildfly.conf</code>复制到<code>/etc/default</code>。</li>
+<li>用命令<code>sudo service wildfly start</code>启动服务。</li>
+</ol>
+
+<p>此时WildFly将会运行，您可以使用命令<code>sudo service wildfly status</code>进行验证。在这个取自Centos 7的示例中，init.d脚本由systemd管理。</p>
+
+<pre><code>$ sudo service wildfly status
+● wildfly.service - LSB: WildFly Application Server
+   Loaded: loaded (/etc/rc.d/init.d/wildfly; bad; vendor preset: disabled)
+   Active: active (running) since Tue 2017-10-24 19:34:44 AEST; 8min ago
+     Docs: man:systemd-sysv-generator(8)
+  Process: 3071 ExecStart=/etc/rc.d/init.d/wildfly start (code=exited, status=0/SUCCESS)
+   CGroup: /system.slice/wildfly.service
+           ├─3102 /bin/sh /opt/wildfly/bin/standalone.sh -c standalone.xml
+           └─3151 java -D[Standalone] -server -Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256...
+
+Oct 24 19:34:40 localhost.localdomain systemd[1]: Starting LSB: WildFly Application Server...
+</code></pre>
+
+<h2 id="opening-the-admin-console">打开管理控制台</h2>
+
+<p>当WildFly被手动或作为服务启动时，可以从http://localhost:9990获得管理控制台。</p>
+
+<p>当您第一次加载管理控制台时，您将被要求输入您用<code>add-user</code>脚本创建的凭证。</p>
+
+<p>出于我不明白的原因，Chrome不会提示你保存用来访问管理控制台的凭证，除非你刷新页面。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/wildfly-admin-console.png" class="zoom" data-title=""><img src="../Images/7bf9f7b4674f4542793de7edf340a80f.png" class="img-fluid center" alt="WildFly Admin Console" data-original-src="https://i.octopus.com/blog/2017-10/wildfly-admin-console.png"/>T2】</a></p>
+
+<p>管理控制台提供了部署web应用程序、更改设置、监控性能、查看日志文件等功能。</p>
+
+<p>我们之前创建的管理员用户可以访问管理控制台的所有方面。如果你需要细粒度的控制，考虑使用基于角色的访问控制(RBAC)。</p>
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我们已经看到了如何在Windows和Linux中手动运行WildFly和作为一个服务，配置一个管理员用户，并打开管理控制台。</p>
+
+<p>如果您对将Java应用程序自动部署到WildFly感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看<a href="https://octopus.com/docs/deployments/java/deploying-java-applications">我们的文档</a>。</p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,349 @@
+<html>
+<head>
+<title>CloudFormation, WildFly and Deploying Maven Artifacts - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>云形成，野火和部署Maven工件-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/cloudformation-and-java#2022-07-14">https://octopus.com/blog/cloudformation-and-java#2022-07-14</a></blockquote>
+                        <p>在过去的几个月里，Octopus增加了许多新特性，允许您部署Java应用程序，使用Maven feeds中的工件，以及部署AWS CloudFormation模板。在这篇博文中，我们将探讨如何将所有这些元素结合起来，在基于云的环境中部署Java应用程序。</p>
+
+<h2 id="the-maven-feed">Maven提要</h2>
+
+<p>我们将要部署的应用程序将来自Maven central。要访问它，我们需要在Octopus中配置Maven提要。这在<span class="path">库➜外部进料</span>中完成。Maven Central的网址是https://repo.maven.apache.org/maven2/的<a href="https://repo.maven.apache.org/maven2/" rel="nofollow"/>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/maven-feed.png" class="zoom" data-title=""><img src="../Images/6027daf11d717f1eaf3e888a7b71d9c8.png" class="img-fluid center" alt="Maven Feed" data-original-src="https://i.octopus.com/blog/2018-02/maven-feed.png"/>T2】</a></p>
+
+<h2 id="the-aws-account">AWS帐户</h2>
+
+<p>Octopus CloudFormation步骤通过AWS帐户向AWS进行身份验证。这些账户由<span class="path">基础设施➜账户➜亚马逊网络服务账户</span>管理。你可以通过我们的<a href="https://octopus.com/docs/infrastructure/aws/creating-an-aws-account">文档</a>找到更多关于创建AWS账户的信息，记住账户需要有一些<a href="https://octopus.com/docs/deployments/aws/permissions">通用权限</a>才能有效地用于部署CloudFormation模板。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/aws-account.png" class="zoom" data-title=""><img src="../Images/e35507332549985b5aedd13b91d0f398.png" class="img-fluid center" alt="AWS Account" data-original-src="https://i.octopus.com/blog/2018-02/aws-account.png"/>T2】</a></p>
+
+<h2 id="the-ssh-account">SSH帐户</h2>
+
+<p>我们还需要配置一个帐户，用于通过SSH连接到WildFly EC2实例。这些账户由<span class="path">基础设施➜账户➜ SSH密钥对</span>管理。在这里，我们将创建一个SSH帐户，用户名为<code>bitnami</code>(因为这是Bitnami AMIs配置的用户名——下面将详细介绍)和PEM文件，您需要在AWS中创建该文件并将其分配给EC2映像。你可以在他们的<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html" rel="nofollow">文档</a>中找到更多关于创建AWS密钥对的信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/ssh-account.png" class="zoom" data-title=""><img src="../Images/792870203d6ad3011cb9468577d3d2ab.png" class="img-fluid center" alt="SSH Account" data-original-src="https://i.octopus.com/blog/2018-02/ssh-account.png"/>T2】</a></p>
+
+<h2 id="the-machine-policy">机器政策</h2>
+
+<p>我们需要配置的最后一个全局Octopus设置是机器策略，可在<span class="path">基础设施➜机器策略</span>下访问。</p>
+
+<p>与轮询触角不同，SSH目标必须有准确的IP地址或主机名才能参与Octopus部署。然而，将由CloudFormation模板创建的EC2实例没有固定的IP地址，并且当EC2实例停止并再次启动时，它们所具有的IP地址将会改变。这意味着我们需要做两件事来确保我们的EC2实例在Octopus中正确配置:</p>
+
+<ol>
+<li>每次EC2实例启动时，将EC2实例添加到Octopus中(如果它尚未注册)。</li>
+<li>让Octopus清理任何未通过健康检查的部署目标。</li>
+</ol>
+
+<p>我们将在后面的章节中用CloudFormation模板中的一些脚本来处理第一步。通过编辑默认机器策略中的<code>Clean Up Unavailable Deployment Targets</code>部分来启用<code>Automatically delete unavailable machines</code>来配置步骤2。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/machine-policy.png" class="zoom" data-title=""><img src="../Images/940416ffa743a65833138121018276ad.png" class="img-fluid center" alt="Machine Policy" data-original-src="https://i.octopus.com/blog/2018-02/machine-policy.png"/>T2】</a></p>
+
+<h2 id="the-wildfly-ami">野花AMI</h2>
+
+<p>我们将利用<a href="https://bitnami.com/stack/wildfly" rel="nofollow"> Bitnami </a>提供的ami作为我们CloudFormation模板的基础。Bitnami提供了大量免费的最新图像，并预装了流行的开源应用程序，这使我们能够快速启动并运行EC2 WildFly实例。</p>
+
+<p>我发现获得AMI ID的最简单方法是在AWS控制台的<code>Public images</code>下搜索<code>WildFly</code>。请记住，这些AMI IDs是特定于地区的，所以<code>ami-5069332a</code>的ID只在北弗吉尼亚州有效。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/bitnami-amis.png" class="zoom" data-title=""><img src="../Images/33ce08b4e104634b9709da955064af8e.png" class="img-fluid center" alt="Bitnami AMIs" data-original-src="https://i.octopus.com/blog/2018-02/bitnami-amis.png"/>T2】</a></p>
+
+<h2 id="the-cloudformation-template">云形成模板</h2>
+
+<p>拥有一个AMI是成功的一半。另一半是从中构建EC2实例，为此我们将利用Octopus 2018.2中引入的CloudFormation步骤。</p>
+
+<p>这个CloudFormation模板必须执行许多步骤:</p>
+
+<ol>
+<li>将AMI部署为EC2实例。</li>
+<li>配置一些标准标签。</li>
+<li>安装支持DotNET Core 2应用程序所需的软件包。</li>
+<li>配置文件系统权限以允许WildFly静默身份验证。</li>
+<li>向Octopus服务器注册EC2实例。</li>
+</ol>
+
+<p>这是完整的模板</p>
+
+<pre><code class="language-yaml">AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  WildFly:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: ami-5069332a
+      InstanceType: m3.medium
+      KeyName: DukeLegion
+      Tags:
+        -
+          Key: Appplication
+          Value: WildFly
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value: WildFly
+        -
+          Key: OS
+          Value: Linux
+        -
+          Key: OwnerContact
+          Value: "#{Contact}"
+        -
+          Key: Purpose
+          Value: Support Test Instance
+        -
+          Key: Source
+          Value: CloudForation Script in Octopus Deploy
+        -
+          Key: scheduler:ec2-startstop
+          Value: true
+      UserData:
+        Fn::Base64: |
+          #cloud-boothook
+          #!/bin/bash
+          echo "Starting" &gt; /tmp/cloudhook
+          sudo apt-get --assume-yes update
+          sudo apt-get --assume-yes install curl libunwind8 gettext apt-transport-https jq
+          getent group deployment || sudo groupadd deployment
+          sudo usermod -a -G deployment wildfly
+          sudo usermod -a -G deployment bitnami
+          echo "Editing permissions" &gt;&gt; /tmp/cloudhook
+          sudo chgrp deployment /opt/bitnami/wildfly/standalone/tmp/auth
+          sudo chmod 775 /opt/bitnami/wildfly/standalone/tmp/auth
+          role="WildFly"
+          serverUrl="#{ServerURL}"
+          apiKey="#{APIKey}"
+          environment="#{Environment}"
+          accountId="#{AccountID}"
+          localIp=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
+          existing=$(wget -O- --header="X-Octopus-ApiKey: $apiKey" ${serverUrl}/api/machines/all | jq ".[] | select(.Name==\"$localIp\") | .Id" -r)
+          if [ -z "${existing}" ]; then
+            fingerprint=$(sudo ssh-keygen -l -E md5 -f /etc/ssh/ssh_host_rsa_key.pub | cut -d' ' -f2 | cut -b 5-)
+            environmentId=$(wget --header="X-Octopus-ApiKey: $apiKey" -O- ${serverUrl}/api/environments?take=100 | jq ".Items[] | select(.Name==\"${environment}\") | .Id" -r)
+            machineId=$(wget --header="X-Octopus-ApiKey: $apiKey" --post-data "{\"Endpoint\": {\"DotNetCorePlatform\":\"linux-x64\", \"CommunicationStyle\":\"Ssh\",\"AccountType\":\"SshKeyPair\",\"AccountId\":\"$accountId\",\"Host\":\"$localIp\",\"Port\":\"22\",\"Fingerprint\":\"$fingerprint\"},\"EnvironmentIds\":[\"$environmentId\"],\"Name\":\"$localIp\",\"Roles\":[\"${role}\"]}" -O- ${serverUrl}/api/machines | jq ".Id" -r)
+          fi
+Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+      - WildFly
+      - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>为了将AMI部署为EC2实例，我们配置了一个类型为<code>AWS::EC2::Instance</code>的资源，将<code>ImageId</code>设置为我们正在部署的AMI ID。</p>
+
+<pre><code class="language-yaml">WildFly:
+  Type: 'AWS::EC2::Instance'
+  Properties:
+    ImageId: ami-5069332a
+</code></pre>
+
+<p>在Octopus内部，我们有一堆需要在任何EC2实例上设置的标签。至少您需要设置<code>Name</code>标记，因为这是出现在AWS控制台中的名称。</p>
+
+<p>注意在Octopus中使用变量替换<a href="https://octopus.com/docs/deployment-process/variables/variable-substitution-syntax" class="alert-link">来设置<code>OwnerContact</code>标签值。我们将在后面的步骤中定义这个变量。</a></p>
+
+
+<pre><code class="language-yaml">Tags:
+  -
+    Key: Appplication
+    Value: WildFly
+  -
+    Key: Domain
+    Value: None
+  -
+    Key: Environment
+    Value: Test
+  -
+    Key: LifeTime
+    Value: Transient
+  -
+    Key: Name
+    Value: WildFly
+  -
+    Key: OS
+    Value: Linux
+  -
+    Key: OwnerContact
+    Value: "#{Contact}"
+  -
+    Key: Purpose
+    Value: Support Test Instance
+  -
+    Key: Source
+    Value: CloudForation Script in Octopus Deploy
+  -
+    Key: scheduler:ec2-startstop
+    Value: true
+</code></pre>
+
+<p>为了将这个EC2实例用作Octopus部署目标，它需要安装Mono，或者安装支持DotNET Core 2所需的包。在这个例子中，我选择支持后者。因为Bitnami AMI运行的是Debian，所以我们使用<code>apt-get</code>来安装在<a href="https://docs.microsoft.com/en-us/dotnet/core/linux-prerequisites?tabs=netcore2x" rel="nofollow">先决条件中列出的依赖项。Linux上的NET Core</a>。</p>
+
+<p><code>#cloud-boothook</code>标记被<code>cloud-init</code>服务用来<a href="http://cloudinit.readthedocs.io/en/latest/topics/format.html#cloud-boothook" rel="nofollow">识别应该在每次引导时运行的脚本</a>。</p>
+
+<p>在生产环境中，像这样的依赖项将被放入基本AMI映像中，而不是在实例启动时安装。</p>
+
+
+<pre><code class="language-yaml">UserData:
+  Fn::Base64: |
+    #cloud-boothook
+    #!/bin/bash
+    sudo apt-get --assume-yes update
+    sudo apt-get --assume-yes install curl libunwind8 gettext apt-transport-https jq
+</code></pre>
+
+<p>Bitnami映像在首次启动时会为WildFly管理控制台创建一个随机密码。您可以使用Bitnami 提供的<a href="https://docs.bitnami.com/aws/faq/#find_credentials" rel="nofollow">指令找到这些凭证。然而，我们可以通过启用</a><a href="https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html-single/how_to_configure_server_security/index#silent_authentication" rel="nofollow">静默认证</a>来避免需要知道这些凭证。静默认证允许访问<code>/opt/bitnami/wildfly/standalone/tmp/auth</code>目录的进程在不提供用户名和密码的情况下通过WildFly进行认证。因为运行WildFly部署的代码将从WildFly EC2实例本身执行，所以我们可以授予对该目录的权限，并且不再需要知道Bitnami生成的随机密码。</p>
+
+<p>这里我们创建一个名为<code>deployment</code>的组，将<code>wildfly</code>和<code>bitnami</code>用户添加到该组，将<code>/opt/bitnami/wildfly/standalone/tmp/auth</code>目录的组所有权分配给<code>deployment</code>组，并授予该组对该目录的完全权限。这意味着当Octopus使用<code>bitnami</code>用户连接到EC2实例时，它将完全控制<code>/opt/bitnami/wildfly/standalone/tmp/auth</code>目录，因此可以利用静默认证。</p>
+
+<pre><code class="language-bash">getent group deployment || sudo groupadd deployment
+sudo usermod -a -G deployment wildfly
+sudo usermod -a -G deployment bitnami
+sudo chgrp deployment /opt/bitnami/wildfly/standalone/tmp/auth
+sudo chmod 775 /opt/bitnami/wildfly/standalone/tmp/auth
+</code></pre>
+
+<p>最后，我们需要这个EC2实例向Octopus服务器注册自己，如果它还没有这样做的话。脚本的这一部分查询Octopus API，以确定EC2实例的当前主机名是否存在一个部署目标，如果没有找到部署目标，就会添加它。</p>
+
+<p>该脚本中的许多变量是使用<a href="https://octopus.com/docs/deployment-process/variables/variable-substitution-syntax" class="alert-link">变量替换</a>提供的。这些将在下一节中定义。</p>
+
+
+<pre><code class="language-bash">role="WildFly"
+serverUrl="#{ServerURL}"
+apiKey="#{APIKey}"
+environment="#{Environment}"
+accountId="#{AccountID}"
+localIp=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
+existing=$(wget -O- --header="X-Octopus-ApiKey: $apiKey" ${serverUrl}/api/machines/all | jq ".[] | select(.Name==\"$localIp\") | .Id" -r)
+if [ -z "${existing}" ]; then
+  fingerprint=$(sudo ssh-keygen -l -E md5 -f /etc/ssh/ssh_host_rsa_key.pub | cut -d' ' -f2 | cut -b 5-)
+  environmentId=$(wget --header="X-Octopus-ApiKey: $apiKey" -O- ${serverUrl}/api/environments?take=100 | jq ".Items[] | select(.Name==\"${environment}\") | .Id" -r)
+  machineId=$(wget --header="X-Octopus-ApiKey: $apiKey" --post-data "{\"Endpoint\": {\"DotNetCorePlatform\":\"linux-x64\", \"CommunicationStyle\":\"Ssh\",\"AccountType\":\"SshKeyPair\",\"AccountId\":\"$accountId\",\"Host\":\"$localIp\",\"Port\":\"22\",\"Fingerprint\":\"$fingerprint\"},\"EnvironmentIds\":[\"$environmentId\"],\"Name\":\"$localIp\",\"Roles\":[\"${role}\"]}" -O- ${serverUrl}/api/machines | jq ".Id" -r)
+fi
+</code></pre>
+
+<h2 id="the-default-security-group">默认安全组</h2>
+
+<p>上面的CloudFormation模板没有定义安全组。这意味着使用默认的。为了通过SSH访问EC2实例并打开WildFly托管的网站，默认安全组需要打开端口<code>22</code>和<code>80</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/default-security-group.png" class="zoom" data-title=""><img src="../Images/ea432bc21fff7c44559cc9795885183a.png" class="img-fluid center" alt="Default security group" data-original-src="https://i.octopus.com/blog/2018-02/default-security-group.png"/>T2】</a></p>
+
+<p>在生产环境中，应该使用专用的安全组。</p>
+
+
+<h2 id="the-variables">变量</h2>
+
+<p>CloudFormation脚本有许多使用<a href="https://octopus.com/docs/deployment-process/variables/variable-substitution-syntax">变量替换</a>定义的变量。这些变量在我们的Octopus项目的<span class="path">变量➜项目</span>部分中定义。</p>
+
+<p>通过获取URL <code>https://octopusserver/app#/infrastructure/accounts/sshkeypair-bitnami</code>的最后一个元素找到<code>sshkeypair-bitnami</code>的<code>AccountID</code>变量，这是从<span class="path">基础设施➜帐户➜ SSH密钥对</span>打开Bitnami SSH帐户时显示的URL。</p>
+
+
+<p>注意<code>AWS Account</code>变量被设置为之前创建的<code>AWS Account</code>。该变量由Octopus步骤使用，而不是由CloudFormation模板直接使用。</p>
+
+<p>你可以从<a href="https://octopus.com/docs/octopus-rest-api/how-to-create-an-api-key">文档</a>中获得更多关于创建Octopus API密匙的信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/project-variables.png" class="zoom" data-title=""><img src="../Images/696e995e8b19799831a7f84751a6f790.png" class="img-fluid center" alt="Project Variables" data-original-src="https://i.octopus.com/blog/2018-02/project-variables.png"/>T2】</a></p>
+
+<h2 id="starting-the-deployment-with-no-targets">开始没有目标的部署</h2>
+
+<p>因为我们正在创建我们将作为Octopus项目的一部分部署到的基础设施，所以我们需要配置一些设置，以允许Octopus在没有任何预先存在的有效目标的情况下开始部署。这是在<code>Deployment Targets</code>下的项目设置中完成的。将值设置为<code>Allow deployments to be created when there are no deployment targets</code>意味着即使没有可用的目标，项目也可以开始部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/allow-deployments-no-targets.png" class="zoom" data-title=""><img src="../Images/3b1f9719e7b340a3196c880887b617ab.png" class="img-fluid center" alt="Allow deployments with no targets" data-original-src="https://i.octopus.com/blog/2018-02/allow-deployments-no-targets.png"/>T2】</a></p>
+
+<h2 id="the-cloudformation-step">云形成步骤</h2>
+
+<p>现在是时候开始定义项目步骤了。我们将从部署CloudFormation模板开始，这是通过<code>Deploy an AWS CloudFormation template</code>步骤完成的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/cloudformation-step.png" class="zoom" data-title=""><img src="../Images/2d7ba0062c62ebf664a71e6453e607c7.png" class="img-fluid center" alt="CloudFormation Step" data-original-src="https://i.octopus.com/blog/2018-02/cloudformation-step.png"/>T2】</a></p>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/cloudformation-wildfly.png" class="zoom" data-title=""><img src="../Images/3ddb34ceb96f1446449cbd0b15d8fe09.png" class="img-fluid center" alt="CloudFormation WildFly" data-original-src="https://i.octopus.com/blog/2018-02/cloudformation-wildfly.png"/>T2】</a></p>
+
+<h2 id="the-health-check-step">健康检查步骤</h2>
+
+<p>一旦部署了CloudFormation模板，它所创建的EC2实例将启动并向Octopus注册自己作为部署目标。我们现在需要将这个新目标添加到项目将要部署到的目标列表中。这是使用<code>Health Check</code>步骤完成的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/health-check.png" class="zoom" data-title=""><img src="../Images/daf610a9f9e65e0d02fbfc14714c75bd.png" class="img-fluid center" alt="Health Check" data-original-src="https://i.octopus.com/blog/2018-02/health-check.png"/>T2】</a></p>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/health-check-wildfly.png" class="zoom" data-title=""><img src="../Images/e756e1b8fcec76301ae4967524ec4c49.png" class="img-fluid center" alt="Health Check WildFly" data-original-src="https://i.octopus.com/blog/2018-02/health-check-wildfly.png"/>T2】</a></p>
+
+<h2 id="the-wildfly-deployment-step">野火部署步骤</h2>
+
+<p>既然我们新创建或更新的EC2实例是我们的部署目标列表的一部分，我们可以向它部署我们的Java应用程序。这是使用<code>Deploy to WildFly or EAP</code>步骤完成的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/wildfly-step.png" class="zoom" data-title=""><img src="../Images/6c8d1dc8466f78ba8a85e4575a66accf.png" class="img-fluid center" alt="WildFly Step" data-original-src="https://i.octopus.com/blog/2018-02/wildfly-step.png"/>T2】</a></p>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><code>com.github.gwtmaterialdesign:gwt-material-demo</code>工件是由<a href="https://github.com/GwtMaterialDesign/gwt-material" class="alert-link" rel="nofollow"> gwt-material </a>项目发布的WAR文件。我们在这里使用它是因为它是一个已经托管在Maven Central上的方便的示例项目。</p>
+
+
+<p>请注意，我们没有提供<code>Management user</code>或<code>Management password</code>。这意味着我们依赖WildFly静默认证功能。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/wildfly-deployment.png" class="zoom" data-title=""><img src="../Images/1b5c480f670e402b9e0470a893cab436.png" class="img-fluid center" alt="WildFly Deployment" data-original-src="https://i.octopus.com/blog/2018-02/wildfly-deployment.png"/>T2】</a></p>
+
+<h2 id="the-final-output-step">最终输出步骤</h2>
+
+<p>为了方便运行此部署的人员，我们将显示一些有用的摘要信息。这是通过<code>Run a Script</code>步骤完成的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/run-script.png" class="zoom" data-title=""><img src="../Images/c6fdb7efe78e57f709c15c27a4393667.png" class="img-fluid center" alt="Run a Script" data-original-src="https://i.octopus.com/blog/2018-02/run-script.png"/>T2】</a></p>
+
+<p>部署CloudFormation模板时，Octopus会捕获任何输出变量，并将其用于后续步骤。我们利用这一点，基于EC2实例的公共IP地址构建一些URL。</p>
+
+<pre><code class="language-powershell">Write-Host "Open application at http://$($OctopusParameters["Octopus.Action[WildFly CloudFormation].Output.AwsOutputs[PublicIp]"])/gwtdemo"
+Write-Host "Establish an SSH tunnel with:"
+Write-Host "ssh -L 9990:localhost:9990 bitnami@$($OctopusParameters["Octopus.Action[WildFly CloudFormation].Output.AwsOutputs[PublicIp]"]) -i YourAWSKeyPair.pem"
+Write-Host "Then open http://localhost:9990"
+Write-Host "Find the credentials using the instructions from https://docs.bitnami.com/aws/faq/starting-bitnami-aws/find_credentials/"
+</code></pre>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/run-script-wildfly.png" class="zoom" data-title=""><img src="../Images/eb959b24fcac05a1dc62c4609de64b3d.png" class="img-fluid center" alt="Run Script WildFly Deployment" data-original-src="https://i.octopus.com/blog/2018-02/run-script-wildfly.png"/>T2】</a></p>
+
+<h2 id="deploying-the-project">部署项目</h2>
+
+<p>下面是这个项目的一个部署结果的截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/cloudformation-output.png" class="zoom" data-title=""><img src="../Images/29d3f7e62af7d36c810638e787b6dc50.png" class="img-fluid center" alt="CloudFormation Output" data-original-src="https://i.octopus.com/blog/2018-02/cloudformation-output.png"/>T2】</a></p>
+
+<p>请注意CloudFormation模板部署的输出中的这几行:</p>
+
+<pre><code>Saving variable "Octopus.Action[WildFly CloudFormation].Output.AwsOutputs[StackId]"
+Saving variable "Octopus.Action[WildFly CloudFormation].Output.AwsOutputs[PublicIp]"
+</code></pre>
+
+<p>这些日志消息提供了一种简单的方法来获取作为CloudFormation部署的结果而创建的任何输出变量的完整变量名。</p>
+
+<p>还要注意运行状况检查步骤的输出。在这个部署中，我通过在UserData脚本中添加一个注释，对CloudFormation模板进行了一些调整。虽然这种变化不影响EC2实例的部署方式，但CloudFormation将其视为对现有堆栈的更改，因此关闭并重新启动EC2实例。这又给了EC2实例一个新的公共IP，这意味着EC2实例将在启动时向Octopus注册自己。然后，运行状况检查步骤检查旧的部署目标和新的部署目标，确定旧的目标不再有效并将其删除，并成功完成对新目标的运行状况检查，并将其包括在用于剩余部署的目标列表中。</p>
+
+<h2 id="open-the-web-application">打开Web应用程序</h2>
+
+<p>最后一个脚本步骤的输出生成了一个URL<code>http://107.20.112.198/gwtdemo/</code>。打开它显示GWT材料演示应用程序。</p>
+
+<p>这个URL实际上对您不起作用，因为这个演示EC2实例已经关闭。为您生成的URL将具有不同的IP地址。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/gwt-material.png" class="zoom" data-title=""><img src="../Images/ecdc74de8f044b9c4046740b6852936d.png" class="img-fluid center" alt="GWT Material" data-original-src="https://i.octopus.com/blog/2018-02/gwt-material.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过将部署CloudFormation模板和Java应用程序的许多新步骤整合在一起，我们可以非常容易地创建一个Octopus项目，该项目动态地构建云基础架构并向其部署应用程序。</p>
+
+<p>如果您对自动化部署Java应用程序或创建云基础设施感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看我们的文档。</p>
+
+                    
+                    
+</body>
+</html>

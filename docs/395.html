@@ -1,0 +1,211 @@
+<html>
+<head>
+<title>Creating an EKS cluster with eksctl - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用eksctl - Octopus Deploy创建EKS集群</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/kubernetes-with-eksctl#2022-07-07">https://octopus.com/blog/kubernetes-with-eksctl#2022-07-07</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/eksctl-kubernetes-clusters.png" class="zoom" data-title=""><img src="../Images/646c6614f8d91b8000246a4eccee24d8.png" class="img-fluid center" alt="Illustration showing an EKS Kubernetes cluster" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/eksctl-kubernetes-clusters.png"/>T2】</a></p>
+
+<p>EKS是由AWS提供的托管Kubernetes服务。在高层次上，EKS由两个组件组成:被管理的EKS控制平面和工作节点。EKS控制平面是AWS中的专用资源，具有云形成类型<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-eks-cluster.html" rel="nofollow"> AWS <span> EKS </span>集群</a>。另一方面，worker节点只是EC2实例，它们在部署过程中被配置为加入Kubernetes集群。</p>
+
+<p>以前，创建所有这些资源是您自己的责任，这不是一项简单的任务。您负责创建VPC、子网、互联网网关、自动扩展组、IAM角色、EC2实例等等。</p>
+
+<p>幸运的是，今天我们有了<a href="https://eksctl.io" rel="nofollow"> eksctl </a>，这是一个命令行工具，展示了一个熟悉的动词/名词参数结构，用于创建和管理EKS集群。</p>
+
+<p>在这篇博文中，我们将看看如何使用<code>eksctl</code>将一个简单的EKS集群部署并集成到Octopus中。</p>
+
+<h2 id="preparing-the-octopus-server">准备Octopus服务器</h2>
+
+<p>专门对Octopus使用Kubernetes集群和EKS意味着在Octopus服务器上有可用的<code>kubectl</code>和<code>aws-iam-authenticator</code>二进制文件。</p>
+
+<p>关于安装<code>kubectl</code>的信息可以在<a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/#install-kubectl-on-windows" rel="nofollow"> Kubernetes文档</a>中找到，你可以从<a href="https://g.octopushq.com/AWSEKSKubectl" rel="nofollow"> AWS文档</a>中找到关于<code>aws-iam-authenticator</code>的更多信息。</p>
+
+<h2 id="preparing-the-octopus-library">准备章鱼图书馆</h2>
+
+<p>对于这个例子，我们将使用直接来自Octopus的<code>eksctl</code>。为了让<code>eksctl</code>在我们的脚本中可用，我们首先需要从<a href="https://github.com/weaveworks/eksctl/releases" rel="nofollow"> eksctl GitHub releases </a>页面下载二进制文件。</p>
+
+<p>你下载的文件会被叫做类似<code>eksctl_Windows_amd64.zip</code>的东西。将此重命名为<code>eksctl.0.4.3.zip</code>(用您下载的<code>eksctl</code>版本替换<code>0.4.3</code>)。新文件名嵌入了版本，这种格式是Octopus所要求的。重命名后，文件可以上传到Octopus内置的提要中。</p>
+
+<p>【T2 <img src="../Images/5f1e46a8219a1d9d5b0bf39d93c3ef54.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/built-in-feed.png"/></p>
+
+<p><em>eks CTL包上传到内置feed。</em></p>
+
+<p>我们还需要检查YAML的文件来提取他们的价值。PowerShell本身不支持YAML解析，这意味着我们需要使用第三方库。</p>
+
+<p>使用PowerShell模块的一个简单方法是将PowerShell Gallery添加到Octopus。提要的URL是https://www.powershellgallery.com/api/v2/的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/powershell-gallery-feed.png" class="zoom" data-title=""><img src="../Images/0ad824f65b4f715c7ddd9149099f967d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/powershell-gallery-feed.png"/>T2】</a></p>
+
+<p><em>PowerShell Gallery Nuget feed。</em></p>
+
+<h2 id="preparing-the-credentials">准备凭据</h2>
+
+<p>EKS集群使用AWS凭据进行身份验证。AWS账户在Octopus中作为专用账户类型公开。您可以在他们的<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html#Using_CreateAccessKey" rel="nofollow">文档</a>中找到关于生成AWS访问键的更多信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/aws-account.png" class="zoom" data-title=""><img src="../Images/9f3294bfd603d48587e03f9038f7a9cd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/aws-account.png"/>T2】</a></p>
+
+<p><em>AWS账户。</em></p>
+
+<h2 id="preparing-the-environment">准备环境</h2>
+
+<p>我们将利用动态创建的基础设施来创建指向新EKS集群的新Kubernetes目标。</p>
+
+<p>为了使动态基础设施能够作为部署的一部分被创建，环境需要启用<code>Dynamic Infrastructure</code>选项。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/dynamic-infrastructure.png" class="zoom" data-title=""><img src="../Images/0328c3dd8f93a1e557f9863b28ba4e5d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/dynamic-infrastructure.png"/>T2】</a></p>
+
+<p>允许创建动态基础设施的环境。</p>
+
+<h2 id="the-octopus-project">章鱼项目</h2>
+
+<p>在我们的Octopus项目中，我们需要设置的第一件事是变量。我们之前创建的AWS帐户被项目中的一个<code>AWS Account</code>变量类型引用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/octopus-variables.png" class="zoom" data-title=""><img src="../Images/5a1a0f0c09f900fa46684d6cb015a18f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/octopus-variables.png"/>T2】</a></p>
+
+<p><em>项目变量，定义指向AWS账户的单个变量。</em></p>
+
+<p>现在我们可以添加一个<code>Run an AWS CLI Script</code>步骤来调用<code>eksctl</code>来创建EKS集群，然后创建Octopus Kubernetes目标。</p>
+
+<p>该步骤引用了我们之前设置的AWS account变量来执行登录。该步骤还定义了将在其中进行部署的AWS区域。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/step-1.png" class="zoom" data-title=""><img src="../Images/cf551157b90c097f3c78483ee0c2f3e3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/step-1.png"/>T2】</a></p>
+
+<p><em>AWS CLI脚本步骤使用的凭据和区域。</em></p>
+
+<p>我们的脚本将引用另外两个包:包含<code>eksctl</code>可执行文件的包，以及来自PowerShell Gallery提要的<code>powershell-yaml</code>模块。这两个附加包都被设置为提取。</p>
+
+<p>这里，我们利用引用的包以两种不同的方式丰富了部署。</p>
+<p><code>eksctl</code>包是一个使用参考包为我们的脚本提供额外的二进制工具的例子。特别是AWS生态系统有丰富的第一和第三方CLI工具(例如，<a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html" class="alert-link" rel="nofollow"> SAM CLI </a>、<a href="https://github.com/s3tools/s3cmd" class="alert-link" rel="nofollow"> S3cmd </a>、<a href="https://eksctl.io" class="alert-link" rel="nofollow"> eksctl </a>、<a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/eb-cli3-getting-started.html" class="alert-link" rel="nofollow"> Beanstalk CLI </a>和<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_CLI.html" class="alert-link" rel="nofollow"> ECS CLI </a>)，可以通过这种方式捆绑在一起。</p>
+<p><code>powershell-yaml</code>包是利用PowerShell Gallery向我们的PowerShell脚本公开模块的一个例子。这样就不需要让这些模块在全球范围内可用，或者将它们与定制脚本捆绑在一起。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/step-2.png" class="zoom" data-title=""><img src="../Images/45116da531ce75c976dc61d476237f66.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/step-2.png"/>T2】</a></p>
+
+<p><em>引用的包，将在部署过程中下载和提取。</em></p>
+
+<p>最后，我们有剧本本身。以下是完整的代码:</p>
+
+<pre><code class="language-PowerShell">Import-Module -Name .\powershell-yaml
+
+$clusterName = "mycluster"
+
+# Check to see if the cluster exists
+eksctl\eksctl get cluster --name $clusterName 2&gt;&amp;1
+
+# If the cluster does not exist, create it. Otherwise get the kubeconfig file
+if ($LASTEXITCODE -ne 0) {
+    eksctl\eksctl create cluster --name $clusterName --kubeconfig eks.yaml
+} else {
+    eksctl\eksctl utils write-kubeconfig --name $clusterName --kubeconfig eks.yaml
+}
+
+# Convert the kubeconfig from YAML
+$kubeConfig = Get-Content -Path eks.yaml -Raw
+$kubeConfigObject = ConvertFrom-Yaml $kubeConfig
+# Extract the cluster URL
+$clusterUrl = $kubeConfigObject.clusters[0].cluster.server
+
+# Create an Octopus target
+New-OctopusKubernetesTarget `
+    -name $clusterName `
+    -octopusRoles "EKS" `
+    -clusterUrl $clusterUrl `
+    -octopusAccountIdOrName $AWS `
+    -clusterName $clusterName `
+    -namespace "default" `
+    -updateIfExisting `
+    -skipTlsVerification True
+</code></pre>
+
+<p>让我们来分解这个代码。</p>
+
+<p>我们从导入来自PowerShell Gallery Nuget提要的<code>powershell-yaml</code>模块开始。这将使我们稍后能够访问像<code>ConvertFrom-Yaml</code>这样的功能:</p>
+
+<pre><code class="language-PowerShell">Import-Module -Name .\powershell-yaml
+</code></pre>
+
+<p>EKS集群的名称是在一个变量中定义的，因为它将在脚本中多次使用:</p>
+
+<pre><code class="language-PowerShell">$clusterName = "mycluster"
+</code></pre>
+
+<p>然后我们通过调用<code>eksctl</code>来检查EKS集群是否已经存在。</p>
+
+<p>Octopus步骤应该被设计成幂等的，这意味着不管任何外部系统的状态如何，它们都可以运行多次。不幸的是，<code>eksclt</code>没有公开幂等命令，这意味着如果您试图创建一个已经存在的集群，您将会收到一个错误。通过检查集群是否已经存在，我们可以实现自己的<em>创建或更新</em>逻辑。</p>
+
+<p>注意，<code>eksctl</code>可执行文件已经被提取到了<code>eksctl</code>目录，因此我们调用了<code>eksctl\eksctl</code>:</p>
+
+<pre><code class="language-PowerShell"># Check to see if the cluster exists
+eksctl\eksctl get cluster --name $clusterName 2&gt;&amp;1
+</code></pre>
+
+<p>如果集群不存在(我们从调用<code>eksctl get cluster</code>的返回代码中确定)，我们就创建它。<code>--name</code>参数定义了EKS集群的名称，而<code>--kubeconfig</code>参数定义了保存客户端连接到集群所需的详细信息的文件名:</p>
+
+<pre><code class="language-PowerShell"># If the cluster does not exist, create it. Otherwise get the kubeconfig file
+if ($LASTEXITCODE -ne 0) {
+    eksctl\eksctl create cluster --name $clusterName --kubeconfig eks.yaml
+}
+</code></pre>
+
+<p>如果集群已经存在，我们将保存kubeconfig详细信息:</p>
+
+<pre><code class="language-PowerShell">else {
+ eksctl\eksctl utils write-kubeconfig --name $clusterName --kubeconfig eks.yaml
+}
+</code></pre>
+
+<p>此时，不管EKS集群是新创建的还是已经存在的，我们都有一个名为<code>eks.yaml</code>的文件，其中包含了客户端连接到集群所需的详细信息。通常这个配置文件会被<code>kubectl</code>命令行工具直接使用，但是在这个例子中，我们想要获取该文件的细节，并使用它们来创建一个Octopus Kubernetes目标。</p>
+
+<p>为了提取文件的细节，我们使用作为<code>powershell-yaml</code>库的一部分导入的<code>ConvertFrom-Yaml</code>函数将其从原始YAML转换为PowerShell对象:</p>
+
+<pre><code class="language-PowerShell"># Convert the kubeconfig from YAML
+$kubeConfig = Get-Content -Path eks.yaml -Raw
+$kubeConfigObject = ConvertFrom-Yaml $kubeConfig
+</code></pre>
+
+<p>然后，我们提取EKS集群的URL:</p>
+
+<pre><code class="language-PowerShell"># Extract the cluster URL
+$clusterUrl = $kubeConfigObject.clusters[0].cluster.server
+</code></pre>
+
+<p>最后一步是使用<code>New-OctopusKubernetesTarget</code>函数在Octopus中创建新的Kubernetes目标。此功能记录在<a href="https://octopus.com/docs/infrastructure/deployment-targets/dynamic-infrastructure/kubernetes-target">这里</a>。</p>
+
+<p>请注意，<code>$AWS</code>变量是由Octopus提供的，它被设置为AWS帐户的ID:</p>
+
+<pre><code class="language-PowerShell"># Create an Octopus target
+New-OctopusKubernetesTarget `
+    -name $clusterName `
+    -octopusRoles "EKS" `
+    -clusterUrl $clusterUrl `
+    -octopusAccountIdOrName $AWS `
+    -clusterName $clusterName `
+    -namespace "default" `
+    -updateIfExisting `
+    -skipTlsVerification True
+</code></pre>
+
+<p>部署这个项目将导致创建EKS集群(如果它还不存在的话)，生成<code>eks.yaml</code>文件，以及新创建或更新的Octopus Kubernetes目标。</p>
+
+<p>【T2 <img src="../Images/e01a5feebd9051da8f6cd2ff6939c119.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/deployment-log.png"/></p>
+
+<p><em>部署日志。</em></p>
+
+<p>然后，我们可以在基础设施页面上看到新的Kubernetes目标。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/k8s-target.png" class="zoom" data-title=""><img src="../Images/9579065439088ec44bdcb2d2d6c80ee8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-with-eksctl/k8s-target.png"/>T2】</a></p>
+
+<p><em>通过调用New-octopus kubernetastarget创建的Kubernetes目标。</em></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>以前，创建EKS集群是一个复杂的过程，需要多个步骤来配置控制平面、工作节点以及所有相关的网络和安全性。</p>
+
+<p>如今，使用<code>eksctl</code>工具，创建一个完整的EKS集群只需一个命令。在本文中，我们看到了如何在Octopus中编写执行<code>eksctl</code>的脚本来创建EKS集群和Octopus Kubernetes目标。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,112 @@
+<html>
+<head>
+<title>Integrating Octopus and Grafana - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>集成Octopus和Grafana - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/grafana#2021-08-12">https://octopus.com/blog/grafana#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/grafana/blogimage-integrating-octopus-and-grafana.png" class="zoom" data-title=""><img src="../Images/bb2c5afcdb71788a46cfec9e3d7ba66d.png" class="img-fluid center" alt="Integrating Octopus and Grafana" data-original-src="https://i.octopus.com/blog/2020-11/grafana/blogimage-integrating-octopus-and-grafana.png"/>T2】</a></p>
+
+<p>Octopus长期以来一直通过<code>/api/reporting/deployments/xml</code> API端点公开部署数据。有了Octopus的Grafana datasource的EAP版本，这些信息可以很容易地可视化，允许团队跟踪他们的部署成功和频率。</p>
+
+<p>在这篇文章和截屏中，我将向您展示如何安装Grafana插件，导入示例仪表板，以及定制图表来显示对您重要的信息。</p>
+
+<h2 id="screencast">截屏</h2>
+
+<iframe src="https://www.youtube.com/embed/bPmjJkkEa3g" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="installing-the-plugin">安装插件</h2>
+
+<p>这个插件可以通过项目的<a href="https://github.com/OctopusDeploy/OctopusGrafanaDataSource/releases" rel="nofollow"> GitHub发布页面</a>获得。</p>
+
+<p>ZIP文件需要解压到Grafana插件目录下的子目录中。在Linux上，这个目录通常是<code>/var/lib/grafana/plugins</code>，对于Windows，默认目录是<code>INSTALL_DIR\data\plugins</code>。</p>
+
+<p>对于这个例子，我将部署到Ubuntu 20.04，我将使用以下命令提取zip文件:</p>
+
+<pre><code>unzip octopus_grafana_datasource.zip -d /var/lib/grafana/plugins/octopus
+</code></pre>
+
+<h2 id="allowing-the-unsigned-plugin-to-be-loaded">允许加载未签名的插件</h2>
+
+<p>Grafana区分了签名插件和未签名插件。Octopus插件是未签名的，必须在Grafana中明确允许。这是通过编辑<code>grafana.ini</code>文件来完成的。在我的Ubuntu虚拟机上，这可以在<code>/etc/grafana/grafana.ini</code>找到。</p>
+
+<p>我们需要配置的设置是<code>[plugins]</code>部分下的<code>allow_loading_unsigned_plugins</code>。该设置必须列出Octopus插件的ID:</p>
+
+<pre><code>[plugins]
+allow_loading_unsigned_plugins = octopus-deploy-xmlfeed
+</code></pre>
+
+<p>Grafana必须重启以加载新的配置，然后加载Octopus插件。</p>
+
+<h2 id="configuring-the-datasource">配置数据源</h2>
+
+<p>Octopus数据源有两个属性:</p>
+
+<ul>
+<li>章鱼服务器</li>
+<li>Octopus API密钥</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/grafana/datasource.png" class="zoom" data-title=""><img src="../Images/8a095fd3f2c984b4a767dd466876c63e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-11/grafana/datasource.png"/>T2】</a></p>
+
+<p><em>Octopus数据源配置。</em></p>
+
+<h2 id="importing-the-sample-dashboard">导入示例仪表板</h2>
+
+<p>我们已经提供了一个显示通用部署指标的示例仪表板。该仪表板可从<a href="https://grafana.com/grafana/dashboards/13413" rel="nofollow"> Grafana仪表板库</a>获得。要导入它，点击左侧面板上的<strong>仪表盘</strong>图标，点击<strong>管理</strong>，然后点击<strong>导入</strong>。在<strong>通过grafana.com</strong>导入选项下，可以加载<a href="https://grafana.com/grafana/dashboards/13413" rel="nofollow">https://grafana.com/grafana/dashboards/13413</a>的示例仪表板URL:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/grafana/import.png" class="zoom" data-title=""><img src="../Images/83bf147fc743a8e8201c149df61dc96d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-11/grafana/import.png"/>T2】</a></p>
+
+<p><em>导入样本仪表板。</em></p>
+
+<p>选择上面创建的数据源并完成导入后，将显示以下仪表板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/grafana/dashboard.png" class="zoom" data-title=""><img src="../Images/11a884d2e1079781803dde625d9b1166.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-11/grafana/dashboard.png"/>T2】</a></p>
+
+<p><em>样本仪表板。</em></p>
+
+<h2 id="dashboard-variables">仪表板变量</h2>
+
+<p>该插件将空间、环境、项目、渠道和租户作为仪表板<a href="https://grafana.com/docs/grafana/latest/variables/variable-types/add-query-variable/" rel="nofollow">查询变量</a>公开:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/grafana/variables.png" class="zoom" data-title=""><img src="../Images/fed2b20f9094ec28a32679597046b594.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-11/grafana/variables.png"/>T2】</a></p>
+
+<p><em>配置为查询变量的环境的例子。</em></p>
+
+<p>然后，这些变量会显示在仪表板的顶部，以自定义在图表中显示哪些部署。变量可以通过<strong>空间名称过滤器</strong>、<strong>项目名称过滤器</strong>、<strong>环境名称过滤器</strong>、<strong>通道名称过滤器</strong>和<strong>租户名称过滤器</strong>字段在查询中引用:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/grafana/query.png" class="zoom" data-title=""><img src="../Images/8cadc56b11fb7e07e3af7ac466acc216.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-11/grafana/query.png"/>T2】</a></p>
+
+<p><em>查询中使用的变量。</em></p>
+
+<h2 id="available-metrics">可用指标</h2>
+
+<p>该插件公开了许多指标:</p>
+
+<ul>
+<li><strong>成功</strong>:设置为1表示部署成功，否则设置为0。</li>
+<li><strong>失败</strong>:设置为1表示部署失败，否则设置为0。</li>
+<li><strong>取消</strong>:设置为1表示取消部署，否则设置为0。</li>
+<li><strong>超时</strong>:超时部署设置为1，否则设置为0。</li>
+<li><strong>总持续时间</strong>:在给定时间段内部署所花费的总时间。</li>
+<li><strong>平均持续时间</strong>:给定时间段内部署的平均时间。</li>
+<li><strong>总恢复时间</strong>:在给定的时间段内，一次失败的部署和下一次成功的部署之间的总时间。</li>
+<li><strong>平均恢复时间</strong>:在给定的时间段内，一次失败的部署和下一次成功的部署之间的平均时间。</li>
+<li><strong>总部署提前期</strong>:在给定时间段内，从创建发布到完成部署的总时间。</li>
+<li><strong>平均部署提前期</strong>:在给定时间段内，从创建发布到完成部署的平均时间。</li>
+</ul>
+
+<p>计算<strong>总部署提前期</strong>和<strong>平均部署提前期</strong>值需要额外调用Octopus API，因此如果不需要这些值，就不应该选择它们。</p>
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>我们希望Grafana插件能让您深入了解部署的进展情况。这是一个EAP版本，所以我们预计会有错误和功能差距，并且只建议在这个阶段进行测试，但是如果您有任何建议或问题，请通过<a href="https://octopus.com/support">常规支持渠道</a>联系我们。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

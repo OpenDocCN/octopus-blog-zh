@@ -1,0 +1,212 @@
+<html>
+<head>
+<title>SSH into a Kubernetes cluster - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>SSH到Kubernetes集群——Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/ssh-into-kubernetes-cluster#2022-10-26">https://octopus.com/blog/ssh-into-kubernetes-cluster#2022-10-26</a></blockquote>
+                        <p>跳跃盒或堡垒主机是一种常见的网络策略，用于向公共互联网暴露单个安全入口点，以访问私有网络。这种单点入口让安全团队能够密切监视和控制对专用网络的网络访问。通常，bastion主机公开了一个众所周知的远程访问服务，如RDP或SSH，团队可以假设这些服务已经过广泛的审查，是值得信任的。</p>
+
+<p>在本文中，我将解释如何在Kubernetes集群中托管OpenSSH服务器来执行管理任务。</p>
+
+<h2 id="deploying-an-ssh-server">部署SSH服务器</h2>
+
+<p>SSH服务器长期以来一直被用来提供对Linux服务器的远程访问，并且将SSH服务器作为Kubernetes pod来托管相对容易。</p>
+
+<p>下面显示的YAML文件创建了一个服务帐户，该帐户具有一个角色和角色绑定，授予对当前名称空间中公共资源的访问权限。然后，它部署一个<code>linuxserver/openssh-server</code>映像实例，继承服务帐户的权限，并通过负载平衡器服务公开它:</p>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-admin
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: k8s-admin-role
+rules:
+- apiGroups: ["", "extensions", "apps", "networking.k8s.io"]
+  resources: ["deployments", "replicasets", "pods", "services", "ingresses", "secrets", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get"]  
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: k8s-admin-role-binding
+subjects:
+- kind: ServiceAccount
+  name: k8s-admin
+  apiGroup: ""
+roleRef:
+  kind: Role
+  name: k8s-admin-role
+  apiGroup: ""
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-ssh-svc
+  labels:
+    app: ssh
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 2222
+  selector:
+    app: ssh
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-ssh
+  labels:
+    app: ssh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ssh
+  template:
+    metadata:
+      labels:
+        app: ssh
+    spec:
+      serviceAccountName: k8s-admin
+      containers:
+      - name: ssh
+        image: lscr.io/linuxserver/openssh-server:latest
+        ports:
+        - containerPort: 2222
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Australia/Brisbane"
+        - name: USER_NAME
+          value: "admin"
+        - name: USER_PASSWORD
+          value: "Password01!"
+        - name: PASSWORD_ACCESS
+          value: "true"
+        - name: SUDO_ACCESS
+          value: "true"          
+</code></pre>
+
+<p>注意，为了方便起见，这个SSH服务器允许密码访问，示例YAML文件嵌入了一个不安全的示例密码，并允许sudo访问。更可靠的解决方案是使用密钥文件进行身份验证。参考<a href="https://hub.docker.com/r/linuxserver/openssh-server" rel="nofollow"> Docker Hub文档</a>中显示如何使用密钥文件进行认证的示例。</p>
+
+<p>将上面的YAML保存到一个名为<code>ssh.yaml</code>的文件中，并使用命令应用它:</p>
+
+<pre><code class="language-bash">kubectl apply -f ssh.yaml
+</code></pre>
+
+<p>然后，您可以使用以下命令找到负载平衡器服务的IP地址或主机名:</p>
+
+<pre><code class="language-bash">kubectl get service my-ssh-svc
+</code></pre>
+
+<p>在我的本地Kubernetes集群上，该命令返回:</p>
+
+<pre><code class="language-bash">NAME         TYPE           CLUSTER-IP      EXTERNAL-IP      PORT(S)          AGE
+my-ssh-svc   LoadBalancer   10.96.164.169   172.21.255.202   2222:31628/TCP   29m
+</code></pre>
+
+<p>然后，您可以使用以下命令SSH到外部IP地址:</p>
+
+<pre><code class="language-bash">ssh admin@172.21.255.202 -p 2222
+</code></pre>
+
+<p>然后，您可以在Kubernetes集群上的pod内进行交互式会话。</p>
+
+<h2 id="installing-and-configuring-kubectl">安装和配置kubectl</h2>
+
+<p>要对集群做任何有用的事情，您需要下载<code>kubectl</code>并将其配置为从pod中访问集群。使用命令下载并安装<code>kubectl</code>:</p>
+
+<pre><code class="language-bash">curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+</code></pre>
+
+<p>默认情况下，pod在<code>/var/run/secrets/kubernetes.io/serviceaccount</code>下挂载了许多文件，让pod与主机集群进行交互。要配置<code>kubectl</code>使用这些文件，将以下文件保存到<code>~/.kube.config</code>:</p>
+
+<pre><code class="language-yaml">apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    server: https://kubernetes.default
+  name: localk8s
+contexts:
+- context:
+    cluster: localk8s
+    user: user
+  name: localk8s
+current-context: localk8s
+kind: Config
+preferences: {}
+users:
+- name: user
+  user:
+    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+</code></pre>
+
+<p>现在，您可以从SSH会话运行<code>kubectl</code>并与父集群交互，为集群管理提供一个方便而安全的环境。</p>
+
+<h2 id="building-a-custom-openssh-docker-image">构建定制的OpenSSH Docker映像</h2>
+
+<p>下载<code>kubectl</code>和复制配置文件非常容易，但是Kubernetes pods的短暂性意味着最终容器将被删除和重新创建，迫使您再次下载和配置<code>kubectl</code>。</p>
+
+<p>一个更好的解决方案是将<code>kubectl</code>及其配置文件烘焙成一个定制的Docker映像。这确保了文件在容器第一次启动时是可用的。</p>
+
+<p>将以下内容保存到名为<code>Dockerfile</code>的文件中:</p>
+
+<pre><code class="language-Dockerfile">FROM lscr.io/linuxserver/openssh-server:latest
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" &amp;&amp; \
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+RUN printf 'apiVersion: v1\n\
+clusters:\n\
+- cluster:\n\
+    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt\n\
+    server: https://kubernetes.default\n\
+  name: localk8s\n\
+contexts:\n\
+- context:\n\
+    cluster: localk8s\n\
+    user: user\n\
+  name: localk8s\n\
+current-context: localk8s\n\
+kind: Config\n\
+preferences: {}\n\
+users:\n\
+- name: user\n\
+  user:\n\
+    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token' &gt;&gt; /opt/kubeconfig
+RUN printf 'mkdir /config/.kube \n\
+cp /opt/kubeconfig /config/.kube/config' &gt;&gt; /etc/cont-init.d/100-kubeconfig
+</code></pre>
+
+<p>然后，使用以下命令构建定制的Docker映像，其中的<code>yourdockerregistry</code>被替换为Docker注册表的名称，您可以将映像推送到该注册表中:</p>
+
+<pre><code class="language-bash">docker build . -t yourdockerregistry/openssh-server:latest
+</code></pre>
+
+<p>将Kubernetes YAML文件中的<code>image</code>属性替换为:</p>
+
+<pre><code>image: yourdockerregistry/openssh-server:latest
+</code></pre>
+
+<p>在使用您的定制映像创建了新的SSH服务器pods之后，<code>kubectl</code>及其配置文件就可以使用了，不需要先下载它们。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在Kubernetes集群上运行OpenSSH的bastion主机为管理和调试任务提供了一个安全的入口点。通过定制Docker映像来包含像<code>kubectl</code>这样的公共工具，DevOps团队可以依赖bastion主机来完成公共管理任务。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

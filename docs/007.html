@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>Octopus Deploy 2.0 has shipped! - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus Deploy 2.0已经发布！-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/2.0#2015-09-25">https://octopus.com/blog/2.0#2015-09-25</a></blockquote>
+                        <p>昨天，我们发货了<strong> <a href="http://octopusdeploy.com/downloads">章鱼部署2.0 </a> </strong>。这是Octopus 2.0的正式、非测试版、公开、发布到网络的版本。呜哇！</p>
+
+<p><img src="../Images/5ac36768c8be547904864580a0f54566.png" alt="The Octopus 2.0 dashboard" data-original-src="https://i.octopus.com/blog/migrated/octopus-home-660_rykdzs.png"/></p>
+
+<p>Octopus 2.0的开发工作始于去年5月。你能相信吗？我们并不只是添加一些功能和改变配色方案，而是着手<a href="http://octopusdeploy.com/blog/octopus-2.0-vision">开发一个真正的2.0版本</a>。我们在制作Octopus 1.0的过程中学到了很多东西，我们想对产品的架构和一些核心概念做一些根本性的改变。</p>
+
+<h2>REST API</h2>
+
+<p>影响最大的变化是决定开发一个全面的REST API。Octopus 1.0的用户界面是在ASP.NET MVC中构建的。对于2.0，我们删除了几乎所有的代码——控制器和视图——而是从头构建了一个REST API。然后，我们使用Angular JS在该API之上构建了UI。现在，你可以在UI中做的任何事情都可以通过API来完成。事实上，很长一段时间2.0代码根本没有UI；我们构建了一套端到端运行的API测试，使用REST API执行Octopus的所有功能。</p>
+
+<h2>投票触角</h2>
+
+<p>另一个巨大的变化是章鱼和触须之间的通讯栈。在1.0版本中，我们使用WCF——触须监听，章鱼连接。</p>
+
+<p><img src="../Images/d7ddef7e689a63dcf24854449f4450d1.png" alt="Choosing a Tentacle communication mode" data-original-src="https://i.octopus.com/blog/migrated/2014-01-30_14_15_43-Tentacle_Setup_Wizard_nve4jh.png"/></p>
+
+<p>在2.0中，我们现在支持触须在<a href="http://docs.octopusdeploy.com/display/OD/Listening+Tentacles">监听</a>或<a href="http://docs.octopusdeploy.com/display/OD/Polling+Tentacles">轮询</a>模式下。为了实现这一点，我们开发了一个基于消息和参与者的通信栈，在传输层使用HTTP和SSL来交换消息。对于与服务器网络的双向安全通信来说，这是一个非常强大的机制，我希望以后能更多地使用这个特性。</p>
+
+<h2>更轻松的Windows服务和ASP.NET/IIS部署</h2>
+
+<p>我们添加了一些新的约定和特性来处理<a href="http://docs.octopusdeploy.com/display/OD/Windows+Services"> Windows服务</a>和<a href="http://docs.octopusdeploy.com/display/OD/IIS+Websites+and+Application+Pools"> IIS/ASP。NET应用程序部署</a>。</p>
+
+<h2>加密的数据库和变量</h2>
+
+<p>章鱼数据库现在被加密了，我们也增加了对T2加密变量的支持。如果您将连接字符串或密码存储在变量中，现在可以用一种安全的方式来实现。</p>
+
+<p>同时，我们也让<a href="https://octopusdeploy.com/blog/new-in-2.0/library-variable-sets">在项目</a>之间共享变量成为可能。</p>
+
+<h2>引导失败</h2>
+
+<p>当出现问题时，您现在可以选择重试或跳过失败的步骤，而不是简单地部署失败。</p>
+
+<h2>滚动部署</h2>
+
+<p><a href="http://docs.octopusdeploy.com/display/OD/Rolling+deployments">滚动部署</a>让您能够在一台服务器上运行一系列步骤，然后在另一台服务器上开始执行步骤。这使得部署到停机时间有限的web服务器群这样的场景变得更加容易。</p>
+
+<p><img src="../Images/8e21ec6ae03694f523997d2b6db03160.png" alt="Rolling deployments" data-original-src="https://i.octopus.com/blog/migrated/2013-12-18_16_34_28-OctoFX_deployment_process_-_Octopus_Deploy_wp5dsy.png"/></p>
+
+<h2>新的安全模式</h2>
+
+<p>我们重新审视了我们的权限模型，并试图构建一个同样安全，但更有用的东西。<a href="http://docs.octopusdeploy.com/display/OD/Managing+users+and+teams">团队</a>是一个新概念，它允许您指定一组用户及其权限，范围是环境和/或项目。</p>
+
+<h2>可配置仪表板</h2>
+
+<p>是的，您现在终于可以<a href="https://i.octopus.com/blog/migrated/2013-12-23_14_44_58-Dashboard_Configuration_-_Octopus_Deploy_ysfo44.png">更改显示在仪表板上的内容</a>。</p>
+
+<h2>失败步骤，以及在包下载之前运行的步骤</h2>
+
+<p>我们对管理部署步骤的方式进行了一些大的改变。现在，您可以在下载软件包之前运行PowerShell和手动步骤(例如，如果您需要建立VPN)，或者指定仅在失败时运行的步骤(例如，发送电子邮件)。</p>
+
+<h2>变量编辑器改进</h2>
+
+<p>在1.0中，一个变量一次只能作用于一个环境、机器、角色或步骤。现在，变量可以同时作用于多个级别。这大大减少了所需变量的数量。我们还对UX做了一些改进，比如一次编辑多个变量，一次删除多个变量，以及一系列其他的UI更改。</p>
+
+<p><img src="../Images/ec9923e45ee8541559728dfef8f97d4e.png" alt="Variable scoped to multiple environments" data-original-src="https://i.octopus.com/blog/migrated/2013-12-17_22_08_43-Logging_variables_-_Octopus_Deploy_yzso9x.png"/></p>
+
+<h2>摘要</h2>
+
+<p>因为有太多的东西被改变了，我们也做了很多其他的改进。安装程序改头换面了，发布创建页面有了一些新特性，我们在项目列表页面添加了图表来显示活动，还有很多其他的东西。</p>
+
+<p>如果你目前使用的是1.6，你绝对应该<a href="http://docs.octopusdeploy.com/display/OD/Upgrading+from+Octopus+1.6">升级</a>。我希望你喜欢使用章鱼2.0就像我们喜欢构建它一样！</p>
+
+                    
+                    
+</body>
+</html>

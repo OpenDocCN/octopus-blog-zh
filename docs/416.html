@@ -1,0 +1,313 @@
+<html>
+<head>
+<title>Maven versions explained - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Maven版本说明- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/maven-versioning-explained#2022-07-15">https://octopus.com/blog/maven-versioning-explained#2022-07-15</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/maven-versioning-explained/java-octopus.png" class="zoom" data-title=""> <img src="../Images/8dda823895fcdf71604d5eba3502566b.png" class="img-fluid center" alt="Maven versions explained" data-original-src="https://i.octopus.com/blog/2020-09/maven-versioning-explained/java-octopus.png"/> </a></p>
+
+<p>版本字符串通常很容易理解，但是Maven有许多规则和边缘情况不是很明显。在这篇文章中，我将看看Maven版本的字符串是如何工作的。</p>
+
+<h2 id="the-source-of-truth">真理的来源</h2>
+
+<p>Maven发行版包括一个名为<a href="https://github.com/apache/maven/blob/master/maven-artifact/src/main/java/org/apache/maven/artifact/versioning/ComparableVersion.java" rel="nofollow"> ComparableVersion </a>的类，它是不同版本字符串如何相互比较的事实来源。</p>
+
+<p>通过针对这个类编写一些测试，我们可以探索Maven版本是如何工作的。</p>
+
+<h2 id="a-sorted-list-of-versions">版本的排序列表</h2>
+
+<p>让我们从一个测试开始，该测试获取一个由<code>ComparableVersion</code>对象组成的数组，克隆该数组，对其进行排序，并将其与原始列表进行比较。测试通过的事实证明了原始列表从最早版本到最新版本是有序的:</p>
+
+<pre><code class="language-java">private static final ComparableVersion[] VERSIONS = new ComparableVersion[]{
+        new ComparableVersion("NotAVersionSting"),
+        new ComparableVersion("1.0a1-SNAPSHOT"),
+        new ComparableVersion("1.0-alpha1"),
+        new ComparableVersion("1.0beta1-SNAPSHOT"),
+        new ComparableVersion("1.0-b2"),
+        new ComparableVersion("1.0-beta3.SNAPSHOT"),
+        new ComparableVersion("1.0-beta3"),
+        new ComparableVersion("1.0-milestone1-SNAPSHOT"),
+        new ComparableVersion("1.0-m2"),
+        new ComparableVersion("1.0-rc1-SNAPSHOT"),
+        new ComparableVersion("1.0-cr1"),
+        new ComparableVersion("1.0-SNAPSHOT"),
+        new ComparableVersion("1.0"),
+        new ComparableVersion("1.0-sp"),
+        new ComparableVersion("1.0-a"),
+        new ComparableVersion("1.0-RELEASE"),
+        new ComparableVersion("1.0-whatever"),
+        new ComparableVersion("1.0.z"),
+        new ComparableVersion("1.0.1"),
+        new ComparableVersion("1.0.1.0.0.0.0.0.0.0.0.0.0.0.1")
+};
+
+@Test
+public void ensureArrayInOrder() {
+    ComparableVersion[] sortedArray = VERSIONS.clone();
+    Arrays.sort(sortedArray);
+    assertArrayEquals(VERSIONS, sortedArray);
+}
+</code></pre>
+
+<p>这个列表揭示了一些关于Maven版本之间相互比较的有趣事实。</p>
+
+<p>限定词如<code>alpha</code>、<code>beta</code>、<code>milestone</code>(或它们的速记等价物<code>a</code>、<code>b</code>和<code>mc</code>)、<code>rc</code>、<code>sp</code>、<code>ga</code>和<code>final</code>有特殊的含义。句点和破折号等分隔符可以互换使用，或者在某些情况下根本不使用。不遵循任何特定格式的版本字符串仍然是有效的和可比较的。</p>
+
+<h2 id="maven-version-components">Maven版本组件</h2>
+
+<p>虽然<code>ComparableVersion</code>类是版本相互比较的事实来源，但它并不解析特别有用的数据结构中的版本。为此，我们有来自<a href="http://www.mojohaus.org/build-helper-maven-plugin/parse-version-mojo.html" rel="nofollow">构建助手</a>插件的第二个类，名为<a href="https://github.com/mojohaus/build-helper-maven-plugin/blob/master/src/main/java/org/codehaus/mojo/buildhelper/versioning/VersionInformation.java" rel="nofollow">版本信息</a>。</p>
+
+<p><code>VersionInformation</code>将Maven版本字符串分解成5个部分:</p>
+
+<ul>
+<li>重要的</li>
+<li>较小的</li>
+<li>修补</li>
+<li>内部版本号</li>
+<li>预选赛</li>
+</ul>
+
+<p>主要、次要、修补和内部版本号都是整数值。</p>
+
+<p>限定符可以包含任何值，尽管有些限定符确实有特殊的含义。</p>
+
+<h2 id="qualifiers-and-aliases">限定符和别名</h2>
+
+<p>Maven可以识别许多特殊的限定符，这里按优先顺序列出:</p>
+
+<ul>
+<li>阿尔法还是阿尔法</li>
+<li>beta或b</li>
+<li>里程碑或m</li>
+<li>rc或cr</li>
+<li>快照</li>
+<li>(空字符串)或ga或final</li>
+<li>sp</li>
+</ul>
+
+<p>我们在排序版本列表中看到，这些限定符确实导致Maven版本按照与项目符号列表相同的顺序排序。</p>
+
+<p>带有无法识别的限定符的版本被视为比非限定版本更晚的版本，无法识别的限定符被作为不区分大小写的字符串进行比较。</p>
+
+<p>一些限定符有速记别名。该测试显示了各种限定符如何产生相同的Maven版本:</p>
+
+<pre><code class="language-java">@Test
+public void testAliases() {
+    assertEquals(new ComparableVersion("1.0-alpha1"), new ComparableVersion("1.0-a1"));
+    assertEquals(new ComparableVersion("1.0-beta1"), new ComparableVersion("1.0-b1"));
+    assertEquals(new ComparableVersion("1.0-milestone1"), new ComparableVersion("1.0-m1"));
+    assertEquals(new ComparableVersion("1.0-rc1"), new ComparableVersion("1.0-cr1"));
+}
+
+@Test
+public void testDifferentFinalReleases() {
+    assertEquals(new ComparableVersion("1.0-ga"), new ComparableVersion("1.0"));
+    assertEquals(new ComparableVersion("1.0-final"), new ComparableVersion("1.0"));
+}
+</code></pre>
+
+<p>请注意，速记别名后面必须有一个数字，而它们的完全对等名称后面没有数字。如果你仔细看这篇文章开头介绍的排序版本列表，你会发现版本<code>1.0-alpha</code>和<code>1.0a1-SNAPSHOT</code>是最早的两个版本，而<code>1.0-a</code>在列表的末尾。</p>
+
+<p>所有限定符都不区分大小写，如本测试所示:</p>
+
+<pre><code class="language-java">@Test
+public void testCase() {
+    assertEquals(new ComparableVersion("1.0ALPHA1"), new ComparableVersion("1.0-a1"));
+    assertEquals(new ComparableVersion("1.0Alpha1"), new ComparableVersion("1.0-a1"));
+    assertEquals(new ComparableVersion("1.0AlphA1"), new ComparableVersion("1.0-a1"));
+    assertEquals(new ComparableVersion("1.0BETA1"), new ComparableVersion("1.0-b1"));
+    assertEquals(new ComparableVersion("1.0MILESTONE1"), new ComparableVersion("1.0-m1"));
+    assertEquals(new ComparableVersion("1.0RC1"), new ComparableVersion("1.0-cr1"));
+    assertEquals(new ComparableVersion("1.0GA"), new ComparableVersion("1.0"));
+    assertEquals(new ComparableVersion("1.0FINAL"), new ComparableVersion("1.0"));
+    assertEquals(new ComparableVersion("1.0-SNAPSHOT"), new ComparableVersion("1-snapshot"));
+}
+</code></pre>
+
+<p>如果版本字符串不能被解析为major.minor.patch.build，并且无法识别限定符，则整个字符串都被视为限定符。然后将这些限定符作为不区分大小写的字符串进行比较:</p>
+
+<pre><code class="language-java">@Test
+public void testQualifierOnly() {
+    assertTrue(new ComparableVersion("SomeRandomVersionOne").compareTo(
+            new ComparableVersion("SOMERANDOMVERSIONTWO")) &lt; 0);
+    assertTrue(new ComparableVersion("SomeRandomVersionThree").compareTo(
+            new ComparableVersion("SOMERANDOMVERSIONTWO")) &lt; 0);
+}
+</code></pre>
+
+<h2 id="separators">分离器</h2>
+
+<p>从数字转换为限定符时，可以选择使用破折号或句点等分隔符:</p>
+
+<pre><code class="language-java">@Test
+public void testSeparators() {
+    assertEquals(new ComparableVersion("1.0alpha1"), new ComparableVersion("1.0-a1"));
+    assertEquals(new ComparableVersion("1.0alpha-1"), new ComparableVersion("1.0-a1"));
+    assertEquals(new ComparableVersion("1.0beta1"), new ComparableVersion("1.0-b1"));
+    assertEquals(new ComparableVersion("1.0beta-1"), new ComparableVersion("1.0-b1"));
+    assertEquals(new ComparableVersion("1.0milestone1"), new ComparableVersion("1.0-m1"));
+    assertEquals(new ComparableVersion("1.0milestone-1"), new ComparableVersion("1.0-m1"));
+    assertEquals(new ComparableVersion("1.0rc1"), new ComparableVersion("1.0-cr1"));
+    assertEquals(new ComparableVersion("1.0rc-1"), new ComparableVersion("1.0-cr1"));
+    assertEquals(new ComparableVersion("1.0ga"), new ComparableVersion("1.0"));
+}
+</code></pre>
+
+<p>但是，当从限定符转换为数字时，情况就不一样了:</p>
+
+<pre><code class="language-java">@Test
+public void testUnequalSeparators() {
+    assertNotEquals(new ComparableVersion("1.0alpha.1"), new ComparableVersion("1.0-a1"));
+}
+</code></pre>
+
+<p>破折号或句点可用于分隔数字:</p>
+
+<pre><code class="language-java">@Test
+public void testDashAndPeriod() {
+    assertEquals(new ComparableVersion("1-0.ga"), new ComparableVersion("1.0"));
+    assertEquals(new ComparableVersion("1.0-final"), new ComparableVersion("1.0"));
+    assertEquals(new ComparableVersion("1-0-ga"), new ComparableVersion("1.0"));
+    assertEquals(new ComparableVersion("1-0-final"), new ComparableVersion("1-0"));
+    assertEquals(new ComparableVersion("1-0"), new ComparableVersion("1.0"));
+}
+</code></pre>
+
+<h2 id="long-versions">长版本</h2>
+
+<p>虽然<code>VersionInformation</code>类只识别major.minor.patch.build格式，但是<code>ComparableVersion</code>类可以识别任意数量的数字:</p>
+
+<pre><code class="language-java">@Test
+public void testLongVersions() {
+    assertEquals(new ComparableVersion("1.0.0.0.0.0.0"), new ComparableVersion("1"));
+    assertEquals(new ComparableVersion("1.0.0.0.0.0.0x"), new ComparableVersion("1x"));
+}
+</code></pre>
+
+<h2 id="the-complete-test">完整的测试</h2>
+
+<p>这是用于生成上述示例的完整测试类:</p>
+
+<pre><code class="language-java">package org.apache.maven.artifact.versioning;
+
+import org.junit.Test;
+
+import java.util.Arrays;
+
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertArrayEquals;
+
+public class VersionTest {
+
+    private static final ComparableVersion[] VERSIONS = new ComparableVersion[]{
+            new ComparableVersion("NotAVersionSting"),
+            new ComparableVersion("1.0-alpha"),
+            new ComparableVersion("1.0a1-SNAPSHOT"),
+            new ComparableVersion("1.0-alpha1"),
+            new ComparableVersion("1.0beta1-SNAPSHOT"),
+            new ComparableVersion("1.0-b2"),
+            new ComparableVersion("1.0-beta3.SNAPSHOT"),
+            new ComparableVersion("1.0-beta3"),
+            new ComparableVersion("1.0-milestone1-SNAPSHOT"),
+            new ComparableVersion("1.0-m2"),
+            new ComparableVersion("1.0-rc1-SNAPSHOT"),
+            new ComparableVersion("1.0-cr1"),
+            new ComparableVersion("1.0-SNAPSHOT"),
+            new ComparableVersion("1.0"),
+            new ComparableVersion("1.0-sp"),
+            new ComparableVersion("1.0-a"),
+            new ComparableVersion("1.0-RELEASE"),
+            new ComparableVersion("1.0-whatever"),
+            new ComparableVersion("1.0.z"),
+            new ComparableVersion("1.0.1"),
+            new ComparableVersion("1.0.1.0.0.0.0.0.0.0.0.0.0.0.1")
+
+    };
+
+    @Test
+    public void ensureArrayInOrder() {
+        ComparableVersion[] sortedArray = VERSIONS.clone();
+        Arrays.sort(sortedArray);
+        assertArrayEquals(VERSIONS, sortedArray);
+    }
+
+    @Test
+    public void testAliases() {
+        assertEquals(new ComparableVersion("1.0-alpha1"), new ComparableVersion("1.0-a1"));
+        assertEquals(new ComparableVersion("1.0-beta1"), new ComparableVersion("1.0-b1"));
+        assertEquals(new ComparableVersion("1.0-milestone1"), new ComparableVersion("1.0-m1"));
+        assertEquals(new ComparableVersion("1.0-rc1"), new ComparableVersion("1.0-cr1"));
+    }
+
+    @Test
+    public void testDifferentFinalReleases() {
+        assertEquals(new ComparableVersion("1.0-ga"), new ComparableVersion("1.0"));
+        assertEquals(new ComparableVersion("1.0-final"), new ComparableVersion("1.0"));
+    }
+
+    @Test
+    public void testQualifierOnly() {
+        assertTrue(new ComparableVersion("SomeRandomVersionOne").compareTo(
+                new ComparableVersion("SOMERANDOMVERSIONTWO")) &lt; 0);
+        assertTrue(new ComparableVersion("SomeRandomVersionThree").compareTo(
+                new ComparableVersion("SOMERANDOMVERSIONTWO")) &lt; 0);
+    }
+
+    @Test
+    public void testSeparators() {
+        assertEquals(new ComparableVersion("1.0alpha1"), new ComparableVersion("1.0-a1"));
+        assertEquals(new ComparableVersion("1.0alpha-1"), new ComparableVersion("1.0-a1"));
+        assertEquals(new ComparableVersion("1.0beta1"), new ComparableVersion("1.0-b1"));
+        assertEquals(new ComparableVersion("1.0beta-1"), new ComparableVersion("1.0-b1"));
+        assertEquals(new ComparableVersion("1.0milestone1"), new ComparableVersion("1.0-m1"));
+        assertEquals(new ComparableVersion("1.0milestone-1"), new ComparableVersion("1.0-m1"));
+        assertEquals(new ComparableVersion("1.0rc1"), new ComparableVersion("1.0-cr1"));
+        assertEquals(new ComparableVersion("1.0rc-1"), new ComparableVersion("1.0-cr1"));
+        assertEquals(new ComparableVersion("1.0ga"), new ComparableVersion("1.0"));
+    }
+
+    @Test
+    public void testUnequalSeparators() {
+        assertNotEquals(new ComparableVersion("1.0alpha.1"), new ComparableVersion("1.0-a1"));
+    }
+
+    @Test
+    public void testCase() {
+        assertEquals(new ComparableVersion("1.0ALPHA1"), new ComparableVersion("1.0-a1"));
+        assertEquals(new ComparableVersion("1.0Alpha1"), new ComparableVersion("1.0-a1"));
+        assertEquals(new ComparableVersion("1.0AlphA1"), new ComparableVersion("1.0-a1"));
+        assertEquals(new ComparableVersion("1.0BETA1"), new ComparableVersion("1.0-b1"));
+        assertEquals(new ComparableVersion("1.0MILESTONE1"), new ComparableVersion("1.0-m1"));
+        assertEquals(new ComparableVersion("1.0RC1"), new ComparableVersion("1.0-cr1"));
+        assertEquals(new ComparableVersion("1.0GA"), new ComparableVersion("1.0"));
+        assertEquals(new ComparableVersion("1.0FINAL"), new ComparableVersion("1.0"));
+        assertEquals(new ComparableVersion("1.0-SNAPSHOT"), new ComparableVersion("1-snapshot"));
+    }
+
+    @Test
+    public void testLongVersions() {
+        assertEquals(new ComparableVersion("1.0.0.0.0.0.0"), new ComparableVersion("1"));
+        assertEquals(new ComparableVersion("1.0.0.0.0.0.0x"), new ComparableVersion("1x"));
+    }
+
+    @Test
+    public void testDashAndPeriod() {
+        assertEquals(new ComparableVersion("1-0.ga"), new ComparableVersion("1.0"));
+        assertEquals(new ComparableVersion("1.0-final"), new ComparableVersion("1.0"));
+        assertEquals(new ComparableVersion("1-0-ga"), new ComparableVersion("1.0"));
+        assertEquals(new ComparableVersion("1-0-final"), new ComparableVersion("1-0"));
+        assertEquals(new ComparableVersion("1-0"), new ComparableVersion("1.0"));
+    }
+}
+</code></pre>
+
+<p>如果您对Java应用程序的自动化部署感兴趣，请注册一个<a href="https://octopus.com/free"> Octopus Deploy </a>的入门许可证，并查看一下<a href="https://octopus.com/docs/deployments/java/deploying-java-applications">我们的文档</a>。</p>
+
+                    
+                    
+</body>
+</html>

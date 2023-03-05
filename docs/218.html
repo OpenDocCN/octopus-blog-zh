@@ -1,0 +1,194 @@
+<html>
+<head>
+<title>Deploy your first container to Kubernetes via Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>通过Octopus - Octopus Deploy将您的第一个容器部署到Kubernetes</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-your-first-container-to-kubernetes#2021-08-12">https://octopus.com/blog/deploy-your-first-container-to-kubernetes#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/octopus-kubernetes.png" class="zoom" data-title=""><img src="../Images/36cbfeb238ff12ee659b72cfe33669f7.png" class="img-fluid center" alt="Deploy your first container to Kubernetes via Octopus" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/octopus-kubernetes.png"/>T2】</a></p>
+
+<p>在<a href="/blog/getting-started-with-kind-and-octopus">之前的帖子</a>中，我们看到了如何用Kind创建一个本地测试Kubernetes集群，并在Octopus中配置它。在本文中，我们将学习如何使用Octopus中的步骤向本地Kubernetes集群部署和公开单个Docker容器。</p>
+
+<h2 id="create-and-push-the-docker-image">创建并推送Docker映像</h2>
+
+<p>Octopus使用提要从Docker存储库中访问Docker图像。有许多工具可以让你托管自己的Docker存储库，但是当你第一次开始时，公共存储库<a href="https://hub.docker.com/" rel="nofollow"> Docker Hub </a>是最简单的选择。</p>
+
+<p>如果您还没有帐户，请创建一个新帐户，然后使用命令<code>docker login</code>登录Docker Hub:</p>
+
+<pre><code>$ docker login
+Login with your Docker ID to push and pull images from Docker Hub. If you don't have a Docker ID, head over to https://hub.docker.com to create one.
+Username: mcasperson
+Password:
+
+Login Succeeded
+</code></pre>
+
+<p>接下来，我们需要构建Docker映像。在这篇文章中，我们将使用来自https://github.com/OctopusSamples/RandomQuotes-Java的<a href="https://github.com/OctopusSamples/RandomQuotes-Java" rel="nofollow">的样例应用程序。使用命令<code>docker build . -t mcasperson/mywebapp:0.1.7</code>构建映像(用Docker Hub用户名替换<code>mcasperson</code>)。</a></p>
+
+<p>很重要的一点是，标签(本例中为<code>0.1.7</code>)是一个有效的SemVer版本字符串。Docker标签不强制任何版本规则，但是Octopus希望它部署的所有包都可以被比较以找到最新的。这是通过要求Docker标签是SemVer字符串来实现的。</p>
+
+<p>Octopus会忽略没有SemVer兼容标签的Docker图像。</p>
+
+
+<p>构建完成后，您可以使用命令<code>docker images "mcasperson/mywebapp"</code>验证映像是否已经创建:</p>
+
+<pre><code>$ docker images "mcasperson/mywebapp"
+REPOSITORY            TAG                 IMAGE ID            CREATED             SIZE
+mcasperson/mywebapp   0.1.7               fadf80ecf48a        1 second ago        129MB
+</code></pre>
+
+<p>最后，使用命令<code>docker push mcasperson/mywebapp:0.1.7</code>将图像推送到Docker Hub:</p>
+
+<pre><code>$ docker push mcasperson/mywebapp:0.1.7
+The push refers to repository [docker.io/mcasperson/mywebapp]
+d817461c3564: Pushed
+11276c4aac8e: Pushed
+f955d35132bf: Pushed
+edd61588d126: Mounted from library/openjdk
+9b9b7f3d56a0: Mounted from library/openjdk
+f1b5933fe4b5: Mounted from library/openjdk
+0.1.7: digest: sha256:0eb09072c3ab7768e9e5f9cae994e63a2d5c8d6957a2d0cd85baae31ee8cc6d7 size: 1573
+</code></pre>
+
+<p>一旦推送，图像就可以在Docker Hub 上<a href="https://hub.docker.com/r/mcasperson/mywebapp" rel="nofollow">查看。</a></p>
+
+<h2 id="create-the-docker-feed">创建Docker提要</h2>
+
+<p>Octopus在部署过程中引用的所有包都来自提要。为了在Kubernetes部署中使用我们的新Docker映像，我们需要通过URL<a href="https://index.docker.io" rel="nofollow">https://index . Docker . io</a>将Docker Hub配置为Docker提要:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/dockerhub-feed.png" class="zoom" data-title=""><img src="../Images/9d7a1e07034b368667dcb538d13139fb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/dockerhub-feed.png"/>T2】</a></p>
+
+<p>然后，我们可以搜索我们的新图像:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/search-result.png" class="zoom" data-title=""><img src="../Images/6aac5558305ea64236a0372fdbfb2405.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/search-result.png"/>T2】</a></p>
+
+<h2 id="deploy-the-image">部署映像</h2>
+
+<p>Octopus附带了许多支持Kubernetes部署的步骤。概括地说，它们分为三类:</p>
+
+<ul>
+<li>针对部署、服务、进入、机密和配置映射的自以为是、以用户界面为中心的步骤。</li>
+<li>生YAML的部署。</li>
+<li>舵图的展开。</li>
+<li>针对<code>kubectl</code>的自定义脚本。</li>
+</ul>
+
+<p>因为这是我们第一次部署到Kubernetes集群中，固执己见的步骤将使我们快速启动并运行，而无需了解Kubernetes YAML的详细信息，因此我们将向我们的Octopus项目添加一个<strong>部署Kubernetes容器</strong>步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/kubernetes-cointainer.png" class="zoom" data-title=""><img src="../Images/f99f168845bd5a3a92f28dd154dd97ca.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/kubernetes-cointainer.png"/>T2】</a></p>
+
+<p>这一步将Kubernetes部署资源与可选的服务、入口、秘密和配置映射结合起来。在Kubernetes中部署应用程序时，这些资源通常作为一个紧密耦合的单元一起部署。但是，在我们的示例中，我们不会部署入口、秘密或配置映射，因此可以禁用这些功能以简化步骤UI:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/features.png" class="zoom" data-title=""><img src="../Images/c16a01523129412016705948553c847a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/features.png"/>T2】</a></p>
+
+<p>该步骤公开了大量选项，但是对于这个示例，我们只需要注意两个选项。</p>
+
+<p>第一个是容器的定义，第二个是服务端口。下面的截图突出显示了这些内容:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/deployment.png" class="zoom" data-title=""><img src="../Images/8f4a2d44361178067bf8e46a4e613c6b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/deployment.png"/></a>T2】</p>
+
+<p>容器定义引用了我们之前推送到Docker Hub的映像:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/container.png" class="zoom" data-title=""><img src="../Images/f22366dc51d9455c2b3c0ab1a7544187.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/container.png"/>T2】</a></p>
+
+<p>它还公开了TCP端口80和一个名为<strong> web </strong>的Kubernetes端口:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/port.png" class="zoom" data-title=""><img src="../Images/c1e170ddaf626e589998750b45c746d9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/port.png"/>T2】</a></p>
+
+<p>然后，服务端口将容器上的端口80公开为服务上的端口80:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/service-port.png" class="zoom" data-title=""><img src="../Images/e0a33856a4139cf83e54e8fb036ac766.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/service-port.png"/>T2】</a></p>
+
+<p>这就是我们将我们的映像部署到Kubernetes所需的全部配置。当我们部署这个项目时，Octopus将在幕后执行一些逻辑来创建Kubernetes部署和服务资源，并将两者链接在一起。链接这些资源使我们从一些手工工作中解脱出来，否则将需要用服务来公开部署。</p>
+
+<p>创建Octopus部署时要注意的一件事是，我们在部署时选择Docker映像版本(如果您还记得，这是我们在构建映像时分配给它的标记)。使用Octopus管理Kubernetes部署的优点之一是在部署时选择映像版本，并在默认情况下选择最新版本。通常，Docker映像的新版本不需要对引用它们的Kubernetes资源进行任何更改，因此只需创建一个新的Octopus部署并引用新的Docker映像，就可以将新版本的代码推送到Kubernetes:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/create-deployment.png" class="zoom" data-title=""><img src="../Images/38d13601ad31bf441c9df62fc082c8c5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/create-deployment.png"/>T2】</a></p>
+
+<p>当部署完成时，我们可以用命令<code>kubectl get deployments</code>验证Kubernetes包含部署资源:</p>
+
+<pre><code>$ kubectl get deployments
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+randomquotes   1/1     1            1           20m
+</code></pre>
+
+<p>然后，我们验证部署使用命令<code>kubectl get pods</code>创建了pod:</p>
+
+<pre><code>$ kubectl get pods
+NAME                            READY   STATUS    RESTARTS   AGE
+randomquotes-65cbb7c849-5vvnw   1/1     Running   0          30s
+</code></pre>
+
+<p>然后我们验证服务是用命令<code>kubectl get service randomquotes</code>创建的:</p>
+
+<pre><code>$ kubectl get service randomquotes
+NAME           TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+randomquotes   ClusterIP   10.99.245.202   &lt;none&gt;        80/TCP    19m
+</code></pre>
+
+<p>为了从我们的本地PC访问服务，我们需要使用<code>kubectl</code>将一个本地端口代理到服务端口，这是我们使用命令<code>kubectl port-forward svc/randomquotes 8081:80</code>完成的。然后，我们可以在http://localhost:8081:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/local-web-app.png" class="zoom" data-title=""><img src="../Images/490bee5156322cf8f32f130dfb7a1a70.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/local-web-app.png"/>T2】</a></p>
+
+<h2 id="inspect-the-cluster-via-octopus">通过Octopus检查集群</h2>
+
+<p>对于经验丰富的Kubernetes管理员来说，在本地运行<code>kubectl</code>非常好，并且在创建新的部署来调试和验证事情是否按预期工作时经常需要。不过，它也有一些缺点:</p>
+
+<ul>
+<li>它需要在本地安装<code>kubectl</code>，并配置管理员凭证。</li>
+<li>如果凭证改变，本地<code>kubectl</code>配置需要手动更新。</li>
+<li>对群集执行的操作可能很难在以后重新构建。</li>
+<li>决策所依据的值通常会丢失，例如pod日志的内容或pod的状态。</li>
+<li>使用<code>kubectl</code>需要对Kubernetes管理有很好的了解。</li>
+</ul>
+
+<p>随着Kubernetes基础设施的成熟，自动化常见的管理任务是有利的。通过自动化这些任务，机构知识可以嵌入到Octopus中，从而更容易将日常操作交给可能不是Kubernetes专家的团队。</p>
+
+<p>为了自动化我们在上一节中对<code>kubectl</code>的调用，我们将利用一个名为<strong>Kubernetes-Inspect Resources</strong>的社区步骤模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/inspect-resources.png" class="zoom" data-title=""><img src="../Images/6bdb99520a15b420b01dfcdaee581105.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/inspect-resources.png"/>T2】</a></p>
+
+<p>首先，我们将获得部署列表。这是通过将<strong>资源</strong>选项设置为<code>Deployment</code>，将<strong>库对象动词</strong>设置为<code>Get</code>，并通过将<strong>创建工件</strong>设置为<code>True</code>来捕获输出来实现的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-deployments.png" class="zoom" data-title=""><img src="../Images/967b684a9103ad19d1455bd1d86a3466.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-deployments.png"/>T2】</a></p>
+
+<p>现在，任何人都可以通过Octopus UI运行该运行手册，解决了上述限制:</p>
+
+<ul>
+<li>这些凭证由Octopus管理，只需在一个地方更新。</li>
+<li><code>kubectl</code>可执行文件只需要在worker上可用，消除了用户在本地安装该工具的需要。</li>
+<li>这个runbook的输出被捕获到Octopus日志中，并作为该步骤生成的一个工件，使得返回并查看导致采取某些操作的集群的状态变得容易。</li>
+<li><code>kubectl</code>命令嵌入在一个步骤中，不需要支持人员记忆命令。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-deployments-log.png" class="zoom" data-title=""><img src="../Images/1a24b1218e8852598a8c83b60519057f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-deployments-log.png"/>T2】</a></p>
+
+<p>现在让我们添加第二个步骤来查询pod。注意这里的<strong>资源名称</strong>已经被设置为<code>randomquotes\*</code>。这是由<strong>Kubernetes-Inspect Resources</strong>步骤增加的便利，允许Kubernetes资源通过通配符进行匹配，这在<code>kubectl</code>中是不可用的。这对于由部署创建的pod尤其方便，因为Kubernetes会为这些pod名称分配随机后缀:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-pods.png" class="zoom" data-title=""><img src="../Images/5618f255b3becec918d92d6dfc6b0a1c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-pods.png"/>T2】</a></p>
+
+<p>最后，我们得到了服务:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-services.png" class="zoom" data-title=""><img src="../Images/5f478d735fd75d89d35ef1e183a63ae4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-your-first-container-to-kubernetes/get-services.png"/>T2】</a></p>
+
+<p>在此基础上，我们创建了一个可以由支持人员运行的操作手册，作为诊断集群任何问题的第一步，生成的工件提供了一个有用的日志集合，可以在以后查看或传递给更高级别的支持。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我们编译了一个新的Docker映像并将其推送到Docker Hub，将Docker Hub作为一个提要添加到Octopus中，然后将该映像作为一个Kubernetes部署进行部署，该部署由一个服务公开给我们在<a href="/blog/getting-started-with-kind-and-octopus">上一篇博文</a>中用Kind创建的测试集群。</p>
+
+<p>有人说<em> Kubernetes让简单的事情变得困难，让困难的事情成为可能</em>。即使是一个简单的Kubernetes部署看起来也有许多移动部分，但是如果您已经达到了这一步，那么您已经实现了一个坚实的基础，可以在此基础上使用Kubernetes构建更复杂的生产就绪型基础设施。事实上，即使是这个简单的例子，您也已经创建了:</p>
+
+<ul>
+<li>任何人都可以通过Octopus门户网站启动可重复的部署，不需要本地工具或Kubernetes专业知识。</li>
+<li>得益于Octopus的内置功能，可对部署进行审核。</li>
+<li>通过<a href="https://octopus.com/docs/packaging-applications/build-servers">许多可用的插件</a>，一个连续的交付管道随时可以从CI系统中触发。</li>
+<li>多环境部署的基础——参见本指南的<a href="https://i.octopus.com/books/kubernetes-book.pdf" rel="nofollow">了解更多详情。</a></li>
+<li>一些帮助负责集群的支持人员的初步操作手册。</li>
+</ul>
+
+                    
+                    
+</body>
+</html>

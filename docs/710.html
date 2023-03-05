@@ -1,0 +1,86 @@
+<html>
+<head>
+<title>Deploying Spring Boot Applications as Windows Services - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>将Spring Boot应用程序部署为Windows服务- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/spring-boot-windows-services#2022-07-14">https://octopus.com/blog/spring-boot-windows-services#2022-07-14</a></blockquote>
+                        <p>一位客户最近询问是否可以使用Octopus Deploy将Spring Boot应用程序部署为Windows服务。Spring文档确实简要提到了一种将Spring Boot应用程序作为Windows服务运行的方法，但是很多细节还是留给读者去解决。所以在这篇博文中，我将向你展示如何快速运行一个标准的Spring Boot应用程序服务。</p>
+
+<h2 id="java-and-windows-services">Java和Windows服务</h2>
+
+<p>要将Spring Boot UberJAR作为Windows服务运行，我们需要两件东西。</p>
+
+<p>第一个是Windows可以作为服务运行的可执行文件。这是由<a href="https://github.com/kohsuke/winsw" rel="nofollow"> winsw </a>项目提供的。Winsw并没有特别绑定到Java，但是它可以用来执行<code>java.exe</code>，这是我们启动Spring Boot JAR文件所需要的。</p>
+
+<p>第二件事是以某种方式优雅地关闭在后台运行的Java应用程序。为此我们有一个简单的项目叫做<a href="https://github.com/OctopusDeploy/SpringBootStopper" rel="nofollow"> Spring Boot停止器</a>(基于从Spring文档链接的<a href="https://github.com/snicoll-scratches/spring-boot-daemon" rel="nofollow"> Spring Boot守护进程</a>项目)。该应用程序将通过JMX与Spring Boot应用程序通信，并指示它关闭。</p>
+
+<h2 id="putting-it-all-together">把所有的放在一起</h2>
+
+<p>这个<a href="https://github.com/OctopusDeploy/SpringBootWindowsService" rel="nofollow">演示项目</a>是一个相当普通的Spring Boot REST MVC应用程序，使用<a href="https://start.spring.io/" rel="nofollow"> Spring Initializr </a>网站生成。该项目没有以特殊的方式配置，当构建时将产生一个股票Spring Boot JAR文件。</p>
+
+<p>在项目的<code>dist</code>文件夹中，你会发现一些文件。</p>
+
+
+
+<p>XML配置文件是最神奇的地方。在里面，您会发现以下设置:</p>
+
+<pre><code>&lt;executable&gt;java&lt;/executable&gt;
+&lt;startargument&gt;-Dspring.application.admin.enabled=true&lt;/startargument&gt;
+&lt;startargument&gt;-Dcom.sun.management.jmxremote.port=50201&lt;/startargument&gt;
+&lt;startargument&gt;-Dcom.sun.management.jmxremote.authenticate=false&lt;/startargument&gt;
+&lt;startargument&gt;-Dcom.sun.management.jmxremote.ssl=false&lt;/startargument&gt;
+&lt;startargument&gt;-jar&lt;/startargument&gt;
+&lt;startargument&gt;SpringBootWindowsService.jar&lt;/startargument&gt;
+</code></pre>
+
+<p>这些设置定义了启动Windows服务时winsw可执行文件将运行的内容。在这种情况下，我们用一些配置JMX的附加系统属性来启动Spring Boot UberJAR <code>SpringBootWindowsService.jar</code>。这些系统属性启用<a href="https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-spring-application.html#boot-features-application-admin" rel="nofollow"> Spring Boot管理功能</a>，将JMX端口设置为<code>50201</code>，禁用SSL并禁用JMX认证。</p>
+
+<p>由于JMX端口上没有身份验证和SSL，作为一项安全措施，该端口应该被防火墙阻止。</p>
+
+
+<p>然后，我们有一些额外的设置来定义当Windows服务停止时winsw可执行文件将运行什么。</p>
+
+<pre><code>&lt;stopexecutable&gt;java&lt;/stopexecutable&gt;
+&lt;stopargument&gt;-jar&lt;/stopargument&gt;
+&lt;stopargument&gt;SpringBootStopper.jar&lt;/stopargument&gt;
+&lt;stopargument&gt;50201&lt;/stopargument&gt;
+</code></pre>
+
+<p>这里，我们运行<code>SpringBootStopper.jar</code>应用程序，传递启动Spring Boot应用程序时使用的同一个JMX端口。这些设置允许<code>SpringBootStopper.jar</code>连接到正在运行的Spring Boot实例并正常关闭它。</p>
+
+<h2 id="packing-up-the-service">打包服务</h2>
+
+<p>要为Octopus Deploy打包这些文件，请使用<a href="https://octopus.com/docs/packaging-applications/create-packages/octopack"> CLI工具</a>。</p>
+
+<pre><code>octo pack --format=zip --id=SpringBootWindowsService --version=1.0.0
+</code></pre>
+
+<p>这将产生一个名为<code>SpringBootWindowsService.1.0.0.zip</code>的文件，然后您可以使用以下命令将该文件推送到Octopus服务器:</p>
+
+<pre><code>octo push --server=http://my.octopus.server --apiKey=API-xxxxxxxxxxxxx --package=SpringBootWindowsService.1.0.0.zip
+</code></pre>
+
+<h2 id="deploying-the-service">部署服务</h2>
+
+<p>此时，您可以将该包部署为执行<code>SpringBoot.exe</code>可执行文件的传统Windows服务。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/deploy-windows-service.png" class="zoom" data-title=""><img src="../Images/19550b19d9b41d2eec40ebdc421dfd8f.png" class="img-fluid center" alt="Deploy Windows Service" data-original-src="https://i.octopus.com/blog/2017-06/deploy-windows-service.png"/>T2】</a></p>
+
+<p>部署后，该服务将像任何其他Windows服务一样出现。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/spring-boot-windows-service.png" class="zoom" data-title=""><img src="../Images/9dc1f283e3bd458d3b71450e1bf416f3.png" class="img-fluid center" alt="Windows Service" data-original-src="https://i.octopus.com/blog/2017-06/spring-boot-windows-service.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>启动服务，并打开浏览器到http://localhost:8080/greeting。您的Spring Boot应用程序现在作为Windows服务运行！</p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

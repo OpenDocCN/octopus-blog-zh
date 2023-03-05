@@ -1,0 +1,198 @@
+<html>
+<head>
+<title>Octopus 2021 Q4: Deploy to ECS with our guided UI step - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2021 Q4:使用我们的引导式UI步骤- Octopus Deploy部署到ECS</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2021-q4#2022-01-20">https://octopus.com/blog/octopus-release-2021-q4#2022-01-20</a></blockquote>
+                        <p>Octopus 2021 Q4版本现已上市。</p>
+
+<p>对Amazon的弹性容器服务(ECS)的内置支持将使您的ECS部署更加容易。我们固执己见的UI步骤指导您完成设置并构建CloudFormation模板，因此您不必编写配置文件或定制脚本。</p>
+
+<p>此版本包括一些其他值得注意的更新:</p>
+
+<ul>
+<li>我们为Octopus Deploy提供了一个新的TypeScript API客户端。</li>
+<li>所有客户都可以使用“配置为代码早期访问预览”( EAP)。</li>
+<li>尝试我们新的Visual Studio代码扩展，它支持Octopus配置语言(OCL)作为代码进行配置。</li>
+<li>用于Octopus Deploy的Terraform Provider支持脚本模块、租户变量和工作池。</li>
+<li>我们为Octopus Deploy改进了我们的Go API客户端和TeamCity插件。</li>
+<li>Octopus Cloud支持Azure AD、Google和Okta作为身份验证提供者，同时支持Octopus ID。</li>
+</ul>
+
+<h2 id="included-in-the-q4-release">包括在第4季度版本中</h2>
+
+<ul>
+<li>章鱼服务器2021.3 ( <a href="https://octopus.com/downloads/whatsnew/2021.3">发布说明</a>)</li>
+<li>用于Octopus Deploy 1.1.5的TypeScript API客户端</li>
+<li>Octopus为Visual Studio部署代码0.0.17</li>
+<li>用于Octopus Deploy 6.1.5的TeamCity插件</li>
+<li>Octopus部署1.7.52的Go API客户端</li>
+<li>触手6.1.1147</li>
+<li>Octopus部署0.7.63的平台提供程序</li>
+</ul>
+
+<h2 id="long-term-support">长期支持</h2>
+
+<p>下表显示了具有长期支持的Octopus服务器版本。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>释放；排放；发布</th>
+<th>长期支持</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>八达通2021.3</td>
+<td>是</td>
+</tr>
+<tr>
+<td>章鱼2021.2</td>
+<td>是</td>
+</tr>
+<tr>
+<td>八达通2021.1</td>
+<td>是(至2022年1月31日)</td>
+</tr>
+<tr>
+<td>八达通2020.6</td>
+<td>期满</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="release-tour">发布之旅</h2>
+
+<iframe src="https://www.youtube.com/embed/NqcfVLP_WrE" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="ecs-integration">新的亚马逊ECS与Octopus的集成</h2>
+
+<p>我们新的Amazon Web Services (AWS) ECS集成使得使用ECS或通过Octopus部署新服务变得更加容易。</p>
+
+<p>此版本交付了第一个集成里程碑以及对现有<strong>部署AWS CloudFormation模板</strong>步骤的更新<a href="https://octopus.com/blog/rfc-ecs-integration-with-octopus">:</a></p>
+
+<ol>
+<li>一个新的<a href="https://octopus.com/docs/deployments/aws/ecs#step-2-create-a-deployment-target-for-your-ecs-cluster">目标</a>代表一个ECS群集，以便您可以对环境和租赁部署进行建模</li>
+<li>一个固执己见的、UI驱动的<a href="https://octopus.com/docs/deployments/aws/ecs"> ECS步骤</a>，它通过CloudFormation为您创建和管理服务和任务定义</li>
+<li>导出底层CloudFormation模板的能力</li>
+<li>跨环境的简化部署工作流</li>
+<li>将Docker图像添加到<a href="https://octopus.com/docs/deployments/aws/cloudformation">部署AWS CloudFormation模板</a>步骤，并在您的CloudFormation模板中引用它们</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-ecs-integration-deploy-to-fargate.png" class="zoom" data-title=""><img src="../Images/564513d31b22a8048c7c2645e51312f7.png" class="img-fluid center" alt="A rocket links the Deploy Amazon ECS Service step in Octopus with tasks performed by Octopus in AWS to deploy the Octo Pet Shop website. Octopus generated the CloudFormation template and created and deployed the CloudFormation stack." data-original-src="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-ecs-integration-deploy-to-fargate.png"/></a>T2】</p>
+
+<p>新的ECS步骤将指导您完成配置，并根据您的输入生成云形成YAML。</p>
+
+<p>当你不再需要guided UI步骤或者需要更多的灵活性时，你可以暴露底层的YAML并将其粘贴到<a href="https://octopus.com/docs/deployments/aws/cloudformation">部署AWS CloudFormation模板</a>步骤中。</p>
+
+<p>我们的目标是帮助您实现可重复、可恢复且可审核的ECS部署。阅读我们的<a href="https://octopus.com/docs/deployments/aws"> AWS文档</a>，了解这些功能如何节省您的时间并最大限度地减少手动配置。</p>
+
+<p>我们正在为第二个里程碑开发更多功能，预计明年发布。观看我们的博客更新。</p>
+
+<h2 id="typescript-api-client">用于Octopus部署的TypeScript API客户端</h2>
+
+<p>新的<a href="https://github.com/OctopusDeploy/api-client.ts" rel="nofollow"> TypeScript API客户端</a>使用Node.js和npm生态系统提供了与Octopus的跨平台集成。</p>
+
+<p>现在，您可以使用一种可访问的、熟悉的编程语言通过Octopus Deploy编写任务脚本，而不管您使用的是什么系统。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-typescript-api-client.png" class="zoom" data-title=""><img src="../Images/b4b6e459e5971a2bba395d30ce893cb9.png" class="img-fluid center" alt="TypeScript source in Visual Studio Code to interact with Octopus Deploy" data-original-src="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-typescript-api-client.png"/>T2】</a></p>
+
+<p>我们的API支持您可以使用Octopus web门户和命令行界面(CLI)执行的所有操作。</p>
+
+<p>以下是让你开始的一些想法:</p>
+
+<ul>
+<li>自动化生产部署批准</li>
+<li>从构建服务器和其他系统触发部署和操作手册</li>
+</ul>
+
+<p>在我们的<a href="https://github.com/OctopusDeploy/api-client.ts/blob/main/getting-started.md" rel="nofollow">入门指南</a>、<a href="https://octopusdeploy.github.io/api-client.ts" rel="nofollow">参考文档</a>和文档化的<a href="https://octopus.com/docs/octopus-rest-api/examples"> API示例</a>中了解关于TypeScript API客户端的更多信息。可以通过npm 下载客户端<a href="https://www.npmjs.com/package/@octopusdeploy/api-client" rel="nofollow">。</a></p>
+
+<h2 id="config-as-code-early-access">早期访问Config as代码和Octopus Deploy for Visual Studio代码</h2>
+
+<p>所有客户都可以使用代码早期访问预览(EAP)配置。我们将Octopus的可用性与Git的能力结合起来，这样您就可以在开发应用程序代码的同时改进部署过程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-config-as-code-branch-selector.png" class="zoom" data-title=""><img src="../Images/1f36920b744e6b079c2f095993e75cfa.png" class="img-fluid center" alt="The branch selector on the deployment process page in Octopus Deploy" data-original-src="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-config-as-code-branch-selector.png"/>T2】</a></p>
+
+<p><a href="https://marketplace.visualstudio.com/items?itemName=octopusdeploy.vscode-octopusdeploy" rel="nofollow">Octopus Deploy for Visual Studio Code</a>是一个免费的扩展，使得使用Octopus配置语言(OCL)文件更加容易。功能包括:</p>
+
+<ul>
+<li>语法突出显示</li>
+<li>步骤和操作的代码片段</li>
+<li>在文件中导航节点的集成树视图</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-deploy-vs-code-extension-ocl.png" class="zoom" data-title=""><img src="../Images/3debc41c39c123640aa848a2b8f9021c.png" class="img-fluid center" alt="The VS Code extension for Octopus includes OCL syntax highlighting and an OCL tree outline" data-original-src="https://i.octopus.com/blog/2021-12/octopus-release-2021-q4/octopus-deploy-vs-code-extension-ocl.png"/>T2】</a></p>
+
+<p>本季度，Octopus Deploy成为Visual Studio代码扩展市场的认证发行商。</p>
+
+<p>在我们的文章<a href="https://octopus.com/blog/config-as-code-eap">Octopus Deploy Config as Code:early access preview</a>中了解更多信息。</p>
+
+<h2 id="other-integration-updates">其他集成更新</h2>
+
+<p>本季度，我们对现有集成进行了改进:</p>
+
+<ul>
+<li>用于Octopus Deploy的<a href="https://github.com/OctopusDeployLabs/terraform-provider-octopusdeploy" rel="nofollow"> Terraform Provider </a>支持脚本模块、租户变量和工作池。我们从<a href="https://registry.terraform.io/providers/OctopusDeployLabs/octopusdeploy/latest" rel="nofollow"> Terraform Registry </a>获得了超过325，000次供应商安装。</li>
+<li>我们为Octopus改进了我们的<a href="https://github.com/OctopusDeploy/go-octopusdeploy" rel="nofollow"> Go API客户端</a>，包括错误修复和对工人池的更新支持。</li>
+<li>Octopus Deploy的<a href="https://plugins.jetbrains.com/plugin/9038-octopus-deploy-integration" rel="nofollow"> TeamCity插件</a>传递版本控制项目的Git细节，以支持代码形式的配置。</li>
+<li>Octopus Cloud支持一系列身份验证提供商，包括Azure AD、Google和Okta。在我们的文档中了解<a href="https://octopus.com/docs/security/authentication">认证提供者</a>。</li>
+</ul>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>这个版本包括三个突破性的变化。</p>
+
+<h3 id="new-default-behavior-for-get-machines">“获取机器”的新默认行为</h3>
+
+<p>我们向部署目标屏幕添加了runbook运行活动。为了支持这一改变，<code>GET machines/{id}/tasks</code>现在返回部署和runbook运行。您可以指定一个<code>type</code>参数来过滤结果:<code>Deployment</code>或<code>RunbookRun</code>。</p>
+
+<p>在GitHub问题中了解更多关于这一变化的信息<a href="https://github.com/OctopusDeploy/Issues/issues/6982" rel="nofollow">。</a></p>
+
+<h3 id="version-mono-for-calamari">运行卡拉马里的Mono推荐版本</h3>
+
+<p>Calamari可以在Mono框架上执行。我们推荐运行Calamari的Mono最低版本为5.14.0。</p>
+
+<p>在我们的<a href="https://octopus.com/docs/infrastructure/deployment-targets/linux/ssh-requirements#mono-calamari"> SSH目标需求</a>文档中了解更多关于这个变化的信息。</p>
+
+<h3 id="version-octopus-dotnet-api-client">章鱼的推荐版本。NET API客户端</h3>
+
+<p>我们推荐11.3.3453作为八达通的最低版本。用于与Octopus Server 2021.3交互的. NET API客户端。</p>
+
+<p>使用八达通的顾客。使用团队、角色和权限的. NET API客户端必须使用11.3.3453版本的客户端(或更新版本),以确保与Octopus Server 2021.3.7491和更新版本兼容。</p>
+
+<p>在GitHub问题中了解更多关于此变化的信息<a href="https://github.com/OctopusDeploy/Issues/issues/7190" rel="nofollow">。</a></p>
+
+<h2 id="upgrade-or-get-started">升级或开始</h2>
+
+<p>章鱼云用户已经在运行这个版本了。自托管八达通客户可以从我们的网站下载最新版本。</p>
+
+<p><span> <a class="btn btn-success" href="https://octopus.com/downloads/2021.3.0">下载章鱼2021.3 </a> </span></p>
+
+<p>我们鼓励您查看升级Octopus服务器的<a href="https://octopus.com/docs/administration/upgrading">步骤。更多信息请参见</a><a href="https://octopus.com/downloads/whatsnew/2021.3">发布说明</a>。</p>
+
+<p>如果你以前从未使用过Octopus，<a href="https://octopus.com/start">注册</a>免费试用，或者<a href="mailto:customersuccess@octopus.com" rel="nofollow">给我们的客户成功团队</a>发电子邮件，观看演示并了解更多信息。</p>
+
+<h2 id="future-releases">未来的版本中会有什么？</h2>
+
+<p>查看我们的<a href="https://octopus.com/roadmap">公共路线图</a>以了解最新消息并注册更新。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Octopus 2021 Q4实现了我们对亚马逊ECS的集中支持的第一个里程碑。</p>
+
+<p>这个版本还包括Octopus的TypeScript API客户端，以及一系列新的和改进的与其他平台的集成。</p>
+
+<p>我们期待在下一个版本中发布更多优秀的特性。</p>
+
+<p>我们欢迎您提出任何问题或意见。你可以在下面留下评论或者加入我们的<a href="https://octopus.com/slack">章鱼社区Slack </a>的讨论。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

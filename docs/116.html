@@ -1,0 +1,92 @@
+<html>
+<head>
+<title>Keeping environments clean - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>保持环境清洁-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/clean-environments#2017-09-29">https://octopus.com/blog/clean-environments#2017-09-29</a></blockquote>
+                        
+
+<p>这篇文章是我们Octopus 3.4博客系列的一部分。在我们的<a href="https://octopus.com/blog/octopus34-blog-series-kickoff">博客</a>或我们的<a href="https://twitter.com/OctopusDeploy">推特</a>上关注它。</p>
+
+<p><strong> Octopus Deploy 3.4已经发货！阅读<a href="https://octopus.com/blog/octopus-deploy-3.4">博文</a>和<a href="https://octopus.com/downloads">今天就下载</a>！</strong></p>
+
+<hr/>
+
+<p>Octopus 3.4引入了机器策略的概念。机器策略允许在可配置的时间段过后自动删除不可用的机器。</p>
+
+<h2>什么是机器？</h2>
+
+<p>在Octopus land(海底深处)中，我们使用术语<em>部署目标</em>来描述可以部署到的事物类型。它们可能是触角、SSH端点、离线点或云区域。过去，我们有Azure相关的部署目标。机器策略中的功能对于一些部署目标没有意义，因此我们决定使用单词<em> machine </em>来标识功能有意义的部署目标子集。目前，机器策略最适用于触手和SSH部署目标。</p>
+
+<h2>为什么要自动删除机器？</h2>
+
+<p>与Octopus相关的基础设施的典型生命周期是:</p>
+
+<ul>
+<li>调配基础架构</li>
+<li>安装触手或SSH</li>
+<li>向Octopus服务器注册触手或SSH端点</li>
+<li>部署！</li>
+<li>终止基础设施</li>
+<li>从Octopus服务器中删除端点</li>
+</ul>
+
+<p>小规模和长寿命的基础设施在Octopus中无需机器策略即可轻松管理。如果Octopus只注册了两个触手，或者一个触手的寿命是几年，那么当一个基础设施被终止时，从Octopus移除触手并不会带来太大的负担。</p>
+
+<p>随着规模的扩大和寿命的缩短，管理Octopus中的机器变得越来越困难。考虑一下自动扩展的基础架构，在这种架构中，每天有数百台机器被供应和终止。试图让Octopus与底层基础设施的变化保持同步，这种情况很快就变成了一场噩梦。通过使用机器策略，Octopus可以配置为在基础架构终止时自动移除机器。</p>
+
+<h2>配置Octopus自动删除机器</h2>
+
+<p>要配置机器策略以自动删除机器:</p>
+
+<p>在环境屏幕上查找机器策略:</p>
+
+<p><img src="../Images/38e7fd514d80d30a7352a372e8485864.png" alt="Machine Policies" data-original-src="https://i.octopus.com/blog/201606-environments-machine-policies-RD8Q.png"/></p>
+
+<p>通过选择添加机器策略或选择默认机器策略来创建新的机器策略:</p>
+
+<p><img src="../Images/122af2c9a328f153b3f30e7b4c7277e4.png" alt="Create a Machine Policy" data-original-src="https://i.octopus.com/blog/201606-create-machine-policy-7FK2.png"/></p>
+
+<p>将“清理不可用的机器”设置更改为“自动删除不可用的机器”。将“不可用小时数”更改为计算机在被删除之前可以不可用的最小小时数:</p>
+
+<p><img src="../Images/26e2d457276bc726b2baf7f81929bebc.png" alt="Automatically delete machines" data-original-src="https://i.octopus.com/blog/201606-machine-policy-delete-machines-6D38.png"/></p>
+
+<p>现在，当分配了此计算机策略的计算机在指定的小时数内不可用时，将被永久删除。</p>
+
+<h2>将机器策略分配给机器</h2>
+
+<p>可以通过Octopus门户将机器策略分配给机器，方法是从“环境”页面中选择一台机器，然后使用策略下拉菜单选择一个机器策略:</p>
+
+<p><img src="../Images/8f1f5ff071df7962472c8f6b6bb38d8f.png" alt="Assign a Machine Policy" data-original-src="https://i.octopus.com/blog/201606-machine-policy-assign-T69D.png"/></p>
+
+<p>使用<code>--policy</code>参数注册机器时，命令行可用于分配机器策略:</p>
+
+<pre><code>Tentacle.exe register-with --instance "Tentacle" --policy "Transient machines" --server "http://YOUR_OCTOPUS" --apiKey="API-YOUR_API_KEY" --role "web-server" --environment "Staging" --comms-style TentaclePassive 
+</code></pre>
+
+<p>还有一个名为<code>MachinePolicyId</code>的属性可以在<code>MachineResource</code>上设置，因此可以通过Octopus API或Octopus来分配机器策略。客户:</p>
+
+<pre><code>$machine = New-Object Octopus.Client.Model.MachineResource
+$machine.Endpoint = $tentacleEndpoint
+$machine.Name = $machineName
+$machine.MachinePolicyId = $machinePolicyId
+$machine.EnvironmentIds.Add($environmentId) 
+$machine.Roles.Add($role) 
+</code></pre>
+
+<p>如果创建了一台机器，但尚未指定机器策略，则将为该机器分配默认的机器策略。</p>
+
+<h2>它是如何工作的</h2>
+
+<p>机器清理使用运行状况检查的结果作为标准来确定是否应该删除机器。当一个机器的生命值被取走，章鱼无法联系机器时，它的生命值状态会变成<code>Unavailable</code>。Octopus每5分钟检查一次<code>Unavailable</code>机器，以确定应该删除的机器。如果机器的机器策略已配置为自动删除<code>Unavailable</code>台机器，并且机器已<code>Unavailable</code>超过机器策略中指定的时间，则机器将从Octopus中永久删除。Octopus将只删除已启用的机器，因此如果一台机器即将脱机并且不应该被删除，请将其禁用。</p>
+
+<h2>进一步的信息</h2>
+
+<p>从我们的<a href="http://docs.octopusdeploy.com/display/OD/Cleaning+up+environments">环境清理指南</a>中了解更多关于自动删除机器的信息。使用我们的<a href="http://docs.octopusdeploy.com/display/OD/Machine+Policies">深入文档</a>或<a href="https://octopus.com/support">探索机器政策。如果您有意见、建议或只想打声招呼，请联系</a>。</p>
+
+                    
+                    
+</body>
+</html>

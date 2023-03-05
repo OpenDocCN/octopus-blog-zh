@@ -1,0 +1,243 @@
+<html>
+<head>
+<title>Write your own PowerShell Desired State Configuration (DSC) module - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>编写自己的PowerShell期望状态配置(DSC)模块- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/write-your-own-powershell-dsc-module#2021-08-12">https://octopus.com/blog/write-your-own-powershell-dsc-module#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/write-your-own-powershell-dsc-module/write-powershell-dsc-module.png" class="zoom" data-title=""><img src="../Images/53413df509ce497b29ac8d250c0d41db.png" class="img-fluid center" alt="Octopus learning how to write a custom PowerShell DSC Module" data-original-src="https://i.octopus.com/blog/2019-10/write-your-own-powershell-dsc-module/write-powershell-dsc-module.png"/>T2】</a></p>
+
+<p>PowerShell DSC是一项非常棒的技术，可以放在您管理基于Windows的服务器的工具箱中。这篇文章是一系列文章的一部分:</p>
+
+
+
+<p>我们也有关于使用PowerShell DSC和Octopus Deploy的文章:</p>
+
+
+
+<hr/>
+
+<p>随着您对PowerShell期望状态配置(DSC)的了解越来越多，您可能会遇到可用模块不太适合您想要做的事情的情况。您可以编写自己的<a href="https://docs.microsoft.com/en-us/powershell/dsc/reference/resources/windows/scriptresource" rel="nofollow">脚本资源</a>，但是它们的伸缩性不好，传递参数很困难，并且它们不提供加密方法，以明文形式留下密码，但是，您可以编写自己的DSC模块。</p>
+
+<p>在这个PowerShell DSC教程中，我将介绍如何编写您的第一个PowerShell DSC模块。</p>
+
+
+
+<p>编写自己的PowerShell DSC模块并没有那么难。最困难的部分是将文件和文件夹放在正确的位置，因为DSC非常明确地规定了哪些文件放在哪里。然而，微软认识到这可能非常令人沮丧，并开发了<a href="https://docs.microsoft.com/en-us/powershell/dsc/resources/authoringresourcemofdesigner" rel="nofollow"> xDscResourceDesigner </a>，这是一个PowerShell模块，可以帮助您开始。使用这个模块，您可以很容易地定义您的资源需要什么属性，它将为您生成整个模块结构，包括MOF模式文件。如果你是第一次，我强烈推荐你使用这个模块，它可以帮你省去不少麻烦(相信我)。</p>
+
+<h2 id="installing-xdscresourcedesigner">安装xDscResourceDesigner</h2>
+
+<p>安装模块与在系统上安装任何其他模块没有什么不同:</p>
+
+<pre><code class="language-PS">Install-Module -Name xDscResourceDesigner
+</code></pre>
+
+<p>正如这篇<a href="https://docs.microsoft.com/en-us/powershell/dsc/resources/authoringresourcemofdesigner" rel="nofollow">微软文章</a>所指出的，如果您的PowerShell版本早于第5版，您可能需要安装PowerShellGet模块以便安装工作。</p>
+
+<h2 id="using-xdscresourcedesigner">使用xDscResourceDesigner</h2>
+
+<p>使用xDscResourceDesigner实际上非常简单，只有两个函数:<code>New-DscResourceProperty</code>和<code>New-xDscResource</code>。<code>New-DscResourceProperty</code>是你用来定义你的DSC资源的属性。完成之后，将信息发送给<code>New-xDscResource</code>函数，它会生成实现资源所需的一切:</p>
+
+<pre><code class="language-PS"># Import the module for use
+Import-Module -Name xDscResourceDesigner
+
+# Define properties
+$property1 = New-xDscResourceProperty -Name Property1 -Type String -Attribute Key
+$property2 = New-xDscResourceProperty -Name Property2 -Type PSCredential -Attribute Write
+$property3 = New-xDscResourceProperty -Name Property3 -Type String -Attribute Required -ValidateSet "Present", "Absent"
+
+# Create my DSC Resource
+New-xDscResource -Name DemoResource1 -Property $property1, $property2, $property3 -Path 'c:\Program Files\WindowsPowerShell\Modules' -ModuleName DemoModule
+</code></pre>
+
+<p>这就是你自己的DSC模块，生成了所有的存根。</p>
+
+<h2 id="understanding-the-resource-attribute-property">了解资源属性特性</h2>
+
+<p>对于DSC中资源属性的属性组件，有四个可能的值:</p>
+
+
+
+<h3 id="key">钥匙</h3>
+
+<p>使用您的资源的每个节点都必须有一个使该节点唯一的键。与数据库表类似，这个键不必是单个属性，但可以由几个属性组成，每个属性都带有key属性。在上面的例子中，<code>Property1</code>是我们的资源键。然而，也可以这样做:</p>
+
+<pre><code class="language-PS"># Define properties
+$property1 = New-xDscResourceProperty -Name Property1 -Type String -Attribute Key
+$property2 = New-xDscResourceProperty -Name Property2 -Type PSCredential -Attribute Write
+$property3 = New-xDscResourceProperty -Name Property3 -Type String -Attribute Required -ValidateSet "Present", "Absent"
+$property4 = New-xDscResourceProperty -Name Property4 -Type String -Attribute Key
+$property5 = New-xDscResourceProperty -Name Property5 -Type String -Attribute Key
+</code></pre>
+
+<p>在本例中，<code>property1</code>、<code>property4</code>和<code>property5</code>构成了节点的唯一值。键属性总是可写的，并且是必需的。</p>
+
+<h3 id="read">阅读</h3>
+
+<p>读取属性是只读的，不能为其赋值。</p>
+
+<h3 id="required">需要</h3>
+
+<p>必需属性是在声明配置时必须指定的可分配属性。使用上面的例子，当我们创建资源时，<code>Property3</code>属性被设置为required。</p>
+
+<h3 id="write">写</h3>
+
+<p>写属性是可选属性，您可以在定义节点时为其指定值。在示例中，<code>Property2</code>被定义为写属性。</p>
+
+<h3 id="validateset-switch">ValidateSet开关</h3>
+
+<p><code>ValidateSet</code>开关可以与Key或Write属性一起使用，指定给定属性的允许值。在我们的例子中，我们已经指定<code>Property3</code>只能是<code>Absent</code>或<code>Present</code>。任何其他值都会导致错误。</p>
+
+<h2 id="dsc-module-file-and-folder-structure">DSC模块文件和文件夹结构</h2>
+
+<p>无论您决定<a href="https://docs.microsoft.com/en-us/powershell/dsc/resources/authoringResourceMOF" rel="nofollow">自己动手</a>还是使用工具，文件夹和文件结构将如下所示:</p>
+
+<pre><code>$env:ProgramFiles\WindowsPowerShell\Modules (folder)
+    |- DemoModule (folder)
+        |- DSCResources (folder)
+            |- DemoResource1 (folder)
+                |- DemoResource1.psd1 (file, optional)
+                |- DemoResource1.psm1 (file, required)
+                |- DemoResource1.schema.mof (file, required)
+</code></pre>
+
+<h2 id="the-mof-file">MOF文件</h2>
+
+<p>MOF代表托管对象格式，是用于描述公共信息模型(CIM)类的语言。使用来自<em>工具的示例来帮助您编写模块</em>部分，生成的MOF文件将如下所示:</p>
+
+<pre><code>[ClassVersion("1.0.0.0"), FriendlyName("DemoResource1")]
+class DemoResource1 : OMI_BaseResource
+{
+    [Key] String Property1;
+    [Write, EmbeddedInstance("MSFT_Credential")] String Property2;
+    [Required, ValueMap{"Present","Absent"}, Values{"Present","Absent"}] String Property3;
+};
+</code></pre>
+
+<p>MOF文件将只包含我们将在模块中使用的属性，以及它们的属性和数据类型。除非我们添加或删除属性，否则这几乎是我们对MOF文件所做的全部工作。</p>
+
+<h2 id="the-psm1-file">psm1文件</h2>
+
+<p>psm1文件是我们大部分代码将要存放的地方。该文件将包含三个必需的函数:</p>
+
+<ul>
+<li><code>Get-TargetResource</code></li>
+<li><code>Test-TargetResource</code></li>
+<li><code>Set-TargetResource</code></li>
+</ul>
+
+<h3 id="get-targetresource">获取目标资源</h3>
+
+<p><code>Get-TargetResource</code>函数返回资源所负责的当前值。我们使用<code>xDscResourceDesigner</code>得到的存根函数如下所示:</p>
+
+<pre><code class="language-PS">function Get-TargetResource
+{
+    [CmdletBinding()]
+    [OutputType([System.Collections.Hashtable])]
+    param
+    (
+        [parameter(Mandatory = $true)]
+        [System.String]
+        $Property1,
+
+        [parameter(Mandatory = $true)]
+        [ValidateSet("Present","Absent")]
+        [System.String]
+        $Property3
+    )
+
+    #Write-Verbose "Use this cmdlet to deliver information about command processing."
+
+    #Write-Debug "Use this cmdlet to write debug information while troubleshooting."
+
+
+    &lt;#
+    $returnValue = @{
+    Property1 = [System.String]
+    Property2 = [System.Management.Automation.PSCredential]
+    Property3 = [System.String]
+    }
+
+    $returnValue
+    #&gt;
+}
+</code></pre>
+
+<p>注意，该功能不需要可选参数<code>Property2</code>(写入属性)。</p>
+
+<h3 id="test-targetresource">测试目标资源</h3>
+
+<p><code>Test-TargetResource</code>函数返回一个布尔值，表明资源是否处于期望的状态。从我们生成的示例来看，该函数如下所示:</p>
+
+<pre><code class="language-PS">function Test-TargetResource
+{
+    [CmdletBinding()]
+    [OutputType([System.Boolean])]
+    param
+    (
+        [parameter(Mandatory = $true)]
+        [System.String]
+        $Property1,
+
+        [System.Management.Automation.PSCredential]
+        $Property2,
+
+        [parameter(Mandatory = $true)]
+        [ValidateSet("Present","Absent")]
+        [System.String]
+        $Property3
+    )
+
+    #Write-Verbose "Use this cmdlet to deliver information about command processing."
+
+    #Write-Debug "Use this cmdlet to write debug information while troubleshooting."
+
+
+    &lt;#
+    $result = [System.Boolean]
+
+    $result
+    #&gt;
+}
+</code></pre>
+
+<h3 id="set-targetresource">设置-目标资源</h3>
+
+<p><code>Set-TargetResource</code>功能用于将资源配置到指定的期望状态。我们生成的示例如下所示:</p>
+
+<pre><code class="language-PS">function Set-TargetResource
+{
+    [CmdletBinding()]
+    param
+    (
+        [parameter(Mandatory = $true)]
+        [System.String]
+        $Property1,
+
+        [System.Management.Automation.PSCredential]
+        $Property2,
+
+        [parameter(Mandatory = $true)]
+        [ValidateSet("Present","Absent")]
+        [System.String]
+        $Property3
+    )
+
+    #Write-Verbose "Use this cmdlet to deliver information about command processing."
+
+    #Write-Debug "Use this cmdlet to write debug information while troubleshooting."
+
+    #Include this line if the resource requires a system reboot.
+    #$global:DSCMachineStatus = 1
+}
+</code></pre>
+
+<h2 id="summary">摘要</h2>
+
+<p>无论简单还是复杂，创建自己的PowerShell DSC模块的步骤都是一样的。这篇文章旨在让你朝着正确的方向开始。从这里，您可以创建您的模块来适应您需要配置的任何资源，并保持在期望的状态。关于工作模块的完整示例，请查看我的GitHub repo上的<a href="https://github.com/twerthi/xCertificatePermission" rel="nofollow"> xCertificatePermission </a>。</p>
+
+                    
+                    
+</body>
+</html>

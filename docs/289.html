@@ -1,0 +1,149 @@
+<html>
+<head>
+<title>Secrets in GitHub Actions - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>GitHub行动中的秘密-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/githubactions-secrets#2022-12-05">https://octopus.com/blog/githubactions-secrets#2022-12-05</a></blockquote>
+                        <p>简而言之,“秘密”是加密的隐藏数据，但在您的项目中仍然可用。秘密可能是关于您的业务或验证方法的敏感数据，例如用于连接管道中其他服务的API密钥。</p>
+
+<p>GitHub允许你在3个不同的级别存储秘密:</p>
+
+<ul>
+<li>贮藏室ˌ仓库</li>
+<li>环境</li>
+<li>组织</li>
+</ul>
+
+<p>在这篇文章中，我们来看看这三个层次，以及如何给它们添加秘密。我们还将看看如何在示例工作流中调用秘密。</p>
+
+<h2 id="repository-secrets">仓库机密</h2>
+
+<p>GitHub只将存储库秘密绑定到一个存储库。任何具有协作者角色的人都可以在操作中使用它们。</p>
+
+<p>每个存储库可以存储100个秘密。</p>
+
+<h3 id="add-a-repository-secret">添加存储库密码</h3>
+
+<ol>
+<li>在GitHub中打开你的项目库，点击顶部菜单中的<strong>设置</strong>。</li>
+<li>点击左侧菜单中的<strong>秘密</strong>。</li>
+<li>点击<strong>新建存储库密码</strong>。</li>
+<li>填写以下字段并点击<strong>添加密码</strong>:<ul>
+<li>给你的秘密取一个合适的名字。除下划线外，不能使用空格或特殊字符。</li>
+<li><strong>值</strong>——输入秘密，比如你的API密匙。</li>
+</ul>
+</li>
+</ol>
+
+<p>您可以随时更新您的秘密值。回到储存库菜单中的<strong>秘密</strong>，点击你需要更改的秘密上的<strong>更新</strong>。</p>
+
+<h2 id="environment-secrets">环境秘密</h2>
+
+<p>与Octopus一样，您可以将GitHub设置为使用环境部署到管道的部署目标。</p>
+
+<p>如果您的回购是公开的，或者您拥有企业许可证，则可以设置仅适用于该环境的特定于环境的秘密。</p>
+
+<p>每个环境中可以存储100个秘密。</p>
+
+<h3 id="add-a-secret-when-creating-a-new-environment">创建新环境时添加秘密</h3>
+
+<ol>
+<li>在GitHub中打开你的项目库，点击顶部菜单中的<strong>设置</strong>。</li>
+<li>点击左侧菜单中的<strong>环境</strong>。</li>
+<li>点击<strong>新环境</strong>。</li>
+<li>为您的环境输入一个名称，然后点击<strong>配置环境</strong>。</li>
+<li>根据需要设置环境的保护规则和部署分支，然后点击<strong> Add secret </strong>。</li>
+<li>填写以下字段并点击<strong>添加密码</strong>:<ul>
+<li>给你的秘密取一个合适的名字。除下划线外，不能使用空格或特殊字符。</li>
+<li><strong>值</strong>——输入秘密，比如你的API密匙。</li>
+</ul>
+</li>
+</ol>
+
+<h3 id="add-a-secret-to-an-existing-environment">将机密添加到现有环境中</h3>
+
+<ol>
+<li>在GitHub中打开你的项目库，点击顶部菜单中的<strong>设置</strong>。</li>
+<li>点击左侧菜单中的<strong>环境</strong>。</li>
+<li>选择需要设置密码的环境。</li>
+<li>点击页面底部的<strong>添加密码</strong>。</li>
+<li>填写以下字段并点击<strong>添加密码</strong>:<ul>
+<li>给你的秘密取一个合适的名字。除下划线外，不能使用空格或特殊字符。</li>
+<li><strong>值</strong>——输入秘密，比如你的API密匙。</li>
+</ul>
+</li>
+</ol>
+
+<h2 id="organization-secrets">组织机密</h2>
+
+<ol>
+<li>在GitHub中打开您组织的页面，点击顶部菜单中的<strong>设置</strong>。</li>
+<li>点击左侧菜单中的<strong>秘密</strong>。</li>
+<li>点击<strong>新建组织机密</strong>。</li>
+<li>填写以下字段并点击<strong>添加密码</strong>:          <ul>
+<li><strong>名字</strong>——给你的秘密取一个合适的名字。除下划线外，不能使用空格或特殊字符。</li>
+<li><strong>值</strong> -输入秘密，例如您的API密钥。</li>
+<li><strong>存储库访问</strong> -从下拉列表中选择一个策略。您可以限制使用公共或私人回购，或手动选择它们。</li>
+</ul>
+</li>
+</ol>
+
+<h2 id="using-secrets-in-github-actions-workflows">在GitHub动作工作流程中使用机密</h2>
+
+<p>您不能将机密用于分叉存储库中的工作流。</p>
+<p>不要在日志文件中捕获秘密。如果包含，GitHub会隐藏秘密，但完全不包含秘密更安全。</p>
+
+
+<p>您使用<code>secrets</code>上下文在工作流中调用您的秘密数据。GitHub使用上下文从各种来源提取信息，包括工作流、作业和步骤。有关上下文的完整列表，请参见<a href="https://docs.github.com/en/actions/learn-github-actions/contexts" rel="nofollow"> GitHub的文档。</a></p>
+
+<p>例如，如果您想将一个包发送到Octopus服务器，作为工作流的一部分进行部署，那么您可以使用secrets上下文以及secrets的名称将您的工作流连接到Octopus。</p>
+
+<pre><code>- name: Push Package to Octopus
+   uses: OctopusDeploy/push-package-action@v1.0.0
+   with:
+       api_key: ${{ secrets.OCTOPUS_TEST_API }}
+       packages: ${{ steps.package.outputs.artifacts }}
+       server: ${{ secrets.OCTOPUS_PACKAGE_STORE }}
+</code></pre>
+
+<p>为了解释发生了什么，工作流程的这一部分:</p>
+
+<ol>
+<li>触发一个动作将包推给Octopus。</li>
+<li>从您的secrets store获取Octopus API密钥，以允许GitHub向Octopus传递数据。</li>
+<li>根据您的操作步骤打包您的工件。</li>
+<li>从您的机密存储中获取隐藏的包目标。</li>
+</ol>
+
+<p>在这里，工作流使用API和目的地，但是将它们隐藏起来。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>机密是一种很好的安全措施，它允许您保护数据和连接到服务，而不会泄露敏感信息。</p>
+
+<h2 id="whats-next">下一步是什么？</h2>
+
+<p>我们建议您查看GitHub的文档:</p>
+
+
+
+<p>如果你还没有看过，可以看看这个持续集成系列中的其他一些博客。</p>
+
+<p>Octopus还构建了一个有用的<a href="https://githubactionworkflows.com/" rel="nofollow"> GitHub Actions工作流生成器</a>来帮助你为GitHub构建CI管道。</p>
+
+<p><a href="https://oc.to/GithubActionsWorkflowGenerator" rel="nofollow">试用我们免费的GitHub Actions工作流工具</a>，帮助您快速为GitHub Actions部署生成可定制的工作流。</p>
+
+<h2 id="watch-our-github-actions-webinar">观看我们的GitHub行动网络研讨会</h2>
+
+<iframe src="https://www.youtube.com/embed/gLkAs_Cy5t4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

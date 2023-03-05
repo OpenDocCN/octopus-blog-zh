@@ -1,0 +1,98 @@
+<html>
+<head>
+<title>MVPs and $100k AWS Bills: Reflections on the launch of Octopus Cloud 1.0 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>MVP和10万美元AWS账单:对推出Octopus Cloud 1.0 - Octopus Deploy的思考</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-cloud-1.0-reflections#2021-08-12">https://octopus.com/blog/octopus-cloud-1.0-reflections#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/octopus-cloud-1.0-reflections/octopus-cloud-recap.png" class="zoom" data-title=""><img src="../Images/4c0dacc18d9ca086cf118ca2a872881f.png" class="img-fluid center" alt="Octopus in the balloon looking ahead to Octopus Cloud version 2.0" data-original-src="https://i.octopus.com/blog/2019-10/octopus-cloud-1.0-reflections/octopus-cloud-recap.png"/>T2】</a></p>
+
+<p>我们将发布一系列关于章鱼云的工程之旅。这是我们在AWS上推出Octopus Cloud v2的故事，我们每月10万美元的AWS账单，MVP和测试客户需求，花了6个月的工程努力，然后亏本运营服务，又花了9个月从头开始重建它，以及我们在重建Octopus Cloud v2时所做的所有考虑，包括从AWS切换到Azure，在Kubernetes上全押等等。</p>
+
+<p>在这个系列的第一篇文章中，我们将看看我们在v1中所做的设计选择，为什么花费这么多，以及为什么我们决定重新开始。</p>
+
+<hr/>
+
+<p>大约一年前<a href="https://octopus.com/blog/announcing-octopus-cloud">,我们推出了Octopus的SaaS版本Octopus Cloud </a>,作为一项实验，看看它是否能为我们的客户带来重大价值并简化他们的部署。我们希望让开发人员专注于他们的部署需求，将管理基础设施的工作交给我们，但我们不知道实施起来有多困难，也不知道启动和运行需要花费多少时间和金钱。</p>
+
+<p>总的来说，我们认为这是一个巨大的成功；足够我们去年投资几乎整个平台从头开始重建。我是发布当前版本Octopus Cloud的团队的一员，我想花一些时间来庆祝我们的一些胜利，并反思我们学到的教训，这些教训塑造了我们的重新设计。</p>
+
+<h2 id="will-anybody-use-it">有人会使用它吗？</h2>
+
+<p>在这个实验中，我们知道有人对云解决方案感兴趣，但是有很多事情我们不知道:</p>
+
+<ul>
+<li>有多少客户会真正使用它？</li>
+<li>这一切要花多少钱？</li>
+<li>我们应该收取多少费用？它能支付基础设施成本吗？</li>
+</ul>
+
+<p>我们可以猜测其中的大部分，但知道答案是不可能的。工程时间也是非常昂贵的，是我们可以花时间向我们的自托管产品添加功能的时候了。如果没有需求，我们不想花费数年时间来设计一个完美优化的云原生产品。</p>
+
+<p>我们决定根据我们的最佳估计来打造一款<a href="https://en.wikipedia.org/wiki/Minimum_viable_product" rel="nofollow"> MVP </a>，并以这种方式测试市场。目标是在6个月内推出产品，并测试需求是否存在；如果不是，我们就浪费了6个月。我们选择优化以快速上市，而不是担心成本。</p>
+
+<p>需求是存在的。在最初的几天里，我们进行了500多次新的云测试。当客户来到我们的网站并决定是试用Octopus自托管还是Octopus云时，大约有一半的人选择在云中试用Octopus。</p>
+
+<h2 id="v1-architecture">V1建筑</h2>
+
+<p>为了将章鱼云快速推向市场，我们做了最简单的事情；我们将自己托管的Octopus服务器产品捆绑到每个注册客户的EC2实例中。我们必须对产品进行修改，但主要是在权限方面。</p>
+
+<p>我们实际上已经在一两个月内准备好了章鱼云v1的内部alpha版本；我记得团队做了bug bashes来测试我们的安全性。花费更长时间的是制造我们乐于让客户使用的产品所需的所有步骤:强化安全性、测试、恢复计划等。</p>
+
+<p>为了确保一个用户的数据不会与另一个用户的数据混杂在一起，每个云实例都有自己专用的虚拟机、数据库和大量的安全配置，以防止任何不正当的交易。这是一张图表，展示了这一切的样子。请注意，我们实际上使用Octopus Deploy来供应和部署每个Octopus Cloud v1客户:</p>
+
+<p>【T2 <img src="../Images/b918e7a305f973255ded117921180c0b.png" class="img-fluid center" alt="Octopus Cloud 1.0 architecture diagram" data-original-src="https://i.octopus.com/blog/2019-10/octopus-cloud-1.0-reflections/octopus-cloud-v1-architecture-diagram.png"/></p>
+
+<h2 id="service-limits">服务限制</h2>
+
+<p>你知道那种感觉吗？当你开车的时候，你似乎碰到了每一个红灯？这有点像推出章鱼云的感觉；只有红灯是AWS服务限制！我们很快了解到AWS中的所有东西都有某种服务限制，我们达到了所有的限制。客户会注册，我们会达到一个极限，我们会要求亚马逊增加它，我们会搭载更多的客户，我们会达到另一个极限。每次我们认为我们是安全的，我们就会达到另一个我们不知道的服务极限。</p>
+
+<p>这在我们扩展时造成了一些问题，在某一点上，我们不得不暂停新的注册，同时我们试图提供更多的扩展空间。</p>
+
+<p/> 
+
+<h2 id="cloud-stuff-can-be-really-expensive">云产品可能非常昂贵</h2>
+
+<p>每个客户都有一个EC2实例，由于我们的数据库是由Amazon RDS支持的，所以每个RDS实例只能有30个数据库。添加存储、网络等。我们每月花费100多美元来保持单个章鱼云实例在线。</p>
+
+<p>Octopus Cloud的客户可以开始30天的免费试用，这意味着每月数百个试用注册，每个注册的费用为100美元，很快就会增加。</p>
+
+<p>我们的定价也不太合适。我们最初推出的Octopus Cloud的起始价格为每月10美元，与我们目前使用的定价模式不同。不幸的是，这是我们学到的最痛苦的教训之一，因为我们收费和支出之间的赤字被使用章鱼云的人数放大了；持续增长将进一步加剧这一问题。</p>
+
+<p>两个月后，我们开始认真讨论我们每月10万美元的AWS支出，以及我们几乎没有收入来抵消这笔支出的事实:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/octopus-cloud-1.0-reflections/octopus-cloud-aws-bill.png" class="zoom" data-title=""><img src="../Images/f96f52b4aad13f95d5a08ee2eaf5d0b4.png" class="img-fluid center" alt="Octopus Cloud AWS is $100,000 plus per month" data-original-src="https://i.octopus.com/blog/2019-10/octopus-cloud-1.0-reflections/octopus-cloud-aws-bill.png"/></a>T2】</p>
+
+<p>我们应该解释一下，<a href="https://octopus.com/company"> Octopus Deploy作为一家公司</a>并没有公开上市，也没有风投资金。自Octopus 1.0以来，我们一直在自豪地引导和盈利，我们一直在保守和可持续地经营这项业务。我们突然发现自己有了一项新业务，它正以惊人的速度耗费我们的资金。</p>
+
+<p>我们决定吸取我们正在学习的教训，开始一项庞大的工作，我们称之为<strong>云v2</strong>；章鱼云的重新想象，可持续发展。</p>
+
+<p>即使在我们构建v1时，团队也知道它不是理想的架构。在v1推出之前，我们的Slack中有很多关于我们是否应该将Octopus移植到Linux并在Kubernetes上运行它，或者看看我们是否可以在Kubernetes的Windows上运行它，或者使用Hashicorp的Nomad？而这一切都要追溯到2018年初，当时一切都在翻腾，没有今天这么成熟。所以单位成本并不令人惊讶。</p>
+
+<p>令人惊讶的是需求。如果每个月只有几个客户注册，我们可以轻松地承担成本(说实话，我们仍然可以，八达通自助有很大的利润！).但是有这么多客户报名，事情就变得紧急多了。每月10万美元以上，一年下来就是120万美元以上，这足以证明花费工程努力来降低它是合理的。</p>
+
+<h2 id="starting-over">重新开始</h2>
+
+<p>我们探索了各种降低成本的方案，最初的计划是迭代v1架构并寻求成本节约，我们确实在这方面取得了一些进展，但最终，我们得出结论，大幅降低成本(不牺牲客户性能)的最佳方式涉及一些实质性的架构变化，本质上是从零开始。</p>
+
+<p>在本系列的其余部分中，我们将深入研究我们在为v2重新设计Octopus Cloud时所做的每个决定。其中包括:</p>
+
+<ul>
+<li>从AWS切换到Azure。</li>
+<li>将Octopus服务器移植到Linux。</li>
+<li>在容器中运行章鱼和使用Kubernetes。</li>
+</ul>
+
+<p>借助Octopus Cloud v2，我们还支持自己学习和使用大量处于托管和编排前沿的技术。<a href="https://github.com/OctopusDeploy/terraform-provider-octopusdeploy" rel="nofollow"> Terraform </a>、<a href="https://hub.docker.com/r/octopusdeploy/octopusdeploy" rel="nofollow"> containers </a>、<a href="https://docs.microsoft.com/en-us/azure/aks/" rel="nofollow"> Kubernetes </a>和<a href="https://docs.microsoft.com/en-us/azure/azure-functions/" rel="nofollow"> Azure Functions </a>只是我们目前工作的几个领域。这种方法带来了自己的挑战，但它也将注入到下一代Octopus工具中，我们可以用我们在这个过程中获得的专业知识来构建这些工具。<a href="https://en.wikipedia.org/wiki/Eating_your_own_dog_food" rel="nofollow">喝我们自己的香槟</a>已经大大提高了Octopus的功能，因为我们已经成为自己最大的客户之一。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>决定从头开始重建是残酷的，它会让你觉得你之前的尝试是在浪费时间和精力，而那项工作正在被抛弃。明知是一个“MVP”项目也很容易，但是随后却对它产生依恋，假设它将是最终的架构。我们需要认识到，第二步是可能的，因为已经迈出了第一步，在这一过程中吸取的每一个教训都是重要的投入。</p>
+
+<p>构建Octopus Cloud v2与v1有很大不同，之前我们都是猜测和盲目飞行，这一次我们有真实的数据可以分析，以回答我们的一些问题:我们知道用户将花费什么，我们知道什么东西将花费什么，我们知道预计会消耗什么样的资源，在这些事情之间，我们知道如何创建一个真正可扩展的平台。</p>
+
+                    
+                    
+</body>
+</html>

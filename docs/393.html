@@ -1,0 +1,97 @@
+<html>
+<head>
+<title>Kubernetes Pod Service Account authentication - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Kubernetes Pod服务帐户验证- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/kubernetes-pod-service-accounts#2021-07-14">https://octopus.com/blog/kubernetes-pod-service-accounts#2021-07-14</a></blockquote>
+                        <p><add blog="" image=""/></p>
+
+<p>我们正在为在Kubernetes集群中运行的Octopus工作人员引入更简单的身份验证，使用Kubernetes Pod服务帐户的凭证。</p>
+
+<p>在这篇文章中，我将介绍新的支持，并演示如何利用这一更新。</p>
+
+<p>Octopus引入了工人将部署工作从Octopus服务器转移到机器池。工作人员在几种情况下对团队有帮助，例如:</p>
+
+<ul>
+<li>备份数据库</li>
+<li>执行数据库模式迁移</li>
+<li>配置负载平衡器</li>
+</ul>
+
+<p>团队也可以创建一个工人池，作为在Kubernetes集群中运行的容器。</p>
+
+<p>当在Kubernetes集群中将一个工作线程池作为一个容器运行时，工作线程现在可以连接回父集群，使用pod服务帐户令牌和在Pod中作为文件挂载的集群证书文件。这允许工作人员管理他们部署到的集群，而不需要从Octopus服务器向他们发送额外的凭证。</p>
+
+<h2 id="creating-a-worker-pool-running-inside-a-kubernetes-cluster">创建一个在Kubernetes集群中运行的工人池</h2>
+
+<p>你可以在一个Kubernetes集群中运行一群章鱼工人。你想这么做有两个原因:</p>
+
+<ul>
+<li>为该集群创建一个专用的工作线程</li>
+<li>创建一群工作程序来使用Octopus Deploy</li>
+</ul>
+
+<p>这可以通过部署Docker Hub中托管的<a href="https://hub.docker.com/r/octopusdeploy/tentacle" rel="nofollow">触手映像</a>或者使用<a href="https://octopus.com/docs/runbooks">章鱼部署操作手册</a>来完成。请参考我们关于<a href="https://octopus.com/blog/kubernetes-workers">在Kubernetes集群上创建工人</a>的帖子，获得关于使用Octopus Deploy将工人池部署到Kubernetes集群的全面说明。</p>
+
+<p>在Kubernetes集群中运行了一组健康的工人之后，您需要在每个Octopus工人中安装<code>kubectl</code>。<code>kubectl</code>是<a href="https://kubernetes.io/docs/tasks/tools/" rel="nofollow"> Kubernetes命令行工具</a>，它允许您对Kubernetes集群运行命令。</p>
+
+<p>为此，导航到每个工作机的目录并运行以下命令:</p>
+
+<pre><code class="language-bash">$ curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+$ chmod +x ./kubectl
+$ mv ./kubectl /usr/local/bin
+</code></pre>
+
+<p>您现在可以通过检查版本来确认<code>kubectl</code>已经成功安装。</p>
+
+<pre><code class="language-bash">$ kubectl version
+</code></pre>
+
+<h2 id="adding-a-kubernetes-target-using-pod-service-account-authentication">使用Pod服务帐户身份验证添加Kubernetes目标</h2>
+
+<p>我们现在有一群健康的工人在Kubernetes集群中运行。</p>
+
+<p>下一步是使用新的身份验证模式Pod Service Account添加部署目标。</p>
+
+<ol>
+<li>导航到<strong>基础设施</strong> ➜ <strong>部署目标</strong>，点击<strong>添加部署目标</strong>。</li>
+<li>选择<strong> KUBERNETES集群</strong>，点击KUBERNETES集群卡片上的<strong>添加</strong>。</li>
+<li>输入Kubernetes群集的显示名称。</li>
+<li>为目标选择至少一个<a href="https://octopus.com/docs/infrastructure/environments">环境</a>。</li>
+<li>为目标选择至少一个<a href="https://octopus.com/docs/infrastructure/deployment-targets#target-roles">目标角色</a>。</li>
+<li>选择<strong> Pod服务帐户</strong>作为认证模式。</li>
+<li>输入<strong> Pod服务帐户</strong>的令牌文件的路径。默认路径通常是<code>/var/run/secrets/kubernetes.io/serviceaccount/token</code>。请注意，该路径是相对于pod目录的。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/authentication-pod-service-account.png" class="zoom" data-title=""><img src="../Images/512bbb03b80a2616444f7a7b030ae3ee.png" class="img-fluid center" alt="Pod Service Account authentication" data-original-src="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/authentication-pod-service-account.png"/>T2】</a></p>
+
+<ol start="8">
+<li>输入Kubernetes集群的URL。Octopus Deploy中的每个Kubernetes目标都需要集群URL，这可以通过检索集群信息来定位(在Kubernetes集群中运行<code>kubectl cluster-info</code>)。</li>
+<li>或者，输入群集证书的路径。默认路径通常是<code>/var/run/secrets/kubernetes.io/serviceaccount/ca.crt</code>。请注意，该路径是相对于pod目录的。如果您选择<strong>跳过TSL验证</strong>，您不需要输入此详细信息。<a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/kubernetes-cluster-details.png" class="zoom" data-title=""> <img src="../Images/37e797261e0daea008649aab2eb37ff3.png" class="img-fluid center" alt="Kubernetes Cluster details" data-original-src="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/kubernetes-cluster-details.png"/> </a></li>
+<li><em>重要提示</em>:选择包含Kubernetes集群内部运行的工作线程的工作线程池。否则，部署目标的运行状况检查将会失败。<a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/worker-pool-selection.png" class="zoom" data-title=""> <img src="../Images/fc3050d0f43ec1f2997534d04bada2aa.png" class="img-fluid center" alt="Worker Pool selection" data-original-src="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/worker-pool-selection.png"/> </a></li>
+</ol>
+
+<h2 id="creating-a-deployment-process">创建部署流程</h2>
+
+<p>部署目标现在已经可以在Kubernetes部署流程中使用了。</p>
+
+<p>您可以创建一个<a href="https://octopus.com/docs/deployments/kubernetes/deploy-container">部署Kubernetes容器</a>步骤来定位这个部署目标的<a href="https://octopus.com/docs/infrastructure/deployment-targets#target-roles">目标角色</a>。</p>
+
+<p>与前面创建的部署目标相似，部署步骤需要在Kubernetes集群中运行一个工作池。请确保为您的步骤选择有效的<strong>工作池</strong>。</p>
+
+<p>【T2 <img src="../Images/a1732d8f8458655ee43148f7d8e71058.png" class="img-fluid center" alt="Step" s="" worker="" pool="" selection="" data-original-src="https://i.octopus.com/blog/2021-07/kubernetes-pod-service-accounts/images/step-worker-pool-selection.png"/></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这篇文章演示了在创建一个<strong> Kubernetes部署目标</strong>时，如何使用<strong> Pod服务帐户</strong>认证模式。</p>
+
+<p>这种身份验证模式的一个好处是让工作人员能够自己连接回父集群。这意味着您不需要将集群的证书数据存储在Octopus服务器中。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

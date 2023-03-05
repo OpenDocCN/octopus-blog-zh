@@ -1,0 +1,177 @@
+<html>
+<head>
+<title>Jenkins security tips - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>詹金斯安全提示-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/jenkins-security-tips#2022-05-19">https://octopus.com/blog/jenkins-security-tips#2022-05-19</a></blockquote>
+                        <p>对于这样一个开放的、可定制的平台，Jenkins即使在默认状态下也能提供不错的安全性。鉴于它连接到无数的行业工具(包括Octopus)，尽管如此，还有一些其他的方法来帮助保护您的项目。</p>
+
+<p>在本帖中，我们将探讨一些方法和工具来保证Jenkins实例的安全，并保护使用它的人。</p>
+
+<h2 id="keep-everything-updated">保持一切更新</h2>
+
+<p><a href="https://octopus.com/blog/octopus-deploy-log4j-response">正如2021年12月提醒我们的</a>，软件漏洞随时都会暴露出来。软件提供商不仅更新他们的应用程序来修复错误或添加新功能，而且还消除安全漏洞。</p>
+
+<p>Jenkins有一个安全咨询页面让你了解他们平台的漏洞。然而，保持你的实例更新仍然是一个好主意，包括它的插件。</p>
+
+<p>要在Jenkins中检查更新:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li><strong> Manage Jenkins </strong>屏幕会在顶部告诉你是否有新版本。点击<strong>或自动升级</strong>按钮立即升级。否则，您可以下载最新版本并在预定时间升级。</li>
+</ol>
+
+<p>您也可以从同一个屏幕回滚升级——只需点击<strong>降级</strong>按钮。</p>
+
+<p>要更新Jenkins插件:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>管理插件</strong>。</li>
+<li>确保你在<strong>更新</strong>标签上，勾选你想要安装的更新，点击<strong>立即下载，重启后安装</strong>。</li>
+<li>重启Jenkins以完成更新。</li>
+</ol>
+
+<p>你可以在大多数主流操作系统和容器上安装Jenkins，所以也要保持更新。有关如何操作的更多信息，请查阅您的操作系统文档。</p>
+
+<h2 id="only-change-jenkins-security-defaults-if-youre-sure">只有在你确定的情况下才更改Jenkins的安全默认值</h2>
+
+<p>Jenkins在安装时启用了它的大部分安全功能，以尽可能确保安全。尽管有很多方法可以使用Jenkins，但对于如何最好地配置或锁定您的实例，并没有“一刀切”的方法。</p>
+
+<p>因此，虽然我们不能提供对您的团队最有利的建议(我们接下来将探讨一个例外)，Jenkins提供了您应该关注的重要特性的详细文档。请参见<a href="https://www.jenkins.io/doc/book/security/" rel="nofollow">保护Jenkins页面</a>获取与以下内容相关的安全帮助:</p>
+
+<ul>
+<li>基本设置</li>
+<li>构建行为</li>
+<li>用户界面</li>
+</ul>
+
+<p>您应该在仔细考虑后做出更改，如果可能的话，与您的网络安全专家交谈。您可以在<strong>配置全球安全</strong>页面中进行这些更改——从左侧菜单中选择<strong>管理Jenkins </strong>即可找到。</p>
+
+<h2 id="avoid-building-on-your-controller">避免在控制器上构建</h2>
+
+<p>Jenkins提供了一个内置节点，因此您可以尽快运行测试，看看它是否适合您。但是，在单个实例上运行的构建可以访问操作系统的文件系统。出于这个原因，Jenkins建议您让作业在“代理”上运行(这发生在可伸缩的设置中，我们在上一篇文章<a href="https://octopus.com/blog/jenkins-dynamic-build-agents">中讨论过，在Jenkins </a>中使用动态构建代理来自动伸缩)。</p>
+
+<p>代理是运行作业而不是控制器的虚拟Jenkins实例。使用代理时，您可以阻止控制器运行内部版本，以限制对可能有害的文件的访问。</p>
+
+<p>若要停止控制器运行构件:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>管理节点和云</strong>。</li>
+<li>点击<strong>内置节点</strong>右侧的齿轮。</li>
+<li>您有两个选项来防止控制器上的构建。选择一个并点击<strong>保存</strong>:          <ul>
+<li>如果您不想在控制器上构建，请将<strong>执行器数量</strong>更改为<strong> 0 </strong>。</li>
+<li>如果您想在需要时在控制器上构建，从<strong>用法</strong>下拉菜单中选择<strong>仅构建标签表达式与此节点</strong>匹配的作业。</li>
+</ul>
+</li>
+</ol>
+
+<h2 id="only-give-your-team-access-to-what-they-need">仅允许您的团队访问他们需要的内容</h2>
+
+<p>安全不仅仅是保护自己免受外来威胁。这也是为了从内部保护你的环境，因为事故可能会发生。在以下情况下，它们更有可能发生:</p>
+
+<ul>
+<li>您正在使用单个管理员帐户运行Jenkins实例</li>
+<li>每个人都可以接触到任何东西</li>
+<li>人们可以改变他们不应该改变的事情</li>
+</ul>
+
+<p>这里有一些管理用户访问的建议。</p>
+
+<h3 id="give-each-jenkins-user-an-account">给每个Jenkins用户一个帐户</h3>
+
+<p>为了帮助跟踪您的用户正在做什么，为使用您的Jenkins实例的任何人创建个人用户帐户。这样你可以看到所有的活动和谁做了什么。</p>
+
+<p>要创建额外用户:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>向下滚动并选择<strong>管理用户</strong>。</li>
+<li>点击左侧的<strong>创建用户</strong>。</li>
+<li>填写所有字段并点击<strong>创建用户</strong>。</li>
+</ol>
+
+<h3 id="use-the-matrix-authorization-strategy-plugin">使用矩阵授权策略插件</h3>
+
+<p>我们建议使用<a href="https://plugins.jenkins.io/matrix-auth/" rel="nofollow">矩阵授权策略插件</a>在更精细的层面上管理用户对Jenkins的访问。例如，使用这个插件，您可以:</p>
+
+<ul>
+<li>限制用户的访问权限，使他们只能查看和管理他们所属项目的内部版本</li>
+<li>授予项目经理只读访问权限，以便他们可以看到构建的进展情况</li>
+</ul>
+
+<p>要安装插件:</p>
+
+<ol>
+<li>从左侧菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>管理插件</strong>。</li>
+<li>点击<strong>可用的</strong>标签，开始输入<code>Matrix Authorization</code>。插件会出现在预测结果中。</li>
+<li>勾选插件左侧的方框，点击<strong>安装，无需重启</strong>。</li>
+</ol>
+
+<p>要使用插件设定权限:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>配置全局安全</strong>。</li>
+<li>单击以下任一选项的单选按钮:          <ul>
+<li><strong>基于矩阵的安全性</strong>–允许您管理全局用户和组权限。</li>
+<li><strong>基于项目的矩阵授权策略</strong>–允许您在项目级别管理用户和组权限。</li>
+</ul>
+</li>
+<li>无论您的选择如何，请使用按钮添加用户或组，并使用表中的复选框选择他们的访问级别。完成后点击<strong>保存</strong>。</li>
+</ol>
+
+<h3 id="other-user-access-plugins-you-should-consider">您应该考虑的其他用户访问插件</h3>
+
+<p>如果您已经使用其他系统进行访问管理，那么您可以使用这些系统来验证您的Jenkins用户。例如，微软的Active Directory和OpenID都有插件，这样你就不用在多个地方管理访问了。</p>
+
+<p>我们还建议查看<a href="https://plugins.jenkins.io/cloudbees-folder/" rel="nofollow">文件夹</a>和<a href="https://plugins.jenkins.io/folder-auth/" rel="nofollow">基于文件夹的授权策略</a>插件。</p>
+
+<p>文件夹插件允许您在嵌套的文件夹中对作业进行分组。这个插件可以让你对共享安全需求的任务进行分组，这有助于你更密切地关注它们。</p>
+
+<p>基于文件夹的授权策略插件通过让您使用角色设置文件夹访问权限，扩展了文件夹的安全性。</p>
+
+<h2 id="securely-store-your-credentials">安全存储您的凭据</h2>
+
+<p><a href="https://plugins.jenkins.io/credentials-binding/" rel="nofollow">凭证绑定插件</a>是加密和安全存储连接Jenkins和其他服务的凭证的最佳选择。Jenkins也推荐它——作为他们第一次安装Jenkins时推荐的插件之一。另外，许多其他插件把它作为一种依赖。</p>
+
+<p>此插件允许您存储和重用所有类型的身份验证方法，例如:</p>
+
+<ul>
+<li>用户名和密码</li>
+<li>SSH用户名和私钥</li>
+<li>秘密文件</li>
+<li>秘密文本</li>
+<li>证书</li>
+</ul>
+
+<p>我们将在以后的文章中详细介绍凭证绑定插件。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>正如您所看到的，有很多方法可以确保安全地使用Jenkins来保护项目免受外部和内部的风险。查看<a href="https://www.jenkins.io/doc/book/security/" rel="nofollow"> Jenkins的文档</a>，了解更多关于保护实例安全的信息。</p>
+
+<p>查看我们关于配置Jenkins的其他帖子:</p>
+
+
+
+<p>尝试我们免费的Jenkins管道生成器工具用Groovy语法创建一个管道文件。这是您启动管道项目所需的一切。</p>
+
+<h2 id="watch-our-jenkins-pipeline-webinar">观看我们的詹金斯管道网络研讨会</h2>
+
+<iframe src="https://www.youtube.com/embed/D_7AHTML_xw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>我们定期举办网络研讨会。请参见<a href="https://octopus.com/events">网络研讨会第</a>页，了解有关即将举办的活动和实时流媒体录制的详细信息。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

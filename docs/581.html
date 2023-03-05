@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>Introducing project TestDrive - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>介绍项目TestDrive - Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/project-testdrive#2021-08-12">https://octopus.com/blog/project-testdrive#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/project-testdrive/octopus-testdrive.png" class="zoom" data-title=""><img src="../Images/d1257cc9a5bbdafe8bdcee4100243935.png" class="img-fluid center" alt="Introducing project TestDrive" data-original-src="https://i.octopus.com/blog/2020-03/project-testdrive/octopus-testdrive.png"/>T2】</a></p>
+
+<p>开始一个新的IT项目是一个令人生畏的前景。通常感觉你需要深入了解六种工具和平台，其中任何一种都足够复杂，你可以围绕它建立一个完整的职业生涯，更不用说以任何有意义的方式将它们集成在一起。</p>
+
+<p>如果你曾经盯着一个概念验证项目，不知道从哪里开始，你并不孤单。我在办公室里听到过不止一个负责调试Kubernetes、NGINX、WildFly或Tomcat部署的开发人员同事(包括我自己)发出的无奈的叹息，我们工作的环境中这种部署司空见惯。</p>
+
+<p>然而，令人难以置信地令人满意的是，您可以看到部署通过Octopus从CI服务器中启动的构建展开到其目的地，因为从该基线开始，变化被快速地迭代实现。</p>
+
+<p>章鱼的目标之一是让您更快、更少沮丧地到达目的地。为此，我们刚刚启动了<a href="https://octopus.com/testdrive"> TestDrive </a>项目，将几个虚拟机发布到<a href="https://app.vagrantup.com/octopusdeploy" rel="nofollow">fluoro Cloud</a>中，这些虚拟机利用自由和开源平台，如Jenkins、Docker、Kubernetes、Tomcat和NGINX，捕获各种独立的CI/CD工作流。</p>
+
+<h2 id="getting-the-vms">获取虚拟机</h2>
+
+<p>Hyper-V和VirtualBox虚拟机已经使用<a href="https://www.vagrantup.com/" rel="nofollow">流浪者</a>构建和打包，并通过<a href="https://app.vagrantup.com/octopusdeploy" rel="nofollow">流浪者云</a>分发。</p>
+
+<p>如果你从来没有使用过vagger，最简单的方法就是把它当成一个管理程序的通用CLI工具。vagger使得消费和创建虚拟机变得容易，你只需要执行两个命令就可以下载并在本地安装一个虚拟机。例如，为VirtualBox用户安装Octopus、Jenkins和Kubernetes虚拟机是通过以下两个命令完成的:</p>
+
+<pre><code>vagrant init octopusdeploy/jenkins-java-k8s
+vagrant up --provider=virtualbox
+</code></pre>
+
+<p>或者这两个针对Hyper-V用户的命令:</p>
+
+<pre><code>vagrant init octopusdeploy/jenkins-java-k8s
+vagrant up --provider=hyperv
+</code></pre>
+
+<p>你可以从<a href="https://octopus.com/testdrive"> Octopus TestDrive页面</a>找到所有的虚拟机。</p>
+
+<p>虚拟机启动后，您将登录到Ubuntu桌面。已安装应用程序的快捷方式已添加到左侧的dock中。下面的屏幕截图显示了Kubernetes虚拟机中的各种图标:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/project-testdrive/ubuntu-desktop.png" class="zoom" data-title=""><img src="../Images/901c7f6ed1e156f359d71cd050d574e4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/project-testdrive/ubuntu-desktop.png"/></a>T2】</p>
+
+<p>您现在有了一个完整的CI/CD管道来进行实验。通过利用虚拟机管理程序的快照功能，您可以快速回滚任何更改，使该虚拟机成为探索Octopus的理想环境。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>如果你曾经好奇Octopus能为你做什么，或者你想探索Octopus作为一个完整的CI/CD管道的一部分，TestDrive VMs是一种快速和安全的方式来试验Octopus、Jenkins和其他平台，如Kubernetes、NGINX、Tomcat和WildFly。</p>
+
+                    
+                    
+</body>
+</html>

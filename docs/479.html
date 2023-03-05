@@ -1,0 +1,64 @@
+<html>
+<head>
+<title>Introducing dark mode - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>介绍黑暗模式-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-dark-mode#2021-07-07">https://octopus.com/blog/octopus-dark-mode#2021-07-07</a></blockquote>
+                        <iframe src="https://www.youtube.com/embed/ZMM8BowrUjQ" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<p>Octopus 2020.1将Octopus带到了黑暗面，在这篇文章中，我们来看看为什么我们加入了黑暗模式，它看起来如何，我们如何实现它，以及在这个过程中吸取的一些教训。</p>
+
+<p>根据研究公司尼尔森的数据，2018年，成年人每天花十一个小时与带屏幕的设备互动。我们认为，对于开发者来说，这个数字可能会高得多。</p>
+
+<p>我们创建了Octopus Deploy，以便我们的客户可以随时随地进行部署，包括周五下午5点甚至更晚的时候。从Octopus 2020.1，你可以通过点击屏幕右上角的配置文件菜单切换到黑暗模式，并将开关切换到on。或者，如果你已经是黑暗模式的粉丝，并且在你的操作系统上启用了黑暗主题或夜间模式，当你登录时，八达通会自动加载黑暗主题。</p>
+
+<h2 id="why-we-built-it">我们为什么建造它</h2>
+
+<p>Octopus被世界各地的开发人员和运营人员大量使用，他们倾向于喜欢黑暗模式。我们团队的大多数人在他们的笔记本电脑和手机上使用黑暗模式。</p>
+
+<p>除此之外，Octopus Deploy区别于其竞争对手的一点是拥有用户界面。保持界面的更新、响应和现代化是我们在过去一年投资UI专家的原因。我们希望我们的用户喜欢Octopus UI。我们不希望部署你的应用程序成为一件苦差事，而是一项你期待的任务。黑暗模式对眼睛来说更容易，开发人员喜欢它，所以我们很自然地将它内置到Octopus中。</p>
+
+<h2 id="visual-tour">视觉游览</h2>
+
+<p>开发一个黑暗的主题对我们来说是一个很好的机会来回顾我们在Octopus是如何进行设计的。我们希望Octopus成为世界级的产品，我们认为世界级的产品应该是漂亮的和精心设计的。在开发黑暗主题的时候，我们开始增加一些改进来迎合可访问性。尽管我们小心翼翼地确保大多数颜色符合AA标准，但这不是一个易访问性主题，但它给了我们一个坚实的基础。</p>
+
+<p>从配置文件菜单无缝切换黑暗模式的开/关:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-toggle.gif" class="zoom" data-title=""><img src="../Images/e7b9b4ee8ccc4bddc93f62f376f03273.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-toggle.gif"/>T2】</a></p>
+
+<p>如果你的操作系统有黑暗模式，八达通将自动检测到这一点，并设置你的主题:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-auto-detect.gif" class="zoom" data-title=""><img src="../Images/a6d6c404e77abacfa763f075db48fbf1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-auto-detect.gif"/>T2】</a></p>
+
+<p>Octopus中的代码编辑器已经更新，无论您使用PowerShell、Bash、Python、F#还是C#，在黑暗模式下看起来都令人惊叹:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-code-editor.gif" class="zoom" data-title=""><img src="../Images/85fc3035a0c171fa1ab73b1b7596b335.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-code-editor.gif"/>T2】</a></p>
+
+<p>任务日志页面已经更新，在黑暗主题中看起来很醒目:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-task-log.png" class="zoom" data-title=""><img src="../Images/908e40eec06a348ecfd66ddc56f14a9c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-task-log.png"/>T2】</a></p>
+
+<p>查看新的基础架构概述页面:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-infrastructure-overview.png" class="zoom" data-title=""><img src="../Images/cf72547cd17525c6f5c3f1d4600b1141.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/octopus-dark-mode/darkmode-infrastructure-overview.png"/>T2】</a></p>
+
+<h2 id="how-we-built-it">我们如何建造它</h2>
+
+<p>我们利用CSS自定义属性在Octopus中创建主题。CSS变量是一个被广泛支持的特性，它使得CSS变量在运行时可用。我们没有使用Material UI的内置主题，因为我们的一些组件使用旧版本的Material UI。我们使用React Context将颜色变量作为道具传递给组件，并在SVG图像中使用CSS变量来切换颜色，而不必维护多组图像。我们还利用CSS媒体特性<code>prefers-color-scheme</code>来检测系统使用的是暗主题还是亮主题。</p>
+
+<p>我们确实遇到了IE11的问题，IE11是唯一不支持CSS变量的浏览器。2019年11月，我们的工程主管迈克尔·诺南写了一篇关于<a href="https://octopus.com/blog/raising-minimum-requirements-for-octopus-server">的文章，反对从2020.1 </a>开始支持IE11。尽管我们正在移除对IE11的支持，但我们不想完全破坏IE11上的Octopus，所以我们利用了一个<a href="https://jhildenbiddle.github.io/css-vars-ponyfill/#/" rel="nofollow">pony fill</a>(<a href="https://ponyfoo.com/articles/polyfills-or-ponyfills" rel="nofollow">pony fill vs . Polly fill</a>)来启用IE11上的CSS变量，并确保至少light主题在IE11上工作。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过黑暗模式，我们希望将章鱼带入一个新的世界，一个你可以日夜部署而不会疲劳眼睛的世界！我们希望您喜欢黑暗模式，如果您有任何反馈，请填写<a href="https://octopusdeploy.typeform.com/to/jVl7gN" rel="nofollow">反馈表</a>！</p>
+
+<h2 id="related-posts">相关职位</h2>
+
+
+
+                    
+                    
+</body>
+</html>

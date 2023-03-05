@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>Octopus Deploy 2019.8 - Streamlined deployment process editor, Tenant cloning, and more ... - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus Deploy 2019.8 -简化的部署流程编辑器、租户克隆等...-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2019.8#2021-08-12">https://octopus.com/blog/octopus-release-2019.8#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/blogimage-shipping-2019-8.png" class="zoom" data-title=""><img src="../Images/65f9bd3e3c081e5b54179e80c91838b9.png" class="img-fluid center" alt="Octopus Deploy 2019.8 announcement fireworks" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/blogimage-shipping-2019-8.png"/>T2】</a></p>
+
+<p>Octopus Deploy 2019.8现已推出。</p>
+
+<p>最明显的变化是对部署流程编辑器的改进，但还有许多其他增强，所有这些都来自用户请求。希望在这个版本中有适合每个人的东西。</p>
+
+<h2 id="streamlined-deployment-process-editor">简化的部署流程编辑器</h2>
+
+<p>2019.8在部署流程的各个步骤之间导航时带来了更好的体验:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/deployment-process-sidebar.gif" class="zoom" data-title=""><img src="../Images/8cf653c0819c599a3a05e4dc1262fc6d.png" class="img-fluid center" alt="Deployment Process Step Sidebar" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/deployment-process-sidebar.gif"/>T2】</a></p>
+
+<p>此更新提供了两个主要优势:</p>
+
+<ul>
+<li>可见性:您现在可以在编辑一个步骤时看到整个过程。这在引用脚本或变量中的其他步骤名称时特别有用。</li>
+<li>可用性:在部署步骤之间跳跃以前可能是痛苦的，特别是对于有许多步骤的过程。这一改变有望节省一些宝贵的时间(并减少鼠标的磨损)。</li>
+</ul>
+
+<p>这代表了我们的部署流程编辑器改进的第一次迭代，我们希望您在评论中提供反馈。</p>
+
+<h2 id="cloning-tenants">克隆租户</h2>
+
+<p>说到节省鼠标点击，现在可以克隆租户了。创建一个新的租户、应用相关的标记、将它链接到适当的项目和环境，以及输入变量值可能会很繁琐，但是您现在可以通过克隆一个现有的租户来跳过这个过程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/tenant-clone.png" class="zoom" data-title=""><img src="../Images/7867e0c7f0aef4402a0fa612fdab309f.png" class="img-fluid center" alt="Clone a tenant" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/tenant-clone.png"/>T2】</a></p>
+
+<h2 id="more-health-check-scheduling-options">更多运行状况检查计划选项</h2>
+
+<p>以前，您只能在计算机策略中配置运行状况检查的时间间隔。Octopus 2019.8带来了提供cron表达式或配置健康检查不运行的能力。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/health-check-cron.png" class="zoom" data-title=""><img src="../Images/7a53da05d1d307558e33d916f7e99ab1.png" class="img-fluid center" alt="Health Check Cron Expression" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/health-check-cron.png"/>T2】</a></p>
+
+<h2 id="overriding-the-namespace-available-in-all-kubernetes-step-types">覆盖所有Kubernetes步骤类型中可用的名称空间</h2>
+
+<p>虽然<em>升级Helm Chart </em>步骤允许指定名称空间，但是其他Kubernetes步骤总是使用Kubernetes部署目标的名称空间。从Octopus 2019.8开始，所有Kubernetes步骤类型都可以通过直接在步骤上指定目标名称空间来覆盖目标名称空间。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/kubernetes-step-namespace.png" class="zoom" data-title=""><img src="../Images/5f8059c62653a7be8d88faac92c02cff.png" class="img-fluid center" alt="Namespace on Kubernetes step" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/kubernetes-step-namespace.png"/>T2】</a></p>
+
+<h2 id="rolling-deployments-can-now-include-deploy-release-steps">滚动部署现在可以包括部署发布步骤</h2>
+
+<p><a href="https://octopus.com/docs/deployment-patterns/rolling-deployments">滚动部署</a>现在可以包括<a href="https://octopus.com/docs/deployment-process/projects/coordinating-multiple-projects/deploy-release-step#rolling-deployments">部署发布步骤</a>。以前，滚动部署排除了这种步骤类型，但是正如你们中的许多人所指出的，在某些情况下这是有意义的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/rolling-deploy-release.png" class="zoom" data-title=""><img src="../Images/e6958507a5958ae8a6b17f295563ce5b.png" class="img-fluid center" alt="Rolling deploy release step" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/rolling-deploy-release.png"/>T2】</a></p>
+
+<h2 id="new-variable-filter-expressions">新的变量筛选表达式</h2>
+
+<p>我们添加了一些新的<a href="https://octopus.com/docs/deployment-process/variables/variable-filters">变量过滤器</a>来帮助切片和切块变量值:</p>
+
+<ul>
+<li><code>Trim</code></li>
+<li><code>Substring</code></li>
+<li><code>Truncate</code></li>
+<li><code>UriEscape</code></li>
+<li><code>UriDataEscape</code></li>
+</ul>
+
+<p>例如，给定一个值为<code>Octopus Deploy</code>的变量<code>Application</code></p>
+
+<pre><code>#{ Application | Substring 7}
+</code></pre>
+
+<p>将评估为<code>Octopus</code></p>
+
+<h2 id="copy-and-paste-to-add-certificates">复制并粘贴以添加证书</h2>
+
+<p>以前，将证书上载至八达通证书库需要选择证书作为档案。当base64或PEM表示位于您的剪贴板上时，这一要求很不方便。</p>
+
+<p>现在，在存储证书时，可以将其直接粘贴到门户中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/certificate-text.png" class="zoom" data-title=""><img src="../Images/3544d3b58d218a0e46771e93e6ee3a1a.png" class="img-fluid center" alt="Paste certificate as text" data-original-src="https://i.octopus.com/blog/2019-08/octopus-release-2019.8/certificate-text.png"/>T2】</a></p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>和往常一样，请按照<a href="https://octopus.com/docs/administration/upgrading">升级Octopus Deploy </a>的正常步骤操作。更多信息请参见<a href="https://octopus.com/downloads/compare?to=2019.8.0">发行说明</a>。</p>
+
+<ul>
+<li><p>自托管八达通客户通过安装<a href="https://octopus.com/downloads">八达通服务器2019.8 </a>，今天就可以开始使用这些功能。注意<code>2019.8</code>是没有<a href="https://octopus.com/docs/administration/upgrading/long-term-support">长期支持</a>的快速通道发布。该功能集将包含在2019年第三季度末的下一次<a href="https://octopus.com/docs/administration/upgrading/long-term-support">LTS</a>Octopus发布中。</p>
+</li>
+<li><p>Octopus Cloud客户将在其维护窗口的大约2周内开始接收最新的bits。</p>
+</li>
+</ul>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。欢迎给我们留下评论，让我们知道你的想法。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

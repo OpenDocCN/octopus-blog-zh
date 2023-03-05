@@ -1,0 +1,399 @@
+<html>
+<head>
+<title>Leveraging Multi-Tenancy to create team and developer sandboxes - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>利用多租户创建团队和开发人员沙箱——Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/multi-tenancy-teams#2021-08-23">https://octopus.com/blog/multi-tenancy-teams#2021-08-23</a></blockquote>
+                        <p>最近，我有机会会见一位客户，谈论他们的开发过程。他们想知道是否有可能改变他们的CI/CD管道，以便更容易、更快速地测试变更。当他们开始描述他们的场景时，我忍不住笑了，因为在过去的10多年里我已经遇到过很多次了。</p>
+
+<p>他们有三个开发团队和四个主要应用程序。四个主要应用程序之间存在一些依赖关系。应用程序A可能调用应用程序B，应用程序B调用应用程序C，依此类推。对于哪个团队可以开发哪个应用程序，并没有明确的“界限”。在任何时候，两个团队都可能在开发同一个应用程序。例如:</p>
+
+<ul>
+<li>团队A正在为应用程序A添加一个新功能。</li>
+<li>团队B正在修复应用程序a的一些错误。</li>
+<li>团队C正在为应用程序b添加一个新功能。</li>
+</ul>
+
+<p>团队B具有更高的优先级，因为它正在修复bug。团队A什么时候可以推出应用程序A的新特性，以便QA工程师进行测试，业务负责人进行验证？有没有可能在B队完成之前完成，而不踩过他们的工作？团队C如何在不停止团队B的情况下更改他们的应用程序？</p>
+
+<p><strong>请注意</strong>:我转述了那次会议的一些内容，如果他们正在阅读这篇文章，我向他们道歉，我把他们的担忧过于简单化了。</p>
+
+<p>在Octopus Deploy工作之前，我在不同的工作中多次遇到这种情况。在那些公司，知识的集体缺乏，以及工具的限制，导致了一些，比如说，不寻常的解决方案。团队C被告知他们所做的任何改变都必须是向后兼容的。如果需要的话，把它藏在特征标志后面。团队A和B的工作不能停止。团队A被告知在团队B完成他们的工作之前不要推进他们的变更。根据这需要多长时间，团队A可能也会尝试进行一些小的修改，增加他们修改的范围，并给QA带来更多的工作。</p>
+
+<p>这只是三个团队。我曾为拥有10多个开发团队的公司工作过。想象一下，试图变戏法所有这一切！</p>
+
+<p>根本问题是上述解决方案不能很好地扩展。手动闸门太多。太容易出错，导致工作变慢。每个团队都需要自己的“沙箱”每个团队的沙箱都有每个团队或开发人员所需的每个应用程序的副本。这使得上述场景更容易处理。</p>
+
+<ul>
+<li>团队A可以把一个新特性推到他们的沙箱中进行测试，而不需要完全依赖团队b。</li>
+<li>团队C可以将更改推送到他们的沙盒中进行测试，而不会破坏团队A和b。</li>
+<li>团队A和B不知道团队C的改变，因为他们指向他们自己的应用程序B的副本。</li>
+<li>一旦团队C的变更被验证，他们将把他们的代码合并到一个发布分支或主版本中，这将开始一个新的构建和新的版本。然后团队A和B将需要把最新的版本带到他们的沙箱中。</li>
+</ul>
+
+<p>有时候，一个开发人员会致力于一个突发事件或另一个变更，他们想要得到反馈，可能来自另一个开发人员，或者来自企业所有者。过去，当我这样做时，我让开发人员和/或企业所有者直接连接到我的机器。直接连接到我的机器对我来说是一个巨大的痛苦，因为我可能正在调整其他东西，代码甚至可能没有运行。如果有一个我也能推动这些改变的地方就好了。当时，如果我这样做了，它会上传到“主”开发服务器，并有可能破坏东西。</p>
+
+<p>这是Octopus Deploy的<a href="https://octopus.com/docs/deployments/patterns/multi-tenant-deployments">多租户特性</a>的完美用例。在本文中，我将带您了解如何使用Octopus Deploy中的多租户特性为团队和开发人员配置私有测试沙箱。</p>
+
+
+
+<h2 id="caveats-to-this-solution">此解决方案的注意事项</h2>
+
+<p>这个解决方案有几个重要的注意事项。</p>
+
+<p>首先，这将要求整个应用程序具有自动化部署。你不能有你的代码(c#/JS/TS/PHP/等。)通过Octopus Deploy进行部署，而您的数据库是手动部署的。</p>
+
+<p>其次，这种解决方案违背了“永远要集成”的原则如果你尽可能快地测试最新最好的代码，那将是最好的。例如，我在一个贷款发放系统上工作，它依赖于一个服务来获取客户信息。当测试我的更改时，我希望被指向最新和最好的客户服务。根据最新和最好的版本进行测试可以更快地发现问题，从而降低成本。下面详细介绍的解决方案将集成推到了软件开发生命周期的后期。</p>
+
+<p>尽可能快地运行最新最好的代码是有风险的。由于客户服务中的一个新特性而产生的错误可能会导致贷款发放系统的测试速度变慢。没有客户很难贷款。当这种情况发生时——这种情况经常发生，但在其他服务上也是如此——我想要一个依赖服务的稳定副本来指向它。一旦新客户服务的测试完成，我就会把这个版本放到我的沙箱里。这种方法的风险是，我可能直到后来才发现应用程序中的错误。该错误可能需要额外的代码更改，这会增加成本。尤其是如果代码更改需要发生在客户服务中，并且最近已经被推送到生产中。</p>
+
+<p>无论哪种方式都有风险。由您决定您希望风险发生在哪里。</p>
+
+<h2 id="configuring-octopus-deploy">配置Octopus部署</h2>
+
+<p>在深入了解配置之前，让我们后退一步，看看一些用例。希望在这篇文章的结尾，我们能见到他们所有人。</p>
+
+<ul>
+<li>作为团队C的开发人员，我希望能够对应用程序B进行修改，而不影响其他团队对应用程序a的工作。</li>
+<li>作为一名开发应用程序A的开发人员，我希望能够在应用程序B的更改完成并通过验证后，将它们拉出来。</li>
+<li>作为一名开发人员，我总是希望能够在非生产环境中测试当前生产中的内容。</li>
+<li>作为一名开发人员，我希望能够在不影响我的团队的情况下做出更改，并将其提交给业务所有者进行验证。</li>
+<li>作为应用程序A的开发人员，我想知道B I正在连接和测试哪个版本的应用程序。</li>
+<li>作为团队A中的一名开发人员，我希望能够将一个修补程序直接发布到staging，而不必先进行开发或测试。</li>
+<li>作为团队A中的一名开发人员，我希望能够将团队的变更推进到客户可以提供反馈的测试区域。获得客户反馈不会一直发生，但我希望有这样的机会。</li>
+</ul>
+
+<p>如前所述，我们将使用Octopus Deploy的<a href="https://octopus.com/docs/deployments/patterns/multi-tenant-deployments">多租户特性</a>来解决这个问题。我选择这个解决方案，而不是为团队和开发人员创建单独的环境，有几个原因。</p>
+
+<ol>
+<li>当您添加一个新环境时，您并不知道需要配置的所有变量。在Octopus Deploy的多租户特性中，有一个可变模板的概念。如果租户缺少一个变量，UI中会有一个指示器，并且有一个中心位置来配置它们。</li>
+<li>它简化了生命周期。我认为任何给定的Octopus部署实例都应该有10个或更少的环境。</li>
+<li>它可以随着团队和开发人员的成长而扩展。当有新人开始时，很容易将他们添加为租户，并在几分钟内为他们配置一个测试沙箱。</li>
+</ol>
+
+
+
+<p>为此，我将创建一个名为<code>Tenant Type</code>的租户标记集，用于分组和组织目的。基于用例，我需要在<code>Tenant Type</code>标签集中添加三个标签。</p>
+
+<ul>
+<li>版本(主版本或主版本和修补程序)。</li>
+<li>团队(供团队测试用)。</li>
+<li>人员(每个开发人员)。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-tags.png" class="zoom" data-title=""><img src="../Images/d20dacb5ea2321726233242c15463f65.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-tags.png"/>T2】</a></p>
+
+<h2 id="global-variables">全局变量</h2>
+
+<p>在我的演示实例中，我有两个变量集。<code>Global</code>将在所有项目中使用。<code>OctoFx</code>将用于任何用于部署OctoFx应用程序组件的OctoFx项目。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/variable-sets.png" class="zoom" data-title=""><img src="../Images/8a5436b5bfdb0c551975a0a44b1b1b85.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/variable-sets.png"/>T2】</a></p>
+
+<p>每个环境都有自己的SQL Server和web服务器。我将在相同的服务器上托管我的租户。每个租户将获得一个独特的子域。我将为分配给团队或个人<code>Tenant Type</code>的租户使用的命名约定将是[environment short name][tenant short name][application name]. octopus demos . com。例如，对于开发中的Bob的OctoFx应用程序副本，名称将是DevBobOctoFx.OctopusDemos.com。对于版本<code>Tenant Type</code>，命名约定将是【环境名称】【应用名称】. OctopusDemos.com。例如，开发中的OctoFx将是DevOctoFx.OctopusDemos.com。</p>
+
+<p>我使用同一个SQL Server进行开发和测试，所以我的数据库名称乍一看会很奇怪。[environment prefix]-[tenant short name]-[application name]用于分配给团队或个人的租户<code>Tenant Type</code>。鲍勃在<code>Development</code>中的OctoFx数据库的副本将是<code>d-Bob-OctoFx</code>。分配给版本<code>Tenant Type</code>的租户将是[environment prefix]-[application name]。比如<code>Development</code>中的OctoFx会是<code>d-octofx</code>。</p>
+
+<p>首先，我将在Global中创建几个变量来存储环境简称和环境前缀变量。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/environment-short-name-global-variable.png" class="zoom" data-title=""><img src="../Images/621f78cbf12540354098d0a5d9f9d678.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/environment-short-name-global-variable.png"/>T2】</a></p>
+
+<p><strong>请注意:</strong>我喜欢用命名方案【VariableSet】。[组件]。[姓名]。当试图引用它们时，更容易找到。此外，当查看项目的所有变量时，它们更容易找到。</p>
+
+<p>然后，我将跳转到<code>Variable Templates</code>选项卡，添加一个新模板。这将在创建租户并将其分配给各种项目时填充。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/variable-sets-templates.png" class="zoom" data-title=""><img src="../Images/c87be8edbc6e3e8681303d921f267b2a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/variable-sets-templates.png"/>T2】</a></p>
+
+<p>现在我可以跳回variables选项卡并添加两个变量，一个用于子域名，另一个用于数据库名。您可以将变量的范围扩大到租户标记。请注意，我只对<code>Tenant Type</code> tenant标签的一个变量进行了限定。这是因为我希望任何“正常的”发布都有相同的命名约定，即使项目没有使用租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/variable-set-with-scoped-variables.png" class="zoom" data-title=""><img src="../Images/0e66b42ccfa84b12a32346d1f5be4a66.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/variable-set-with-scoped-variables.png"/>T2】</a></p>
+
+<p>你会注意到我在这里引用了一个名为<code>Project.Application.Name</code>的变量。该变量将在项目级别设置。这是可能的，因为变量替换是在运行时完成的。需要在运行时替换变量，因为Octopus通常直到在机器上运行该步骤时才知道值。</p>
+
+<p><code>OctoFx</code>变量集没什么超级复杂的。它存储一些数据库值，这样它可以建立一个连接字符串。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-variable-set.png" class="zoom" data-title=""><img src="../Images/3dfcb6872832351937db9a0652050dcd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-variable-set.png"/>T2】</a></p>
+
+<h2 id="infrastructure">基础设施</h2>
+
+<p>正如我在前面的部分中所述，我将部署到一个SQL服务器和多个web服务器。我将使用一个worker来部署到SQL Server。只有网络服务器上有触角。我需要更新触手注册，以允许多租户部署。首先，我们需要告诉Octopus Deploy允许对每个web服务器进行租户和非租户部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/machine-settings-tenant.png" class="zoom" data-title=""><img src="../Images/20f989c94e31a5d617db0f83bbaa2028.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/machine-settings-tenant.png"/>T2】</a></p>
+
+<p>当我们这样做时，屏幕上会出现一个新的部分，允许我们选择允许哪些租户。我们将使用<code>Tenant Type</code>标记，而不是分配特定的租户。使用的<code>Tenant Type</code>标签将取决于环境。</p>
+
+<ul>
+<li>制作:发布<code>Tenant Type</code>。</li>
+<li>登台:组队和发布<code>Tenant Type</code>。</li>
+<li>测试:全部<code>Tenant Type</code>。</li>
+<li>开发:全部<code>Tenant Type</code>。</li>
+</ul>
+
+<p>你可能想知道为什么staging得到两个团队并发布<code>Tenant Type</code>标签。我见过很多舞台和生产相匹配的例子。这包括外部访问。将staging用作外部客户的“测试”站点是很常见的。开发人员做出的一个突发事件或随机变化不太可能被修饰到足以让客户测试的程度。一个团队创建的新特性更有可能在客户测试它之前被多人测试过。</p>
+
+<p>【T2 <img src="../Images/ad993ef9a472fa5a9aea13232ac1d4ce.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/infrastructure-with-tenant-tags.png"/></p>
+
+<p>当我更新完我的机器后，概览屏幕将如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/infrastructure-overview-with-tenant-tags.png" class="zoom" data-title=""><img src="../Images/137384cf6e3ec0348b84f20dc8bafe6a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/infrastructure-overview-with-tenant-tags.png"/>T2】</a></p>
+
+<h2 id="projects">项目</h2>
+
+<p>在配置租户之前，我想看一下我将作为例子使用的<code>OctoFx</code>应用程序。OctoFx由两部分组成；一个数据库和一个网络界面。每个组件在Octopus Deploy中都有其部署项目。并不是对OctoFx的所有更改都需要部署完整的应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-overview.png" class="zoom" data-title=""><img src="../Images/52f7a8acb10583624addaa2da2b03af6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-overview.png"/>T2】</a></p>
+
+<p>向数据库添加索引不需要部署网站。更新CSS不需要部署数据库。将它们分开有助于节省时间。当您必须部署修补程序时，这真的很方便。当您真正需要修复网站时，必须等待数据库部署完成，这是对耐心的一种锻炼。</p>
+
+<p>每个项目只需要专注于一件事。数据库项目只是担心数据库部署。</p>
+
+<p><strong>请注意:</strong>这个项目是在假设数据库在那个特定环境中不存在的情况下创建的。它将创建一个新的数据库，并运行必要的脚本来添加模式、数据和用户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-db-project.png" class="zoom" data-title=""><img src="../Images/0270de29476b1b850ce91330e8c5793a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-db-project.png"/>T2】</a></p>
+
+<p>而web部署只需要考虑web部署的步骤。就像数据库项目一样，它是在假设网站不存在的情况下编写的。部署到IIS将在服务器上创建网站。然后有一个步骤将网站添加到DNS。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-web-overview.png" class="zoom" data-title=""><img src="../Images/e084a592bf13ac64d7256dbe27a01cb4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-web-overview.png"/>T2】</a></p>
+
+<p>有些情况下，您希望同时部署整个堆栈。这就是“交通警察”项目的由来。它使用deploy a release步骤以正确的顺序部署组件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-trafficcop-overview.png" class="zoom" data-title=""><img src="../Images/e313924dd4daca9ca21ed888f13e1a2a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octofx-trafficcop-overview.png"/>T2】</a></p>
+
+<p>构建服务器负责为每个组件创建版本。一个人将进来并为交通警察项目创建发布。请注意，traffic cop项目的生命周期允许您直接部署到staging，跳过<code>Development</code>和<code>Testing</code>。跳过这些环境是为了处理个别组件被手动推送到<code>Testing</code>的情况。</p>
+
+<p><strong>请注意:</strong>我的示例实例中的项目是在假设数据库和/或网站不存在的情况下创建的。每个项目都执行必要的步骤来启动和运行组件。为了让这种沙盒方法发挥作用，您的项目需要用类似的概念来创建。你不必重复我在项目中使用的确切过程。</p>
+
+<p>另一个需要做的重要调整是配置项目以支持多租户部署。可以通过转到项目的设置部分并更改多租户设置来找到该配置。在我的例子中，我选择需要一个租户来进行部署。如果您第一次将项目过渡到多租户，那么允许有租户和没有租户的部署会更有意义。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/project-multi-tenant-settings.png" class="zoom" data-title=""><img src="../Images/8ccf1fbac039d3688be184996b172bb7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/project-multi-tenant-settings.png"/>T2】</a></p>
+
+<h2 id="branching-lifecycles-and-channels">分支、生命周期和通道</h2>
+
+<p>现在正是讨论分支策略的最佳时机。分支将对应于Octopus Deploy中的一个生命周期和项目通道。我将让我的构建服务器向来自非发布分支的任何包构建添加一个预发布标记。构建服务器还将根据分支名称确定租户和通道。</p>
+
+<ul>
+<li>发布分支(release/*):部署到开发-&gt;测试-&gt;试运行-&gt;生产。所有生产版本的95%都将经历这个生命周期。</li>
+<li>热修复分支(hotfix/*):可以跳过开发和测试，直接进入试运行阶段，然后进入生产阶段。所有生产版本的5%应该经历这个生命周期。这为生产提供了一条清晰的路径，同时提供了测试能力。</li>
+<li>团队分支([TeamName]/*):只能转到开发-&gt;测试-&gt;登台。这个分支将有一个附加到包名的预发布标签。</li>
+<li>开发者分支([DeveloperName]/*):只能去开发-&gt;测试。这个分支将有一个附加到包名的预发布标签。</li>
+</ul>
+
+<p>在Octopus Deploy中，我创建了以下生命周期。团队和开发生命周期将<code>Development</code>和<code>Testing</code>环境设置为可选的。这是为了让用户能够自由选择要更新的环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/lifecycles-overview.png" class="zoom" data-title=""><img src="../Images/679c990ed57ffaa20c11d3358e6e87a6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/lifecycles-overview.png"/>T2】</a></p>
+
+<p>每个项目将有以下渠道来支持各种用例。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/channeloverview.png" class="zoom" data-title=""><img src="../Images/730b1ed78ebedc5b1508ef465ad4462b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/channeloverview.png"/>T2】</a></p>
+
+<p>每个使用的渠道都有一个针对软件包预发布标签的版本规则。对于团队和开发人员部署，过滤器是<code>.+</code>，这意味着它必须有一个预发布标签。对于所有其他频道，过滤器是<code>^$</code>，这意味着不允许预发布标签。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/channel-prereleasetag.png" class="zoom" data-title=""><img src="../Images/c7341ab3df24d0e01ce5dd2eb09533ee.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/channel-prereleasetag.png"/>T2】</a></p>
+
+<p>构建服务器配置将在本文稍后介绍。</p>
+
+<p>您会注意到任何租户都可以使用默认频道。这是否意味着每个租户都可以部署到生产环境中？不。当您将租户链接到项目时，您将告诉Octopus租户可以部署到的环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-overview-project-environments-highlighted.png" class="zoom" data-title=""><img src="../Images/8ffe20f856eb4f163c775a0cb27cd28a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-overview-project-environments-highlighted.png"/>T2】</a></p>
+
+<h2 id="tenants">房客</h2>
+
+<p>租户标签已经就位。已经配置了生命周期。项目已经配置完毕。已经进行了必要的基础设施改革。终于到了创建一些租户的时候了。</p>
+
+<p>对于每个租户，我将分配一个租户标记。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-with-tag.png" class="zoom" data-title=""><img src="../Images/726bb168e4471d2094e6e084dc20a113.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-with-tag.png"/>T2】</a></p>
+
+<p>然后，我将连接我的项目。因为这是一个人<code>Tenant Type</code>我只允许部署到<code>Development</code>和<code>Testing</code>环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-connect-project.png" class="zoom" data-title=""><img src="../Images/457aa21985b99d36d9c3da5a55b8506c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-connect-project.png"/>T2】</a></p>
+
+<p>如果您还记得，<code>Global</code>变量集有一个变量模板。现在项目已经连接好了，我需要进入变量然后选择<code>Common Templates</code>来填充变量模板。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-common-variable.png" class="zoom" data-title=""><img src="../Images/df51317b52eaf47b4c9fa7d535800b8b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenant-common-variable.png"/>T2】</a></p>
+
+<p>该说的都说了，该做的都做了，我为发布版<code>Tenant Type</code>创建了两个租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/release-tenants.png" class="zoom" data-title=""><img src="../Images/faa52d3e381c8882b18824d2688e0739.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/release-tenants.png"/>T2】</a></p>
+
+<p>团队的三个租户<code>Tenant Type</code>。我们把我们的团队命名为pod-[章鱼型]。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/team-tenants.png" class="zoom" data-title=""><img src="../Images/01d8442674d2d3e865c22a31f81fe476.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/team-tenants.png"/>T2】</a></p>
+
+<p>最后，几个租户指定了这个人<code>Tenant Type</code>。</p>
+
+<p>【T2 <img src="../Images/5a143c2771aafce954cc4d0eb95b8f77.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/person-tenants.png"/></p>
+
+<p>租户屏幕可以按<code>Tenant Type</code>过滤。通过<code>Tenant Type</code>过滤可以更容易地找到特定的租户。以及事后截图。我完全做到了。</p>
+
+<p>现在，项目概览屏幕将显示所有租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/databasedeployments-with-tenants.png" class="zoom" data-title=""><img src="../Images/b7ed389ba770400c4909db81ace70641.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/databasedeployments-with-tenants.png"/>T2】</a></p>
+
+<p>我可以通过选择一个版本来部署到特定的租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/projectoverview-select-release.png" class="zoom" data-title=""><img src="../Images/b94257be179160cd8fdbbf0948b2cbd4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/projectoverview-select-release.png"/>T2】</a></p>
+
+<p>当您进入部署屏幕时，您可以选择按租户标签部署到特定的租户。如果您查看屏幕截图的底部，它会向您显示将被部署到的所有租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenants-deploy-screen.png" class="zoom" data-title=""><img src="../Images/6e6bf0ec31590ee345b6d5d7742d387d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/tenants-deploy-screen.png"/>T2】</a></p>
+
+<p>项目概述屏幕还提供了按租户标签对租户进行分组的能力。当我们按租户类型分组时，屏幕将按租户类型对所有租户进行分组。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/projectoverview-groupby.png" class="zoom" data-title=""><img src="../Images/761929afcc0abc1ec57444752695a6c7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/projectoverview-groupby.png"/>T2】</a></p>
+
+<h2 id="build-server">构建服务器</h2>
+
+<p>在这个例子中，我将使用TeamCity。同样的核心概念也适用于您选择的构建服务器。</p>
+
+<p>在构建开始时，我运行一个PowerShell脚本来设置各种输出参数。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-build-process.png" class="zoom" data-title=""><img src="../Images/8e86fb57ff758fa27672741ba653c1b9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-build-process.png"/>T2】</a></p>
+
+<p>在我的例子中，PowerShell脚本设置了这三个参数。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-output-parameters.png" class="zoom" data-title=""><img src="../Images/69da2155d7e8701d8fbbf1a7cc8ebb0a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-output-parameters.png"/></a>T2】</p>
+
+<p>这些参数将在创建发布步骤中使用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-create-octopus-release.png" class="zoom" data-title=""><img src="../Images/0a1ab4ed7c0fca9191f6797a0184a82e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-create-octopus-release.png"/>T2】</a></p>
+
+<p>被调用的PowerShell并不是什么超级复杂的东西。对照规则列表检查分支名称，然后从那里开始。在脚本的最后，它使用TeamCity特定的格式来设置输出变量。</p>
+
+<pre><code class="language-PS">Param(.   
+    [string]$currentBranch,
+    [string]$buildNumber,
+    [string]$defaultMajorVersion,
+    [string]$featureBranchVersion
+)
+
+Write-Host "BuildNumber: $buildNumber"
+Write-Host "DefaultMajorVersion: $defaultMajorVersion"
+Write-Host "FeatureBranchVersion: $featureBranchVersion"
+
+$channelName = "Default"
+$releaseVersion = "$defaultMajorVersion.$buildNumber"
+$environmentName = "Development"
+$tenantName = "Main"
+
+Write-Host "The branch that is building is: $currentBranch"
+
+if ($currentBranch -like "refs/heads/hotfix*") {    
+    Write-Host "Hotfix Branch Detected, deploying to staging and using the hotfix channel"
+    $channelName = "Hotfix"    
+    $releaseVersion = "$defaultMajorVersion.$buildNumber"
+    $environmentName = "Staging"
+    $tenantName = "Hotfix"
+}
+elseif ($currentBranch -like "refs/heads/team-*") {    
+    Write-Host "Team branch detected, deploying to a team tenant"
+    $channelName = "Team and Developer"
+    $environmentName = "Development"
+
+    $preReleaseTag = $currentBranch.replace("refs/heads/team-", "").replace(" ", "").replace("/", "-")
+    $releaseVersion = "$featureBranchVersion.$buildNumber-$preReleaseTag"
+
+    $teamName = $currentBranch.replace("refs/heads/team-", "")
+    $teamName = $teamName.substring(0, $teamName.indexOf("/"))
+
+    $tenantName = $teamName
+}
+elseif ($currentBranch -like "refs/heads/developer-*") {    
+    Write-Host "Dev branch detected, deploying to the team or team tenant"
+    $channelName = "Team and Developer"
+    $environmentName = "Development"
+
+    $preReleaseTag = $currentBranch.replace("refs/heads/developer-", "").replace(" ", "").replace("/", "-")
+    $releaseVersion = "$featureBranchVersion.$buildNumber-$preReleaseTag"
+
+    $devName = $currentBranch.replace("refs/heads/developer-", "")
+    $devName = $devName.substring(0, $devName.indexOf("/")).replace("-", " ")
+
+    $tenantName = $devName
+}
+else{
+    Write-Host "Master or release branch detected, using the defaults"
+    $channelName = "Default"
+    $releaseVersion = "$defaultMajorVersion.$buildNumber"
+    $environmentName = "Development"
+    $tenantName = "Main"
+}
+
+Write-Host "Tenant Name: $tenantName"
+Write-Host "Environment Name: $environmentName"
+Write-Host "Release Version: $releaseVersion"
+Write-Host "Channel Name: $channelName"
+
+"##teamcity[setParameter name='env.octopusChannel' value='$channelName']"
+"##teamcity[setParameter name='env.octopusVersion' value='$releaseVersion']"
+"##teamcity[setParameter name='env.octopusEnvironment' value='$environmentName']"
+"##teamcity[setParameter name='env.octopusTenant' value='$tenantName']"
+</code></pre>
+
+<p>最后一部分是告诉您的构建服务器，在我的例子中是TeamCity，监控所有的分支，或者监控符合您的需求的分支。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-monitor-all-branches.png" class="zoom" data-title=""><img src="../Images/c89f7a0ee993b8722d4e4987f72c87b8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-monitor-all-branches.png"/>T2】</a></p>
+
+<h2 id="seeing-it-in-action">看到它的实际应用</h2>
+
+<p>是时候测试一下了。我为我的开发人员创建了一个测试分支，并将其推送到服务器。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/git-test-commit.png" class="zoom" data-title=""><img src="../Images/0854f95391f77367bddfd78f0ce75f19.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/git-test-commit.png"/>T2】</a></p>
+
+<p>TeamCity选择了新的分支机构。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-pending-build.png" class="zoom" data-title=""><img src="../Images/63816df0c8bb17ede179f59aefe3775b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-pending-build.png"/>T2】</a></p>
+
+<p>日志表明它成功地找到了所有东西。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-script-log.png" class="zoom" data-title=""><img src="../Images/c3a03a90c3e3a3577bf5d2471f0632bb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/teamcity-script-log.png"/>T2】</a></p>
+
+<p>并且为租户启动部署。</p>
+
+<p>【T2 <img src="../Images/d074a74fa96d2f7675bf4229e9b93bfa.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octopus-deploy-building.png"/></p>
+
+<p>我也有一个特定的分支包，然后可以与其他开发人员共享。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octopus-deploy-developer-package.png" class="zoom" data-title=""><img src="../Images/330557676e43055978fee633cd804426.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octopus-deploy-developer-package.png"/>T2】</a></p>
+
+<p>因此，如果Derek想要将这些更改带入他的沙箱，我们将首先将版本更改为我的版本号。然后，我们将单击“部署”按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octopusdeploy-derek-bringing-in-release.png" class="zoom" data-title=""><img src="../Images/a2b5f18ff64ecf48f5835b56697df345.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/octopusdeploy-derek-bringing-in-release.png"/>T2】</a></p>
+
+<h2 id="standing-up-an-entire-sandbox">站着一整个沙箱</h2>
+
+<p>到目前为止，我们一直专注于一个应用程序，OctoFx。我敢打赌，您的开发团队中有不止一个应用程序。为了解决这个问题，我创建了一个名为<code>Deploy All The Things</code>的项目。项目的生命周期允许它进入开发、测试和准备阶段，开发和测试是可选的。它旨在供带有个人或团队<code>Tenant Type</code>租户标签的租户使用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/deploy-all-the-things.png" class="zoom" data-title=""><img src="../Images/eccd87f2db82ec7a6f2adcb401e86b92.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/deploy-all-the-things.png"/>T2】</a></p>
+
+<p>目前它只部署了OctoFx。将来，它可以部署其他应用程序，并按照需要的顺序进行部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/deploy-all-the-things-process.png" class="zoom" data-title=""><img src="../Images/6bbfc4ee80bfbc97eeca454bd1221bed.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/deploy-all-the-things-process.png"/>T2】</a></p>
+
+<p>关于部署发布步骤的一个注意事项。当您创建一个发布时，也就是当您选择子项目的发布版本时，这个项目完全有可能只将一个发布部署到一个环境中的一个租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/deploy-all-the-things-select-release.png" class="zoom" data-title=""><img src="../Images/25fa41b661548f4f7fcd684497e5328e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-04/multi-tenancy-teams/deploy-all-the-things-select-release.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这需要一点设置，但是可以配置Octopus Deploy，这样每个团队和每个开发人员都有自己的沙箱来部署。拥有一个独立的沙箱将允许团队和开发人员获得关于正在进行的工作的反馈，而不必与其他团队协调何时可以进行更改。让我们再检查一次用例，以确保我们解决了它们。</p>
+
+<ul>
+<li>作为团队C的一名开发人员，我希望能够对应用程序B进行更改，而不影响其他团队对应用程序a的工作。-&gt;解决了，每个团队都有自己的沙箱。开发应用程序B的团队会推进他们的沙箱进行测试。</li>
+<li>作为一名开发应用程序A的开发人员，我希望能够在应用程序B的更改完成并通过验证后，将它们拉出来。-&gt;解决后，团队可以等待，直到更改被合并到一个发布分支并推送到主租户，或者他们可以选择为租户创建的发布并将其放入他们的沙箱。</li>
+<li>作为一名开发人员，我总是希望能够在非生产环境中测试当前生产中的内容。-&gt;已解决，只有在团队沙盒中验证了某项功能后，才会更改非生产环境中的主要租户。更改在主租户的较低环境中停留的时间应该很短，因为它已经过测试。</li>
+<li>作为一名开发人员，我希望能够在不影响我的团队的情况下做出更改，并将其提交给业务所有者进行验证。-&gt;解决了，每个开发者都获得了自己的租户，也就是获得了自己的沙盒。</li>
+<li>作为应用程序A的开发人员，我想知道B I正在连接和测试哪个版本的应用程序。-&gt;已解决，每个团队和开发人员都可以完全控制他们的沙箱中的版本。</li>
+<li>作为团队A中的一名开发人员，我希望能够将一个修补程序直接发布到staging，而不必先进行开发或测试。-&gt;已解决，有了渠道和热修复租户，就有可能将更改直接推送到暂存。</li>
+<li>作为团队A中的一名开发人员，我希望能够将团队的变更推进到客户可以提供反馈的测试区域。获得客户反馈不会一直发生，但我希望有这样的机会。-&gt;解决了，任何有团队的租户<code>Tenant Type</code>都可以推送到staging。</li>
+</ul>
+
+<p>关于修补程序租户的最后一个想法。你不需要包括这个。我这样做是因为与我交谈的客户在其暂存环境中有一个单独的“热修复”子域。这对他们来说是有意义的。对你来说可能没有意义。我鼓励您亲自测试一下，并调整流程以满足您的需求。</p>
+
+<p>下次再见，愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

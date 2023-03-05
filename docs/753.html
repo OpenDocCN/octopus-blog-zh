@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>Deploying Tomcat apps via the manager - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>通过管理器部署Tomcat应用程序</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/tomcat-manager-deployment#2021-10-14">https://octopus.com/blog/tomcat-manager-deployment#2021-10-14</a></blockquote>
+                        <p>在上一篇文章中，我向您展示了如何通过将一个WAR文件提取到Tomcat <code>webapps</code>文件夹中，从Octopus Deploy部署到Tomcat。除了文件副本，Tomcat还支持通过与Tomcat发行版捆绑在一起的<a href="https://tomcat.apache.org/tomcat-7.0-doc/html-manager-howto.html" rel="nofollow">管理器应用程序</a>部署WAR文件。</p>
+
+<p>在本文中，我将向您展示如何通过Tomcat管理器在Tomcat中部署WAR文件。</p>
+
+<h2 id="configuring-tomcat">配置Tomcat</h2>
+
+<p>在开始上传WAR文件之前，我们需要做一些初始配置。</p>
+
+<h3 id="configuring-users">配置用户</h3>
+
+<p>我们需要定义与管理器交互的凭证。经理区分两种类型的用户，一种是通过浏览器使用web界面的用户，另一种是将使用API的用户。</p>
+
+<p>为了定义这些用户，我们需要编辑<code>conf/tomcat-users.xml</code>文件。</p>
+
+<p>基于浏览器的用户被分配到<code>manager-gui</code>角色，而API用户被分配到<code>manager-script</code>角色:</p>
+
+<pre><code class="language-xml">&lt;user username="manager" password="s3cret" roles="manager-gui"/&gt;
+&lt;user username="deployer" password="s3cret" roles="manager-script"/&gt;
+</code></pre>
+
+<h3 id="define-maximum-file-upload-size">定义最大文件上传大小</h3>
+
+<p>默认情况下，您只能通过管理器上传大约50MB的文件。这对于大的包来说通常不够大，所以您可以通过编辑<code>webapps/manager/WEB-INF/web.xml</code>文件来设置一个更高的限制。在该文件中，您会发现一个<code>&lt;multipart-config&gt;</code>元素，它的子元素定义了最大文件上传大小。</p>
+
+<p>在这里，我将最大文件上传大小设置为250MB:</p>
+
+<pre><code class="language-xml">&lt;multipart-config&gt;
+  &lt;max-file-size&gt;262144000&lt;/max-file-size&gt;
+  &lt;max-request-size&gt;262144000&lt;/max-request-size&gt;
+  &lt;file-size-threshold&gt;0&lt;/file-size-threshold&gt;
+&lt;/multipart-config&gt;
+</code></pre>
+
+<h2 id="uploading-the-war-file">上传战争文件</h2>
+
+<p>要将WAR文件放入Octopus Deploy，请按照前一篇博文中的<a href="https://octopus.com/blog/octopus-tomcat#packaging-the-war-file">打包WAR文件</a>和<a href="https://octopus.com/blog/octopus-tomcat#pushing-the-package">推送包</a>中的说明进行操作。</p>
+
+<p>然后，您可以使用<a href="https://octopus.com/blog/octopus-tomcat#creating-a-octopus-deploy-project">中的指令将WAR文件提取到目标服务器上，创建一个Octopus部署项目</a>。</p>
+
+<p>但是这次有一个重要的不同。我们将把WAR文件提取到一个临时位置，而不是直接提取到<code>webapps</code>文件夹。在这种情况下，我将文件提取到了<code>C:\staging</code>文件夹:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/tomcat-extract-war.png" class="zoom" data-title=""><img src="../Images/a9dfc21961559fccb2e907978bbf6048.png" class="img-fluid center" alt="Tomcat WAR Extraction" data-original-src="https://i.octopus.com/blog/2017-06/tomcat-extract-war.png"/>T2】</a></p>
+
+<p>为了部署文件，我们需要对<code>http://localhost:8080/manager/text/deploy</code> URL进行HTTP PUT，在请求体中提供要部署的WAR文件。<code>path</code>查询参数定义了将分配给应用程序的上下文路径。请注意，在路径名中有前导斜杠是很重要的。</p>
+
+<p>下面的PowerShell命令使用<a href="https://curl.haxx.se/download.html" rel="nofollow"> curl </a>来发出HTTP请求:</p>
+
+<pre><code class="language-powershell">&amp; "C:\curl.exe" -u deployer:s3cret -X PUT -F "file=@C:\staging\demo.war" http://localhost:8080/manager/text/deploy?path=/demo
+</code></pre>
+
+<h2 id="confirming-the-deployment">确认部署</h2>
+
+<p>打开http://localhost:8080/manager，并为我们之前创建的管理员用户提供凭据。您将看到应用程序部署在<code>demo</code>路径下:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/tomcat-manager.png" class="zoom" data-title=""><img src="../Images/86941bc9479ac73b257c3d703bb7738c.png" class="img-fluid center" alt="Tomcat Manager" data-original-src="https://i.octopus.com/blog/2017-06/tomcat-manager.png"/>T2】</a></p>
+
+<h2 id="next-steps">后续步骤</h2>
+
+<p>正在开发这些过程，作为最终将迁移到Octopus Deploy中直接提供的步骤中的概念验证。</p>
+
+<p>如果您对此流程有任何疑问，请留下评论。如果有一些Java特性你希望Octopus在未来部署支持，请加入<a href="https://octopus.com/blog/java-rfc"> Java RFC帖子</a>的讨论。</p>
+
+                    
+                    
+</body>
+</html>

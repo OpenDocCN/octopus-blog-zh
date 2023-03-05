@@ -1,0 +1,307 @@
+<html>
+<head>
+<title>Using the Octopus Terraform Provider to create standards - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus Terraform提供者创建标准- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/standards-with-octopus-terraform-provider#2022-08-01">https://octopus.com/blog/standards-with-octopus-terraform-provider#2022-08-01</a></blockquote>
+                        <p>自从我们在2019年末创建以来，<a href="https://samples.octopus.app" rel="nofollow"> Octopus Deploy samples实例</a>已经显著增长。它有30多个车位。然而，这种增长是一把双刃剑。这些示例对我们的客户很有帮助，但是空间太大使得日常维护任务非常耗时，比如旋转外部feed密码。</p>
+
+<p>在这篇文章中，我描述了我们的客户解决方案团队如何使用<a href="https://registry.terraform.io/providers/OctopusDeployLabs/octopusdeploy/latest/" rel="nofollow">Octopus Deploy terra form Provider</a>来建立标准，以使示例实例更易于维护。</p>
+
+<h2 id="maintenance-woes">维护困难</h2>
+
+<p>在Octopus Deploy，每个团队都有一个针对AWS、Azure和GCP的独特沙盒。在我们的沙盒里，每个人都可以自由支配。我们可以创建任何我们需要的资源来演示Octopus Deploy的功能。</p>
+
+<p>然而，随着团队和样本实例的增长，样本之间的一致性变得更加难以实施。每个人都使用离他们最近的地区(对我来说，美国中部代表Azure和GCP，美国东部代表AWS)。如果我们的区域没有虚拟网络、VPC、数据库服务器等，我们会创建空间。当一个新的空间被创建时，创建它的人会从他们以前工作过的例子中复制值。除此之外，还要创建云帐户、工人池、外部提要和其他变量集。</p>
+
+<p>维护示例实例非常耗时。例如，我们的一些样本使用AWS AMIs。AWS喜欢贬低AMIs，它要求我们搜索每个样本来决定更新哪个样本。</p>
+
+<p>虽然这是一种痛苦，但它并没有引起足够的摩擦来改变任何事情。我们并不是一直在创造空间。我们会尽可能地抽查商品。但是当我们的安全团队要求我们移动AWS和Azure沙箱时，我仔细研究了一下Octopus Terraform提供商。</p>
+
+<h2 id="space-standards">空间标准</h2>
+
+<p>samples实例中的每个空间都是唯一的，展示了如何在Octopus Deploy中使用不同的特性。空间之间的项目很少相似。范围设置为该项目的所有空间的基础资源。这些资源是:</p>
+
+<ul>
+<li>帐目</li>
+<li>工人池</li>
+<li>外部源<ul>
+<li>码头工人</li>
+<li>开源代码库</li>
+<li>进给</li>
+</ul>
+</li>
+<li>库变量集<ul>
+<li>通知(与电子邮件和Slack一起使用的标准消息)</li>
+<li>GCP</li>
+<li>自动警报系统</li>
+<li>蔚蓝的</li>
+<li>API键(从Octopus调用API脚本时使用)</li>
+</ul>
+</li>
+</ul>
+
+<p>在上面的列表中，您会注意到每个云提供商的库变量集。这是空间标准项目的第二部分。我们决定在美国和英国的一些地区创建一组基础资源、VPC或虚拟网络、子网、安全组等。这些基础资源的名称存储在那些库变量集中，因此任何空间上的任何样本都可以使用它。</p>
+
+<h2 id="using-octopus-deploy-runbooks-to-run-terraform-commands">使用Octopus Deploy Runbooks运行Terraform命令</h2>
+
+<p>我知道我将使用Octopus Deploy Runbooks来运行<code>terraform apply</code>或<code>terraform destroy</code>命令。但是我不确定那些操作手册应该放在哪里。在samples实例上存储runbooks导致了“蛇吃尾巴”的情况。他们最终可能会阻止示例部署和其他操作手册。</p>
+
+<p>我选择创建一个新的实例<code>samples-admin</code>，来存放运行手册。</p>
+
+<p>下一步是开发一个runbook结构，将Terraform模板应用于samples实例上的所有空间。空间列表是动态的；添加空格应该会自动添加到流程中。Octopus Terraform提供程序在针对特定空间时效果最佳。因此，我需要为每个空间运行<code>terraform apply</code>命令。拥有一个包含34个静态步骤的单一runbook，每个步骤运行<code>terraform apply</code>并不能很好地扩展。为了解决这个难题，我制作了以下操作手册:</p>
+
+<p><strong>实施系统范围的标准</strong>——运行API脚本来实施everyone团队、Octopus employees团队和Octopus managers团队的权限，然后调用<strong>实施samples实例上每个空间的空间标准</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/enforce-system-wide-standards-process.png" class="zoom" data-title=""><img src="../Images/4a21b564c9499ff78d8d150c98a9bbea.png" class="img-fluid center" alt="enforce system-wide standards process" data-original-src="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/enforce-system-wide-standards-process.png"/>T2】</a></p>
+
+<p><strong>实施空间标准</strong>——接受一个Space-ID作为提示变量，运行几个API脚本来实施保留策略，并运行<strong>应用Terraform模板</strong>内置步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/enforce-space-standards-proess.png" class="zoom" data-title=""><img src="../Images/bccd051d343324d239afa018941cca12.png" class="img-fluid center" alt="enforce space standards process" data-original-src="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/enforce-space-standards-proess.png"/>T2】</a></p>
+
+<p>如果我想在单个空间上快速测试一个变化，Space-ID提示变量将<code>Spaces-1</code>作为默认值。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/space-id-prompted-variable.png" class="zoom" data-title=""><img src="../Images/88ef670043d2c8aa1cd5590008965204.png" class="img-fluid center" alt="space id prompted variable" data-original-src="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/space-id-prompted-variable.png"/>T2】</a></p>
+
+<p><strong>创建新空间</strong>——接受一个空间名作为提示变量，并运行API脚本来创建一个空间。创建空间后，它调用<strong>Enforce System Wide Standards</strong>run book(对单个空间使用提示变量)来确保为新空间正确设置权限和资源。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/create-new-space-process.png" class="zoom" data-title=""><img src="../Images/719f533638be3115bfb0222e331ab3e6.png" class="img-fluid center" alt="create new space process" data-original-src="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/create-new-space-process.png"/>T2】</a></p>
+
+<p>预定触发器仅调用<strong>强制系统范围标准</strong>运行手册。每次该触发器运行时，都会创建以下任务:</p>
+
+<ul>
+<li><strong>实施全系统标准</strong>          <ul>
+<li><strong>执行空间标准</strong>(空间-1)</li>
+<li><strong>执行空间标准</strong>(空间-2)</li>
+<li><strong>执行空间标准</strong>(空间-3)</li>
+<li>...</li>
+<li><strong>执行太空标准</strong> (Spaces-xxx)</li>
+</ul>
+</li>
+</ul>
+
+
+
+<h2 id="terraform-basics">地形基础</h2>
+
+<p>在开始时，我对Terraform的体验仅限于概念验证。这一节讲述了我所学到的如何将Terraform与Octopus Deploy一起使用。</p>
+
+<h3 id="resource-ownership">资源所有权</h3>
+
+<p>向Terraform添加资源，无论是基础设施帐户、环境还是库变量集，都意味着它现在拥有该项目的生命周期。在Octopus UI中对该资源的任何修改都将在下次为该空间运行<code>terraform apply</code>时被覆盖。我的runbooks每6小时运行一次，因此，在被覆盖之前，修改最多会存在6个小时。</p>
+
+<p>我想实施的一个标准是，每个生命周期的保留策略都设置为5天。我们的一些空间有多种生命周期来展示一个特定的功能。通过Terraform管理该标准是不可能的，因为:</p>
+
+<ul>
+<li>资源必须在Terraform文件中声明。我们不想失去通过UI添加生命周期的能力。向Terraform文件动态添加资源是一项不小的工作量。</li>
+<li>如果有一两个生命周期是由Terraform管理的，而其他的则不是，这将会非常混乱。</li>
+<li>Terraform拥有对资源的完全控制权。我不能让Terraform只管理保留策略。</li>
+</ul>
+
+<p>我选择了一个<a href="https://github.com/OctopusSamples/IaC/blob/master/octopus-samples-instances/api-scripts/enforce-lifecycle-policies.ps1" rel="nofollow"> API脚本</a>。</p>
+
+<p>你不能用Terraform和Octopus UI来管理资源。非此即彼。明确哪些资源是Terraform管理的。我决定在每个资源名中包含后缀<code>TF</code>。</p>
+
+
+<h3 id="state">状态</h3>
+
+<p>Terraform使用状态文件来确定创建、更新和删除哪些资源。当资源出现在Terraform文件中而不是状态文件中时，Terraform会尝试创建它。如果资源出现在状态文件中，但没有出现在Terraform文件中，它将被删除。</p>
+
+<p>默认情况下，状态文件存储在工作目录的子目录中。Octopus Deploy会在每个Terraform步骤运行后删除工作目录。该状态文件将被自动删除。Octopus Deploy第一次运行<code>terraform apply</code>命令时，一切都正常，因为这是一个全新的状态文件，资源将不存在。但是在随后的运行中它会失败，因为资源已经存在于Octopus Deploy中，但是状态文件认为这些资源不存在。</p>
+
+<p>无论如何，不建议将状态文件存储在本地目录中。任何敏感值都不加密地存储在状态文件中。为了存储状态文件，建议使用<a href="https://www.terraform.io/language/settings/backends" rel="nofollow">远程后端</a>来存储状态文件。我选择了一个加密的安全S3桶。</p>
+
+<p>在我最初版本的Terraform文件中，状态选项是内联声明的。但是，您不能将变量用于状态选项。出于无知，我决定使用Octostache并让Octopus Deploy在runbook运行时替换这些值。</p>
+
+<pre><code>terraform {
+  required_providers {
+    octopusdeploy = {
+      source = "OctopusDeployLabs/octopusdeploy"
+      version = "&gt;= 0.7.64" # example: 0.7.62
+    }
+  }
+
+  backend "s3" {
+    bucket = "#{Project.AWS.Backend.Bucket}"
+    key = "#{Project.AWS.Backend.Key}"
+    region = "#{Project.AWS.Backend.Region}"
+  }
+}
+
+provider "octopusdeploy" {
+  # configuration options
+  address    = var.octopus_address
+  api_key    = var.octopus_api_key
+  space_id   = var.octopus_space_id
+}  
+</code></pre>
+
+<p>我不喜欢那样。有太多的活动部件，很容易搞砸。任何修改这个过程的人都必须知道查看variables.tf和main.tf文件，以确保他们创建了所有的变量。</p>
+
+<p>在浏览<a href="https://www.terraform.io/language/settings/backends/configuration#command-line-key-value-pairs" rel="nofollow"> Terraform的文档</a>时，我发现了<code>terraform init</code>命令的<code>-backend-config</code>参数。Octopus Deploy可以给<code>terraform init</code>命令添加额外的参数。因为我使用的是S3，所以额外的命令行参数是:</p>
+
+<pre><code>-backend-config="key=#{Project.AWS.Backend.Key}" -backend-config="region=#{Terraform.Init.S3.Region}" -backend-config="bucket=#{Terraform.Init.S3.Bucket}"
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/terraform-backend-init-in-octopus.png" class="zoom" data-title=""><img src="../Images/d1ca06dd05b5ea0cd85c1241dfe50e1c.png" class="img-fluid center" alt="terraform backend init in Octopus" data-original-src="https://i.octopus.com/blog/2022-08/standards-with-octopus-terraform-provider/terraform-backend-init-in-octopus.png"/>T2】</a></p>
+
+<p>现在我的main.tf文件如下所示:</p>
+
+<pre><code>terraform {
+  required_providers {
+    octopusdeploy = {
+      source = "OctopusDeployLabs/octopusdeploy"
+      version = "&gt;= 0.7.64" # example: 0.7.62
+    }
+  }
+
+  backend "s3" { }
+}
+
+provider "octopusdeploy" {
+  # configuration options
+  address    = var.octopus_address
+  api_key    = var.octopus_api_key
+  space_id   = var.octopus_space_id
+}  
+</code></pre>
+
+<h3 id="importing-pre-existing-items-into-the-state-file">将预先存在的项目导入状态文件</h3>
+
+<p>除了外部源，几乎所有的空间标准项目对每个空间都是新的。一些空间有Docker外部提要、Github外部提要，或者两者都有。我不想创建新的外部提要，并强迫每个人更新他们的部署流程。在运行<code>terraform apply</code>步骤之前，我选择将那些预先存在的外部提要导入到状态文件中。</p>
+
+<p>这可不像跑<code>terraform import</code>那么简单。我希望我的过程运行多次。我的脚本需要:</p>
+
+<ol>
+<li>通过调用Octopus API确定提要是否已经存在于Octopus中。如果没有，则退出。</li>
+<li>确定该提要是否已存在于Terraform状态文件中。如果是，那么退出。</li>
+<li>将有问题的提要导入状态文件。</li>
+</ol>
+
+<p>调用Octopus Deploy API对我来说不是问题。我有一些使用API的经验。其他一切对我来说都是新的。</p>
+
+<p>我想用和Octopus Deploy内置步骤一样的方式登录AWS。Octopus使用<a href="https://www.terraform.io/language/settings/backends/s3#credentials-and-shared-configuration" rel="nofollow">环境变量</a>作为凭证后端。在我的例子中，我需要为<code>AWS_ACCESS_KEY_ID</code>和<code>AWS_SECRET_ACCESS_KEY</code>提供一个值。</p>
+
+<pre><code class="language-PowerShell">$backendAccountAccessKey = $OctopusParameters["Project.AWS.Backend.Account.AccessKey"]
+$backendAccountSecretKey = $OctopusParameters["Project.AWS.Backend.Account.SecretKey"]
+
+$env:AWS_ACCESS_KEY_ID = $backendAccountAccessKey
+$env:AWS_SECRET_ACCESS_KEY = $backendAccountSecretKey
+
+terraform init -no-color
+</code></pre>
+
+<p>我解决了第一个问题；接下来是将状态文件读入内存。我是通过运行带有指定参数<code>-json</code>的<code>terraform show</code>命令和运行<code>ConvertFrom-Json</code> cmdlet来实现的。</p>
+
+<pre><code class="language-PowerShell">$currentStateAsJson = terraform show -json
+$currentState = $currentStateAsJson | ConvertFrom-Json -depth 10
+</code></pre>
+
+<p>有了PowerShell中的对象，花了一些试错才发现结构(很多<code>Write-Hosts</code>)。我最后说:</p>
+
+<pre><code class="language-PowerShell">function Get-ItemExistsInState
+{
+  param 
+    (
+      $currentState,
+        $itemTypeToFind,
+        $itemNameToFind
+    )
+
+    foreach ($item in $currentState.Values.root_module.resources)
+    {
+        Write-Host "Comparing $($item.Name) with $itemNameToFind and $($item.type) with $itemTypeToFind"
+        if ($item.name.ToLower().Trim() -eq $itemNameToFind.ToLower().Trim() -and $item.type.ToLower().Trim() -eq $itemTypeToFind)
+        {
+            Write-Host "The item already exists in the state"
+      return $true
+        }
+    }   
+
+    return $false
+}
+</code></pre>
+
+<p>将项目导入状态文件的命令是<code>terraform import [address] [id]</code>。该地址是在terraform文件中定义的。</p>
+
+<p>对于定义为以下内容的资源:</p>
+
+<pre><code class="language-Terraform">resource "octopusdeploy_feed" "github" {
+  name = "GitHub Feed TF"  
+  feed_type = "GitHub"
+  feed_uri = "https://api.github.com"
+  is_enhanced_mode = false
+}
+</code></pre>
+
+<p>地址是<code>octopusdeploy_feed.github</code>。id是Octopus Deploy中项目的ID。比如<code>Feeds-1070</code>。</p>
+
+
+
+<h3 id="passing-in-variable-values">传入变量值</h3>
+
+<p>使用Terraform，您可以像这样定义和使用变量:</p>
+
+<pre><code class="language-Terraform">terraform {
+  required_providers {
+    octopusdeploy = {
+      source = "OctopusDeployLabs/octopusdeploy"
+      version = "&gt;= 0.7.64" # example: 0.7.62
+    }
+  }
+
+  backend "s3" { }
+}
+
+variable "octopus_address" {
+    type = string
+}
+
+variable "octopus_api_key" {
+    type = string
+}
+
+variable "octopus_space_id" {
+    type = string
+}
+
+provider "octopusdeploy" {
+  # configuration options
+  address    = var.octopus_address
+  api_key    = var.octopus_api_key
+  space_id   = var.octopus_space_id
+}
+</code></pre>
+
+<p>向这些变量传递值有3个选项。</p>
+
+<ol>
+<li>命令行参数:<code>-var="octopus_address=https://samples.octopus.app"</code>或<code>-var="octopus_address=#{Octopus.Web.ServerUri}"</code></li>
+<li>变量文件:用扩展名<code>.tfvars</code>命名一个文件，并用值填充它。例如<code>octopus_address = "https://samples.octopus.app"</code>或<code>octopus_address = "#{Octopus.Web.ServerUri}"</code></li>
+<li>环境变量:<code>export TF_VAR_octopus_address=https://samples.octopus.app</code>或<code>$env:TF_VAR_octopus_address = https://samples.octopus.app</code></li>
+</ol>
+
+<p>Octopus Deploy支持所有3个选项。这是个人喜好的问题。我不喜欢使用. tfvars文件，因为它必须用八进制值签入源代码管理；任何变量名的改变都需要更新多个不同的地方。我选择环境变量，因为它在Octopus UI中比命令行变量更简洁。</p>
+
+<h2 id="migrating-to-new-resources">迁移到新资源</h2>
+
+<p>我在用几个项目做一个试点模板时学到了大部分经验。试点完成后不久，所有示例实例上都创建了这些资源。这是这个项目最简单的部分。</p>
+
+<p>现在是时候迁移所有现有项目来使用新资源了。这是一项重要的任务，不是我们可以用一些API脚本编写的。每个样本都有自己的基础设施。我们需要修改这些示例，以使用相同的云资源基础集，并且只创建需要的内容。</p>
+
+<p>拥有相同的库变量集、帐户和工作池使得迁移变得更加容易，但这仍然是手工操作。我提到这一点是因为如果您想在现有实例上实现这样的东西，您可能需要额外的手工操作。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在我们开始使用Octopus Terraform Provider之前，复制/粘贴需要几个小时来轮换密码或在所有空间上添加新的资源组。现在只需要不到30分钟。</p>
+
+<p>Octopus Terraform提供者使得在Octopus Deploy samples实例上跨所有空间建立标准变得容易。在了解了Terraform的细微差别后，我开始欣赏它所能提供的东西。我现在可以在空间之间共享一些资源，但是这些资源的状态由Terraform管理。通过这样做，我限制了Octopus UI中的编辑权限，并依靠分支、恢复和拉请求等版本控制特性来创建批准流程。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

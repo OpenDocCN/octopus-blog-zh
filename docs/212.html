@@ -1,0 +1,77 @@
+<html>
+<head>
+<title>Deployment targets in Octopus 3.0 (RFC) - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 3.0 (RFC)中的部署目标- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deployment-targets-in-octopus-3#2015-09-25">https://octopus.com/blog/deployment-targets-in-octopus-3#2015-09-25</a></blockquote>
+                        <p>在这篇文章中，我想讨论一下我们对触手所做的一些改变，以及作为Octopus 3.0一部分的总体部署目标。</p>
+
+<p><strong>概要:</strong></p>
+
+<ul>
+<li>多种类型的“机器”(监听和轮询触角、SSH、Azure网站、Azure云服务、WebDeploy、离线drops)</li>
+<li>像贝壳一样的触手</li>
+<li>开源触手</li>
+<li>不再支持FTP部署</li>
+</ul>
+
+<h2>多种类型的机器(部署目标)</h2>
+
+<p>Octopus和触手是一起设计的，并且假设Octopus将部署到的唯一类型的“目标”将总是运行触手。2013年，我们增加了对Azure云服务和FTP站点的支持，两者都是为了处理无法安装触手的情况。这些没有出现在environments页面上，没有参与运行状况检查，并且不可能并行部署到多个环境中(例如，上传到多个FTP存储库)。</p>
+
+<p>我们最常见的一些功能需求是添加对新类型部署目标的支持:特别是对部署到Linux服务器的支持，对部署到Azure网站的更好支持，以及通过创建可以手动执行的包来部署到“离线”机器的能力。</p>
+
+<p>为此，我们将把Octopus中的“机器”概念扩展到更一般的“部署目标”概念。在environments页面中，您可以添加不同的部署目标，而不是添加机器(这总是意味着触手可及):</p>
+
+<p><img src="../Images/64b74c402211130c92a4b0d305c69b4a.png" alt="New deployment target dialog for Octopus 3.0" data-original-src="https://i.octopus.com/blog/migrated/2015-02-25_11_50_33-New_Machine_-_Octopus_Deploy_mruopx.png"/></p>
+
+<p>以前，为了让FTP和Azure云服务步骤工作，你必须有一个特殊的<a href="http://docs.octopusdeploy.com/display/OD/How+to+run+steps+on+the+Octopus+Server">触手在Octopus服务器</a>上运行。对于3.0，这将不再是必需的；Octopus将能够原生推送Azure网站/云服务。</p>
+
+<p>如上图所示，我们添加了一些新的部署目标。<strong> SSH </strong>目标允许您使用用户名/密码认证或证书部署到任何运行SSH的服务器。这些可能是Amazon AWS Linux实例、您自己的本地Linux服务器、运行OSX的机器，甚至是Raspberry Pi。我们将执行bash脚本，而不是运行PowerShell脚本。你可以<a href="http://octopusdeploy.com/blog/rfc-linux-deployments">在我们的RFC </a>中读到更多关于Linux/SSH计划的信息。</p>
+
+<p><strong> WebDeploy </strong>目标将允许您部署到任何启用了WebDeploy的服务器。一些第三方主机供应商，以及微软Azure，都支持WebDeploy。一个特定的<strong> Azure网站</strong>部署目标使用WebDeploy客户端，但更容易设置(一旦你将Octopus连接到你的Azure订阅，你就可以从列表中选择网站)。</p>
+
+<p><strong>离线放置</strong>是一个特殊的部署目标，它将捆绑执行部署所需的所有文件，并将它们放在一个文件共享上，准备好复制到USB驱动器并手动部署。</p>
+
+<p>就像触角一样，这些机器类型可以用角色来标记，您将能够并行地部署到它们。例如，如果你在不同的地区有两个Azure网站，你可以给他们相同的角色，然后将该角色设置为NuGet包步骤的目标——然后包将被并行推送到两个站点。</p>
+
+<p>根据目标的不同，部署逻辑的执行会略有不同。对于Tentacles和SSH部署，我们将在远程目标机器上执行配置转换和运行脚本。对于Azure网站、云服务和WebDeploy，它们将在Octopus服务器上执行，然后上传。对于离线放置，它们根本不会被执行，相反，执行它们所需的代码将包含在捆绑包中。</p>
+
+<p>展望未来，我们计划开发更多的目标类型，特别是PowerShell远程目标。这些只是章鱼3.0的一部分。</p>
+
+<h2>像贝壳一样的触手</h2>
+
+<p>我们正在做的另一个大的改变是触手目前的设计。目前，触手是一个与章鱼沟通的代理。它知道如何做很多事情:</p>
+
+<p><img src="../Images/550c342ad1d3cd57d1d0af108c0c13ec.png" alt="Tentacle currently" data-original-src="https://i.octopus.com/blog/migrated/2015-02-25_12_03_48-Feature_notes_-_tentacles_and_relays_for_3.0.pptx_Protected_View_-_PowerPoint_lhrxnz.png"/></p>
+
+<p>举个例子，组成触手的C#代码知道如何进行配置转换、修改IIS和其他一些事情。如果我们需要改变这些功能的工作方式，我们必须发布新版本的触手。</p>
+
+<p>当我们添加SSH支持时，我们意识到同样的架构无法工作——SSH所能做的就是运行命令和移动文件。配置转换的所有逻辑和约定，等等。需要从Octopus服务器上推过来。</p>
+
+<p>将通信逻辑(事物的SSH方面)从部署逻辑中分离出来是一个更好的架构。因此，我们决定在3.0中对触须做同样的事情:触须将只知道如何通过安全连接运行命令或传输文件。所有用于部署的逻辑和工具都将从Octopus服务器上发送，这意味着触手升级将远不那么常见。</p>
+
+<p><img src="../Images/ec1f6608247dcf9ed6497b25881d8c1c.png" alt="Tentacle in future" data-original-src="https://i.octopus.com/blog/migrated/2015-02-25_12_04_33-Feature_notes_-_tentacles_and_relays_for_3.0.pptx_Protected_View_-_PowerPoint_erqi3o.png"/></p>
+
+<p>从3.0开始，除了支持轮询和监听模式之外，可以把触手看作SSH的面向Windows的版本。它只知道如何执行PowerShell脚本或传输文件。其他的东西——配置转换的东西，IIS的东西——将是PowerShell脚本，Octopus将确保在部署执行之前存在于Octopus服务器上。</p>
+
+<h2>开源触手的核心包部署组件</h2>
+
+<p>现在，我们将通信通道从部署引擎中分离出来，我们获得了一个新的可能性:在部署过程中，所有由触手执行的脚本和部署逻辑(以及SSH部署中使用的脚本和工具)现在都可以开源。我们的计划是将其作为GitHub项目来管理。如果你不喜欢我们在部署过程中调用的脚本，你可以派生它，构建你自己的触手包，把它放在Octopus服务器上，在部署过程中使用你自己的脚本/工具。这也意味着我们可以接受社区的贡献，这对支持各种Linux发行版特别有帮助。</p>
+
+<h2>停止支持FTP</h2>
+
+<p>查看我们的使用统计数据，FTP是最不常用的部署目标(世界上约253个FTP步骤，相比之下，36，000个NuGet包步骤)，我怀疑其中大多数是针对Azure网站的。</p>
+
+<p>由于我们正在添加原生WebDeploy和Azure网站支持，很难证明继续将FTP作为独立的步骤或机器类型来维护是合理的。出于这个原因，我们会反对它。我们将制作一个使用命令行FTP工具的步骤模板，该工具可以作为替代工具。</p>
+
+<h2>结论</h2>
+
+<p>我们仍然计划在三月底/四月初发布Octopus 3.0的预览版，即使到那时所有的部署目标还没有完全完成。同时，我们非常感谢您对我们上述计划的评论，尤其是对开源核心部署脚本/工具的评论。请在下面的评论中告诉我们！</p>
+
+                    
+                    
+</body>
+</html>

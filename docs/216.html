@@ -1,0 +1,553 @@
+<html>
+<head>
+<title>Deploying to AWS Elastic Beanstalk with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus - Octopus部署到AWS弹性豆茎</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-to-aws-beanstalk#2021-08-12">https://octopus.com/blog/deploy-to-aws-beanstalk#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/img-blog-deploy-netcore-to-aws-elastic-beanstalk.png" class="zoom" data-title=""><img src="../Images/aeb62c2df8037e1f7878f878daaabcf4.png" class="img-fluid center" alt="Slingshot deploying a new application release to a beanstalk vine" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/img-blog-deploy-netcore-to-aws-elastic-beanstalk.png"/>T2】</a></p>
+
+<p>Elastic Beanstalk是AWS提供的平台即服务(PaaS ),允许开发人员部署用各种语言编写的代码，例如。NET、Java、PHP、Node.js、Go、Python和Ruby移植到预先配置好的基础设施上。您只需上传您的应用程序，Elastic Beanstalk就会自动处理容量供应、负载平衡、伸缩和应用程序健康监控等细节。</p>
+
+<p>Beanstalk应用程序和Octopus的生命周期有许多共同之处，例如，Beanstalk将应用程序部署到多个隔离的环境中，每个环境都可能有独特的设置。这种重叠意味着Octopus可以帮助部署Beanstalk。</p>
+
+<p>然而，Beanstalk有一些我们需要考虑的独特需求，以便正确地与Octopus集成。在这篇博文中，我们将探索一个示例部署脚本，它允许Octopus将. NET核心应用程序部署到AWS Elastic Beanstalk。</p>
+
+<h2 id="an-overview-of-the-beanstalk-infrastructure">Beanstalk基础设施概述</h2>
+
+<p>在部署到Beanstalk之前，我们需要了解Beanstalk是如何组织的。</p>
+
+<p>任何Beanstalk基础设施的顶层都是应用程序。从概念上讲，应用程序是包含应用程序版本和环境的空间。通常，命名应用程序是为了标识它所代表的部署。在本文中，我们将部署<a href="https://github.com/OctopusSamples/RandomQuotes" rel="nofollow">随机报价</a>应用程序，因此Beanstalk应用程序将被称为随机报价。</p>
+
+<p>应用程序版本是部署到环境中的代码的副本。每个应用程序版本都有一个唯一的版本标签。不过，版本标签并不强制要求任何特定的版本化方案，只是每个版本都是唯一的。</p>
+
+<p>最后，我们有环境。环境是运行代码的物理基础设施。Beanstalk为支持的编程语言以及支持的Docker容器提供了多种预配置的环境平台。您还可以选择为更高级的场景创建自己的定制平台。每个环境都相互独立，可以部署任何应用程序版本。</p>
+
+<p><figure class="figure"/></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/workflow.png" class="zoom" data-title=""> <img src="../Images/37114f582b11d161fb6512a01ecb322c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/workflow.png"/> </a> <figcaption class="figure-caption text-center">青苗部署生命周期。</figcaption></p>
+
+<p/>
+
+<h2 id="the-beanstalk-application-packaging-requirements">豆茎应用程序包装要求</h2>
+
+<p>另一个要考虑的主要问题是Beanstalk期望如何为部署构建包。</p>
+
+<p>Beanstalk接受的包的类型很大程度上取决于用来创建代码的编程语言。</p>
+
+<p>对于简单的部署，Beanstalk接受一个标准的ZIP文件，或者对于Java，接受一个JAR或WAR文件。这些文件与Octopus配合得很好，因为它们都可以存储在内置提要中，并且在部署步骤中很容易使用。</p>
+
+<p>但是，在某些情况下，Beanstalk希望接收嵌套的归档文件，并且。NET Core部署就是需要嵌套归档的一个例子。</p>
+
+<p>在...的情况下。可部署的工件是一个ZIP文件，包含一个JSON清单文件和另一个包含应用程序代码的嵌套ZIP文件。你可以在下面的截图中看到这些文件。文件<code>aws-windows-deployment-manifest.json</code>是Beanstalk清单文件，文件<code>site.zip</code>包含。NET核心代码。</p>
+
+<p><figure class="figure"/></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/package.png" class="zoom" data-title=""> <img src="../Images/388944c3a7f83c58a4e608ed892e721b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/package.png"/> </a> <figcaption class="figure-caption text-center">包含要部署到Beanstalk的. NET核心应用程序的ZIP文件的内容。</figcaption></p>
+
+<p/>
+
+<p>我们需要记住这些嵌套的档案，以便在部署过程中充分利用Octopus提供的特性。</p>
+
+<h2 id="the-sample-application">示例应用程序</h2>
+
+<p>我们正在部署的示例应用程序叫做<a href="https://github.com/OctopusSamples/RandomQuotes" rel="nofollow">随机报价</a>。这是一个简单的。NET Core web应用程序，它不一定是为部署到Beanstalk而设计的。</p>
+
+<p>此应用程序的一般性质突出了部署到Beanstalk必须考虑的一些挑战，例如，如何在不维护特定于环境的工件的情况下实现特定于环境的设置。</p>
+
+<p>Beanstalk环境可以定义它们自己的环境变量集，这是配置它们运行的应用程序的特定于环境的方面的首选方式。将所有配置存储在环境变量中是<a href="https://12factor.net/config" rel="nofollow"> 12因子应用</a>方法推荐的方法。</p>
+
+<p>但是我们的示例应用程序仍然将配置保存在文件中，特别是<a href="https://github.com/OctopusSamples/RandomQuotes/blob/master/RandomQuotes/appsettings.json" rel="nofollow"> appsettings.json </a>文件。虽然我们可以利用<code>ASPNETCORE_ENVIRONMENT</code>环境变量来<a href="https://visualstudiomagazine.com/articles/2019/03/01/managing-production-and-development.aspx" rel="nofollow">选择适当的设置文件</a>，但是对于这个部署过程，我们将在部署期间直接定制<code>appsettings.json</code>文件。</p>
+
+<p>为了允许Octopus在部署过程中修改文件，我们可以<strong>而不是</strong>将编译好的代码打包到一个嵌套的ZIP存档中。Octopus有许多功能可以替换文件中的值，如<a href="https://octopus.com/docs/deployment-process/configuration-features/substitute-variables-in-files">变量替换</a>和<a href="https://octopus.com/docs/deployment-process/configuration-features/json-configuration-variables-feature"> JSON配置变量</a>，但这些功能都依赖于处理包含文本文件的档案，而不是额外的嵌套档案。</p>
+
+<p>这意味着Octopus托管的打包代码将包含调用<code>dotnet package</code>生成的文件。然后由我们将这个文件重新打包到Beanstalk要求的嵌套归档中。</p>
+
+<p>Random Quotes利用GitHub动作来构建代码，你可以在这里看到工作流程<a href="https://github.com/OctopusSamples/RandomQuotes/blob/master/.github/workflows/dotnetcore.yml" rel="nofollow"/>。在这个工作流程中，有四个重要的工作突出了我们如何打包这个应用程序。</p>
+
+<p>首先，我们构建代码:</p>
+
+<pre><code class="language-YAML">- name: Build with dotnet
+  run: dotnet build --configuration Release
+</code></pre>
+
+<p>接下来，我们打包代码，将运行该应用程序所需的所有文件放入一个名为<code>site</code>的目录中:</p>
+
+<pre><code class="language-YAML">- name: Publish with dotnet
+  run: dotnet publish -o site --configuration Release
+</code></pre>
+
+<p>Octo CLI将<code>site</code>目录打包成一个ZIP文件:</p>
+
+<pre><code class="language-YAML">- name: Pack Beanstalk App
+  run: &gt;-
+    /opt/octo/Octo pack .
+    --outFolder /home/runner/work/RandomQuotes/RandomQuotes
+    --basePath /home/runner/work/RandomQuotes/RandomQuotes/RandomQuotes/site
+    --id RandomQuotes
+    --version $(cat /home/runner/work/RandomQuotes/RandomQuotes/version.txt)
+    --format zip
+</code></pre>
+
+<p>并将包推送到Octopus服务器:</p>
+
+<pre><code class="language-YAML">- name: Push to Octopus
+  run: &gt;-
+    if [[ ! -z "${{ secrets.OctopusUrl }}" &amp;&amp; ! -z "${{ secrets.OctopusApiKey }}" ]]; then
+    /opt/octo/Octo push
+    --server ${{ secrets.OctopusUrl }}
+    --apiKey ${{ secrets.OctopusApiKey }}
+    --package /home/runner/work/RandomQuotes/RandomQuotes/RandomQuotes.$(cat /home/runner/work/RandomQuotes/RandomQuotes/version.txt).zip
+    --overwrite-mode IgnoreIfExists;
+    fi
+</code></pre>
+
+<p>这个过程的最终结果是一个ZIP文件，其中包含运行应用程序所需的dll和任何其他配置文件。在下面的截图中，你可以看到这个ZIP文件的内容。</p>
+
+<p>重要的是，这个ZIP文件不是我们可以以当前形式部署到Beanstalk的东西。创建可以部署到Beanstalk的归档文件是Octopus部署的一部分。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/code-package.png" class="zoom" data-title=""><img src="../Images/01fb00696f25a40f2712df8322c917f5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/code-package.png"/>T2】</a></p>
+
+<h2 id="creating-the-beanstalk-application">创建Beanstalk应用程序</h2>
+
+<p>我们现在需要创建Beanstalk应用程序和环境。有许多方法可以创建Beanstalk基础设施，但是为了简单起见，我们在这里通过AWS控制台创建它。</p>
+
+<p>所以我们有一个名为<code>Random Quotes</code>的应用程序，它有两个环境:<code>Development</code>和<code>Test</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/beanstalk-application.png" class="zoom" data-title=""><img src="../Images/56d339b79765e7e3bb4815f3212d160f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/beanstalk-application.png"/>T2】</a></p>
+
+<h2 id="preparing-the-octopus-project">筹备八达通项目</h2>
+
+<p>在我们部署任何东西之前，我们的Octopus项目需要配置一些变量。这是我们必须定义的变量的表格。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>名字</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Application</code></td>
+<td>Beanstalk应用程序的名称。</td>
+</tr>
+<tr>
+<td><code>AppSettings:EnvironmentName</code></td>
+<td><code>appsettings.json</code>文件中<code>EnvironmentName</code>属性的值。JSON配置变量特性使用这个变量。</td>
+</tr>
+<tr>
+<td><code>AWS</code></td>
+<td>将用于执行部署的AWS帐户。</td>
+</tr>
+<tr>
+<td><code>BucketName</code></td>
+<td>将保存Beanstalk部署档案的S3存储桶的名称。</td>
+</tr>
+<tr>
+<td><code>Environment</code></td>
+<td>Octopus环境到Beanstalk环境的映射。</td>
+</tr>
+</tbody>
+</table>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/variables.png" class="zoom" data-title=""><img src="../Images/94ad2844578ae6ebacadc79c5f3e8c80.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/variables.png"/>T2】</a></p>
+
+<p><em>为Octopus项目定义的变量。</em></p>
+
+<h2 id="the-octopus-deployment">章鱼部署</h2>
+
+<p>现在我们已经创建了Beanstalk应用程序和环境，我们的。NET核心应用代码打包上传到Octopus，是时候实现部署了。</p>
+
+<p>Octopus没有部署到Beanstalk的专用步骤，但是我们可以利用<code>Run an AWS CLI script</code>步骤使用捆绑的AWS CLI来执行部署。</p>
+
+<p>下面的代码是执行部署的Octopus步骤的内容:</p>
+
+<pre><code class="language-powershell">&lt;#
+.DESCRIPTION Waits for the given environment to finish any processing
+.PARAMETER application The name of the Beanstalk application
+.PARAMETER environment The name of the Beanstalk environment
+#&gt;
+function Wait-ForEnvironmentToBeReady ($application, $environment) {
+    do {
+      $result = aws elasticbeanstalk describe-environments `
+          --environment-names $environment `
+          --application-name $application `
+          --output json |
+          ConvertFrom-Json |
+          Select-Object -ExpandProperty Environments |
+          Select-Object -First 1
+
+      if ($null -eq $result) {
+          throw "Could not find the environment $environment in the application $application"
+      }
+
+      Write-Host "Environment $environment is $($result.Status)"
+      Start-Sleep 10
+    } while (-not ($result.Status -in @("Ready", "Terminated")))
+  }
+
+  &lt;#
+  .DESCRIPTION Creates a new application version
+  .PARAMETER application The name of the Beanstalk application
+  .PARAMETER version The name of the Beanstalk application version
+  .PARAMETER s3Bucket The S3 bucket that holds the application code
+  .PARAMETER s3Key The S3 file of the application code
+  #&gt;
+  function New-ApplicationVersion($application, $version, $s3Bucket, $s3Key) {
+    Write-Host "Creating application version $version"
+    aws elasticbeanstalk create-application-version `
+        --application-name $application `
+        --version-label $version `
+        --source-bundle S3Bucket="$s3Bucket",S3Key="$s3Key" |
+        Out-Null
+
+  }
+
+  &lt;#
+  .DESCRIPTION Uploads a file to S3
+  .PARAMETER file The file to upload
+  .PARAMETER s3Bucket The S3 bucket that holds the application code
+  .PARAMETER s3Key The S3 file of the application code
+  #&gt;
+  function Add-File($file, $s3Bucket, $s3Key) {
+    Write-Host "Uploading File"
+    aws s3 cp $file "s3://$s3Bucket/$s3Key" | Out-Null
+  }
+
+  &lt;#
+  .DESCRIPTION Updates a Beanstalk environment with the supplied application version
+  .PARAMETER application The name of the Beanstalk application
+  .PARAMETER environment The name of the Beanstalk environment
+  .PARAMETER version The name of the Beanstalk application version
+  #&gt;
+  function Update-Environment($application, $environment, $version) {
+    Write-Host "Updating Environment $environment to $version"
+    aws elasticbeanstalk update-environment `
+        --application-name $application `
+        --environment-name $environment `
+        --version-label $version |
+        Out-Null
+  }
+
+  function New-ManifestFile($name, $file) {
+      Set-Content -Path "aws-windows-deployment-manifest.json" -Value @"
+      {
+        "manifestVersion": 1,
+        "deployments": {
+            "aspNetCoreWeb": [
+            {
+                "name": "$name",
+                "parameters": {
+                    "appBundle": "$file",
+                    "iisPath": "/",
+                    "iisWebSite": "Default Web Site"
+                }
+            }
+            ]
+        }
+    }
+"@
+  }
+
+  $VersionLabel = $OctopusParameters["Octopus.Action.Package[RandomQuotes].PackageId"] +
+      "." +
+      $OctopusParameters["Octopus.Action.Package[RandomQuotes].PackageVersion"] +
+      "." +
+      $OctopusParameters["Octopus.Deployment.Id"]
+
+  New-ManifestFile "random-quotes" "site.zip"
+
+  # Compress the extracted DotNET application code
+  Compress-Archive `
+      -Path "$($OctopusParameters["Octopus.Action.Package[RandomQuotes].ExtractedPath"])\*" `
+      -DestinationPath "site.zip"
+
+  # Compress the application code with the manifest file to create the Beanstalk deployment    
+  Compress-Archive `
+      -Path "site.zip", "aws-windows-deployment-manifest.json" `
+      -DestinationPath "$VersionLabel.zip"
+
+  # Upload the Beanstalk deployment to S3    
+  Add-File "$VersionLabel.zip" $BucketName "$VersionLabel.zip"
+
+  # Use the new file in S3 to create a Beanstalk application version
+  New-ApplicationVersion $Application $VersionLabel $BucketName "$VersionLabel.zip"
+
+  # Wait for any pending changes to the environment to finish
+  Wait-ForEnvironmentToBeReady  $Application $Environment
+
+  # Deploy the application version to the environment
+  Update-Environment $Application $Environment $VersionLabel
+
+  # Wait for the new deployment to finish
+  Wait-ForEnvironmentToBeReady  $Application $Environment
+</code></pre>
+
+<p>让我们来分解这个代码。我们将从调用组成部署过程的自定义函数开始，然后，我们将讨论函数本身。</p>
+
+<h3 id="creating-the-application-version-label">创建应用程序版本标签</h3>
+
+<p>首先，我们创建一个应用程序版本标签。如果您还记得的话，这个标签必须是唯一的，但是除此之外不强制任何特定的格式。这段代码将创建一个包含Octopus包ID、包版本和Octopus部署ID的标签。这种组合确保Octopus执行的任何部署都将产生唯一的版本标签。</p>
+
+<p>这样做的最终结果是一个类似于<code>RandomQuotes.1.0.1+45.Deployments-4147</code>的字符串。</p>
+
+<pre><code class="language-powershell">$VersionLabel = $OctopusParameters["Octopus.Action.Package[RandomQuotes].PackageId"] +
+    "." +
+    $OctopusParameters["Octopus.Action.Package[RandomQuotes].PackageVersion"] +
+    "." +
+    $OctopusParameters["Octopus.Deployment.Id"]
+</code></pre>
+
+<h3 id="creating-the-manifest-file">创建清单文件</h3>
+
+<p>正如我们前面讨论的，部署到Beanstalk的归档文件包含一个清单文件和一个包含应用程序代码的嵌套归档文件。我们上传到Octopus的工件只包含编译过的。NET代码，但不是清单文件。所以我们在这里创建了<a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/dotnet-manifest.html#dotnet-manifest-dotnetcore" rel="nofollow">清单文件</a>:</p>
+
+<pre><code class="language-powershell">New-ManifestFile "random-quotes" "site.zip"
+</code></pre>
+
+<p><code>New-ManifestFile</code>函数保存一个名为<code>aws-windows-deployment-manifest.json</code>的JSON文件:</p>
+
+<pre><code class="language-powershell">function New-ManifestFile($name, $file) {
+    Set-Content -Path "aws-windows-deployment-manifest.json" -Value @"
+    {
+      "manifestVersion": 1,
+      "deployments": {
+          "aspNetCoreWeb": [
+          {
+              "name": "$name",
+              "parameters": {
+                  "appBundle": "$file",
+                  "iisPath": "/",
+                  "iisWebSite": "Default Web Site"
+              }
+          }
+          ]
+      }
+  }
+"@
+}
+</code></pre>
+
+<p>调用该函数的结果是一个名为<code>aws-windows-deployment-manifest.json</code>的文件，其内容如下:</p>
+
+<pre><code class="language-JSON">{
+  "manifestVersion": 1,
+  "deployments": {
+      "aspNetCoreWeb": [
+      {
+          "name": "random-quotes",
+          "parameters": {
+              "appBundle": "site.zip",
+              "iisPath": "/",
+              "iisWebSite": "Default Web Site"
+          }
+      }
+      ]
+  }
+}
+</code></pre>
+
+<h3 id="creating-the-beanstalk-deployment-archive">创建Beanstalk部署档案</h3>
+
+<p>现在我们有了清单文件，我们需要将它和包含应用程序代码的嵌套存档一起添加到ZIP存档中。</p>
+
+<p>的。NET应用程序存档作为参考包包含在此步骤中。我们将这个包称为<code>RandomQuotes</code>，并将其设置为在部署期间提取，这意味着可以在<code>$OctopusParameters["Octopus.Action.Package[RandomQuotes].ExtractedPath"]</code>变量引用的路径下找到包的内容。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/referenced-package.png" class="zoom" data-title=""><img src="../Images/1f33f227407eb6e7ba9ab8c9b91ff3da.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/referenced-package.png"/>T2】</a></p>
+
+<p><em>引用包的摘要。</em></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/referenced-package-details.png" class="zoom" data-title=""><img src="../Images/66d4e9aec002dfb3514dc39e446f7edc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/referenced-package-details.png"/>T2】</a></p>
+
+<p><em>参考包的详细信息。</em></p>
+
+<p>因为我们已经启用了<code>JSON configuration variables</code>特性，并将其配置为处理名为<code>appsettings.json</code>的文件，所以Octopus变量<code>AppSettings:EnvironmentName</code>的值将替换JSON文件中现有的<code>EnvironmentName</code>。这样，我们就从一个通用的应用程序包中创建了一个特定于环境的部署。</p>
+
+<p>您可以以同样的方式使用<code>substitute variables in files</code>功能。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/features.png" class="zoom" data-title=""><img src="../Images/5012e364ed4421f8ba6b74e1f2f3f23c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/features.png"/>T2】</a></p>
+
+<p><em>台阶特征。</em></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/feature-config.png" class="zoom" data-title=""><img src="../Images/968060f2dd504871d015aa45fc6fbcc7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/feature-config.png"/>T2】</a></p>
+
+<p><em>JSON配置变量设置。</em></p>
+
+<p>用章鱼提取和处理了。NET核心应用程序包，我们将文件压缩回一个名为<code>site.zip</code>的文件中:</p>
+
+<pre><code class="language-powershell"># Compress the extracted DotNET application code
+Compress-Archive `
+    -Path "$($OctopusParameters["Octopus.Action.Package[RandomQuotes].ExtractedPath"])\*" `
+    -DestinationPath "site.zip"
+</code></pre>
+
+<p>接下来，我们创建第二个归档文件，包含Beanstalk清单文件和。NET核心应用程序档案:</p>
+
+<pre><code class="language-yaml"># Compress the application code with the manifest file to create the Beanstalk deployment    
+Compress-Archive `
+    -Path "site.zip", "aws-windows-deployment-manifest.json" `
+    -DestinationPath "$VersionLabel.zip"
+</code></pre>
+
+<p>这样做的最终结果是一个类似于<code>RandomQuotes.1.0.1+45.Deployments-4147.zip</code>的文件。</p>
+
+<h2 id="upload-the-file-to-s3">把文件上传到S3</h2>
+
+<p>Beanstalk应用程序档案首先被上传到S3。大多数AWS服务使用S3作为使用应用程序代码的舞台，Beanstalk也不例外。</p>
+
+<pre><code class="language-powershell"># Upload the Beanstalk deployment to S3    
+Add-File "$VersionLabel.zip" $BucketName "$VersionLabel.zip"
+</code></pre>
+
+<p><code>Add-File</code>函数是对AWS CLI上传文件的简单调用:</p>
+
+<pre><code class="language-powershell">function Add-File($file, $s3Bucket, $s3Key) {
+  Write-Host "Uploading File"
+  aws s3 cp $file "s3://$s3Bucket/$s3Key" | Out-Null
+}
+</code></pre>
+
+<h3 id="create-the-application-versions">创建应用程序版本</h3>
+
+<p>使用S3中的代码，我们可以创建一个新的应用程序版本，将工件与版本标签相关联。</p>
+
+<p>变量<code>$Application</code>和<code>$BucketName</code>由Octopus提供，并映射到项目变量的值。</p>
+
+
+<pre><code class="language-powershell"># Use the new file in S3 to create a Beanstalk application version
+New-ApplicationVersion $Application $VersionLabel $BucketName "$VersionLabel.zip"
+</code></pre>
+
+<p>AWS CLI用于使用我们上传到S3的文件，并为其分配一个版本标签。完成后，我们的Beanstalk应用程序将有一个新的应用程序版本，可以部署到一个环境中:</p>
+
+<pre><code class="language-powershell">function New-ApplicationVersion($application, $version, $s3Bucket, $s3Key) {
+  Write-Host "Creating application version $version"
+  aws elasticbeanstalk create-application-version `
+      --application-name $application `
+      --version-label $version `
+      --source-bundle S3Bucket="$s3Bucket",S3Key="$s3Key" |
+      Out-Null
+}
+</code></pre>
+
+<h3 id="wait-for-the-environment-to-be-in-a-ready-state">等待环境处于就绪状态</h3>
+
+<p>如果由于某种原因Beanstalk环境已经被更新了(可能是通过AWS控制台进行的更改)，我们需要等待它进入<code>Ready</code>状态。我们通过调用<code>Wait-ForEnvironmentToBeReady</code>来做到这一点。</p>
+
+<p>变量<code>$Environment</code>由Octopus提供，映射到当前部署环境范围内的变量值。</p>
+
+
+<pre><code class="language-powershell">Wait-ForEnvironmentToBeReady  $Application $Environment
+</code></pre>
+
+<p><code>Wait-ForEnvironmentToBeReady</code>功能轮询环境描述并等待状态为<code>Ready</code>或<code>Terminated</code>:</p>
+
+<pre><code>function Wait-ForEnvironmentToBeReady ($application, $environment) {
+    do {
+      $result = aws elasticbeanstalk describe-environments `
+          --environment-names $environment `
+          --application-name $application `
+          --output json |
+          ConvertFrom-Json |
+          Select-Object -ExpandProperty Environments |
+          Select-Object -First 1
+
+      if ($null -eq $result) {
+          throw "Could not find the environment $environment in the application $application"
+      }
+
+      Write-Host "Environment $environment is $($result.Status)"
+      Start-Sleep 10
+    } while (-not ($result.Status -in @("Ready", "Terminated")))
+  }
+</code></pre>
+
+<h3 id="create-the-application-version-and-update-the-environment">创建应用程序版本并更新环境</h3>
+
+<p>我们现在在Beanstalk中创建了一个新的应用程序版本，所以下一步是将其部署到一个环境中。对<code>Update-Environment</code>的调用是部署到Beanstalk的地方:</p>
+
+<pre><code class="language-powershell"># Deploy the application version to the environment
+Update-Environment $Application $Environment $VersionLabel
+</code></pre>
+
+<p>在Beanstalk中，用应用程序版本“更新”环境是我们部署新代码的方式:</p>
+
+<pre><code class="language-powershell">function Update-Environment($application, $environment, $version) {
+  Write-Host "Updating Environment $environment to $version"
+  aws elasticbeanstalk update-environment `
+      --application-name $application `
+      --environment-name $environment `
+      --version-label $version |
+      Out-Null
+}
+</code></pre>
+
+<h3 id="wait-for-the-deployment-to-finish">等待部署完成</h3>
+
+<p>我们最后一次调用<code>Wait-ForEnvironmentToBeReady</code>来等待新的应用程序版本被部署到环境中。通话结束后，部署就完成了:</p>
+
+<pre><code class="language-powershell"># Wait for the new deployment to finish
+Wait-ForEnvironmentToBeReady  $Application $Environment
+</code></pre>
+
+<h2 id="performing-the-deployment">执行部署</h2>
+
+<p>让我们继续执行到<code>Dev</code>环境的部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/deployment-dev.png" class="zoom" data-title=""><img src="../Images/17ddd4f128888eeea43375a90626607e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/deployment-dev.png"/>T2】</a></p>
+
+<p><em>部署日志。</em></p>
+
+<p>日志消息<code>Performing JSON variable replacement on 'C:\Octopus\Work\20190902230557-24738-504\RandomQuotes\appsettings.json'</code>显示Octopus已经成功处理了<code>appsettings.json</code>文件，并注入了我们想要覆盖的值。</p>
+
+<p>豆茎应用程序包被上传到S3。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/s3.png" class="zoom" data-title=""><img src="../Images/df83ca4a3a6a27a20f6d5ec618373d2f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/s3.png"/>T2】</a></p>
+
+<p><em>S3水桶。</em></p>
+
+<p>应用程序版本已创建。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/application-version.png" class="zoom" data-title=""><img src="../Images/8ac685f7a5ed65b0ced493770bc2df54.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/application-version.png"/>T2】</a></p>
+
+<p><em>应用程序版本。</em></p>
+
+<p>最后，使用新的应用程序版本更新了环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/environment-deployment.png" class="zoom" data-title=""><img src="../Images/85291b283d9997da824be78db8b5c840.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/environment-deployment.png"/>T2】</a></p>
+
+<p><em>环境。</em></p>
+
+<p>如果我们打开最终部署的应用程序，我们可以看到它显示了我们部署到的名为<code>Dev</code>的环境。这与<code>appsettings.json</code>文件中的默认值有细微的变化，该文件将环境列为<code>DEV</code>(全部大写)。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/random-quotes-dev.png" class="zoom" data-title=""><img src="../Images/497ae93fa854bd32a5890baf2ff5f2eb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/random-quotes-dev.png"/>T2】</a></p>
+
+<p><em>开发环境中部署的应用程序。</em></p>
+
+<p>将部署提升到<code>Test</code>环境使得替换更加清晰。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/deploy-to-aws-beanstalk/random-quotes-test.png" class="zoom" data-title=""> T32 </a></p>
+
+<p><em>测试环境中部署的应用程序。</em></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本文中，我们讨论了Beanstalk服务的高级架构，然后实现了一个定制的PowerShell脚本，该脚本通过以下方式将应用程序部署到Beanstalk:</p>
+
+<ul>
+<li>创建一个Beanstalk清单文件。</li>
+<li>创建一个Beanstalk档案，包括。NET核心应用程序档案和清单文件。</li>
+<li>把文件上传到S3。</li>
+<li>从S3的文件创建应用程序版本。</li>
+<li>用应用程序版本更新环境。</li>
+</ul>
+
+<p>我们构建这个过程是为了让我们利用Octopus的特性，比如JSON配置变量。这意味着我们可以部署特定于环境的应用程序，而不仅仅依赖于环境变量。</p>
+
+                    
+                    
+</body>
+</html>

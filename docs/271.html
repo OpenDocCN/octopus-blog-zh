@@ -1,0 +1,133 @@
+<html>
+<head>
+<title>A first look at Jenkins X - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>詹金斯X - Octopus部署初探</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/first-look-at-jenkins-x#2021-08-12">https://octopus.com/blog/first-look-at-jenkins-x#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/first-look-jenkins-x.png" class="zoom" data-title=""><img src="../Images/79c07dbfdf73ee831a1e72e486512515.png" class="img-fluid center" alt="Jenkins X first look" data-original-src="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/first-look-jenkins-x.png"/>T2】</a></p>
+
+<p>作为一个免费的开源构建服务器，Jenkins被数百万人使用，所以大多数开发者都使用过或者至少听说过Jenkins。像大多数构建服务器一样，Jenkins通常安装在服务器上，以使用源代码，在构建代理上执行构建过程，并部署或发布生成的工件。</p>
+
+<p>从概念上讲，这个构建服务器的模型对我来说很容易理解，它适用于当今大多数流行的解决方案，如Team City、Azure DevOps、Bamboo等。所以第一次和<a href="https://jenkins-x.io/about/" rel="nofollow"> Jenkins X </a>合作的时候，很自然的，我尝试用同样的概念模型去理解。这被证明是一个错误。</p>
+
+<p>我真的很难理解Jenkins X是什么，但是在一些尝试和错误之后，我回去重读了关于第页的<a href="https://jenkins-x.io/about/what/" rel="nofollow">Jenkins X。深藏在文本中的两句话对于理解詹金斯X至关重要:</a></p>
+
+<blockquote class="blockquote">
+<p>詹金斯X固执己见。</p>
+</blockquote>
+
+<blockquote class="blockquote">
+<p>要注意的关键是，你需要从你可能已经有的任何詹金斯经验中清除你的头脑。</p>
+</blockquote>
+
+<p>内化这两个陈述对于理解詹金斯X是什么是至关重要的。考虑到这一点，让我们从高层次上来看看詹金斯x。</p>
+
+<h2 id="it-starts-with-the-kubernetes-cluster">它始于库伯内特星团</h2>
+
+<p>从字面上看，Kubernetes是一个容器编排器。你描述你想要运行的容器，它们如何相互通信，它们需要什么资源，Kubernetes做执行一切的艰苦工作。通常，Kubernetes托管长期运行的应用程序，如不断等待请求的web服务器，Kubernetes的一个重要特性是它将监控这些长期运行的进程，并在它们失败时重新启动它们。</p>
+
+<p>这种对Kubernetes的传统看法是你首先要忘记的。要理解Jenkins X，可以把Kubernetes更像一个云操作系统。</p>
+
+<p>你使用<code>apt-get</code>在Linux中安装一个应用程序，同样，Kubernetes可以使用<a href="https://helm.sh/" rel="nofollow"> Helm </a>安装应用程序。</p>
+
+<p>就像您可以使用<code>docker</code> CLI运行短期命令来构建您的应用程序和Docker映像一样，Kubernetes可以使用<a href="https://github.com/GoogleContainerTools/skaffold" rel="nofollow">ska fold</a>构建软件和Docker映像。</p>
+
+<p>由于您将托管Docker图像或其他图像工件库，如<a href="https://www.sonatype.com/nexus-repository-sonatype" rel="nofollow"> Nexus </a>作为随操作系统启动的服务，因此您可以将这些相同的应用程序部署到Kubernetes。</p>
+
+<p>Jenkins X将您的Kubernetes集群视为一个运行构建的环境，一种托管工件存储库的方式，一个Helm charts的安装目标，最后，一个部署和运行您构建的应用程序的地方。</p>
+
+<p>通过安装Jenkins X，您将拥有一个自包含的Kubernetes集群，其中包含精选和定制配置的服务，可以开始构建和部署应用程序。</p>
+
+<h2 id="this-extends-to-your-local-development-environment">这扩展到了您的本地开发环境</h2>
+
+<p>我习惯于我的本地开发环境与中央构建服务器完全分离。为了让我的代码进入构建服务器，我通常将它推到一个中央GIT存储库，转到CI服务器，将一个项目指向GIT repo，配置构建，然后启动它。</p>
+
+<p>如果我的CI服务器提供了CLI工具，它专门用于管理CI服务器。这样的工具对我正在处理的代码没有任何概念。</p>
+
+<p>同样，忘记您从传统CI服务器中学到的一切。Jenkins X对如何构建和部署您的代码有自己的看法，并不羞于为您配置一切。</p>
+
+<p>要让Jenkins X构建您的现有代码，您可以运行<code>jx import</code>。运行该命令将向您的项目添加几个文件，包括<code>jenkins-x.yml</code>(这是<a href="https://jenkins-x.io/architecture/jenkins-x-pipelines/" rel="nofollow"> Jenkins X管道</a>)、<code>Dockerfile</code>(这构建了<a href="https://docs.docker.com/engine/reference/builder/" rel="nofollow"> Docker映像</a>)、<code>skaffold.yaml</code>(这是<a href="https://skaffold.dev/docs/references/yaml/" rel="nofollow">ska fold项目配置</a>)和一个<code>charts</code>目录(这提供了<a href="https://helm.sh/docs/chart_template_guide/" rel="nofollow">掌舵图模板</a>)。</p>
+
+<p>Jenkins X然后将所有代码放入GIT存储库中，推送它，并开始构建。</p>
+
+<p>正如您从下面的输出中看到的，Jenkins X将许多不同的工具和服务结合在一起，以创建一个可重复的构建过程:</p>
+
+<pre><code>PS C:\Users\Matthew\Downloads\ThymeleafSpring&gt; jx import
+WARNING: No username defined for the current Git server!
+? Do you wish to use mcasperson as the Git user name: Yes
+The directory C:\Users\Matthew\Downloads\ThymeleafSpring is not yet using git
+? Would you like to initialise git now? Yes
+? Commit message: Initial import
+
+Git repository created
+selected pack: C:\Users\Matthew\.jx\draft\packs\github.com\jenkins-x-buildpacks\jenkins-x-kubernetes\packs\maven
+? Which organisation do you want to use? mcasperson
+replacing placeholders in directory C:\Users\Matthew\Downloads\ThymeleafSpring
+app name: thymeleafspring, git server: github.com, org: mcasperson, Docker registry org: kubernetes-demo-198002
+skipping directory "C:\\Users\\Matthew\\Downloads\\ThymeleafSpring\\.git"
+Using Git provider GitHub at https://github.com
+? Using organisation: mcasperson
+? Enter the new repository name: ThymeleafSpring
+Creating repository mcasperson/ThymeleafSpring
+Pushed Git repository to https://github.com/mcasperson/ThymeleafSpring
+Creating GitHub webhook for mcasperson/ThymeleafSpring for url http://hook.jx.35.194.232.107.nip.io/hook
+
+Watch pipeline activity via:  jx get activity -f ThymeleafSpring -w
+Browse the pipeline log via:  jx get build logs mcasperson/ThymeleafSpring/master
+You can list the pipelines via: jx get pipelines
+When the pipeline is complete: jx get applications
+
+For more help on available commands see: https://jenkins-x.io/developing/browsing/
+</code></pre>
+
+<h2 id="the-build-and-deploy-ties-it-all-together">构建和部署将它们联系在一起</h2>
+
+<p>如果说传统CI服务器有一个好处的话，那就是因为您手动设置了一切，所以您对代码如何从源代码库流向最终部署有一个相当好的想法。</p>
+
+<p>因为Jenkins X为我们做了这么多工作，所以很难理解构建过程中实际发生了什么。所以让我们来看看幕后的一些工作。</p>
+
+<p>作为Kubernetes集群初始化的一部分，Jenkins X安装了Nexus存储库管理器。构建完成后，我们可以看到我们的应用程序所依赖的Java依赖项现在被缓存在本地。这种缓存意味着任何后续构建都将更快地完成。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/nexus.png" class="zoom" data-title=""><img src="../Images/f574b78d56a873d63b7cad2dd8a6e8b4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/nexus.png"/>T2】</a></p>
+
+<p>Jenkins X安装的另一个服务是ChartMuseum，这是一个Helm存储库。通过下载<code>index.yaml</code>文件，我们可以看到Jenkins X已经创建了一个舵图并发布到这个内部存储库中:</p>
+
+<pre><code>curl http://chartmuseum.jx.35.194.232.107.nip.io/index.yaml
+apiVersion: v1
+entries:
+  jenkinx-spring-demo:
+  - apiVersion: v1
+    appVersion: 0.0.1
+    created: "2019-08-28T19:25:22.445582847Z"
+    description: A Helm chart for Kubernetes
+    digest: 9e048b78247da2a28562771742454484dbaf35b10d14a0c0a668c3ba826d02c4
+    icon: https://raw.githubusercontent.com/jenkins-x/jenkins-x-platform/master/images/java.png
+    name: jenkinx-spring-demo
+    urls:
+    - charts/jenkinx-spring-demo-0.0.1.tgz
+    version: 0.0.1
+generated: "2019-08-28T19:32:00Z"
+</code></pre>
+
+<p>Jenkins X还负责将Docker映像发布到本地容器注册中心。因为我们在Google Cloud Kubernetes集群中运行Jenkins X，所以Jenkins X默认使用Google容器注册表。然而，如果该服务不可用，Jenkins X就会在Kubernetes集群中安装Docker注册中心。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/container-registry.png" class="zoom" data-title=""><img src="../Images/4c5a420012f228e23985eca5f8408043.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/container-registry.png"/>T2】</a></p>
+
+<p>最后，我们可以看到Helm图表已经部署在集群中，并且入口规则已经由<a href="https://jenkins-x.io/faq/technology/#whats-is-exposecontroller" rel="nofollow"> exposecontroller </a>创建，这导致我们的应用程序公开了一个自定义主机名。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/services.png" class="zoom" data-title=""><img src="../Images/3dae72b0b65e7ef9f2222c265c04a41a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/first-look-at-jenkins-x/services.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>当你第一次遇到Jenkins X时，可能很难理解它到底是什么。如果从这篇文章中有什么收获的话，那就是忘记你所知道的关于CI服务器的一切，并欣赏Jenkin X本身。</p>
+
+<p>Jenkins X不仅仅是一种运行构建的方式，它提供了一个完整的构建生态系统和自以为是的工作流，从准备本地代码结构开始，到部署Kubernetes应用程序结束。</p>
+
+<p>欣赏Jenkins X需要从大多数开发人员与开发管道交互的方式上进行思维转变，但好处是一个结构良好的工作流和紧密配置的工具链。</p>
+
+                    
+                    
+</body>
+</html>

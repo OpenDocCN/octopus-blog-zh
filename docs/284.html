@@ -1,0 +1,185 @@
+<html>
+<head>
+<title>Announcing GitHub Actions for Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>宣布GitHub对Octopus Deploy的操作- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/github-actions-for-octopus-deploy#2022-08-10">https://octopus.com/blog/github-actions-for-octopus-deploy#2022-08-10</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/github-actions-for-octopus-deploy/github-actions-integration.png" class="zoom" data-title=""><img src="../Images/8749de1bf5c55a0705619744eeeb35c2.png" class="img-fluid center" alt="GitHub actions integrating with Octopus Deploy build" data-original-src="https://i.octopus.com/blog/2021-06/github-actions-for-octopus-deploy/github-actions-integration.png"/>T2】</a></p>
+
+<p>我们已经为Octopus Deploy发布了我们的第一个官方GitHub动作。这些初始操作涵盖了将GitHub构建与Octopus中的部署和runbook运行相连接的核心集成场景:</p>
+
+
+
+<p>我们计划在今年晚些时候添加更多的GitHub动作。</p>
+
+<p>在这篇博文中，我演示了如何开始使用GitHub Actions将构建工件推送到Octopus，创建一个版本，并将其部署到开发环境中。</p>
+
+<h2 id="what-is-github-actions">什么是GitHub Actions？</h2>
+
+<p><a href="https://docs.github.com/en/actions" rel="nofollow"> GitHub Actions </a>是一个流行的新平台，用于自动化软件开发工作流，如围绕GitHub生态系统构建的CI/CD。</p>
+
+<p>您使用YAML配置文件定义您的工作流，并将其存储在您的Git存储库中。您可以用称为操作的可重用构建块来构建自动化。工作流在容器中执行，实现可重复且可靠的流程。</p>
+
+<p>下面是一个GitHub Action job工作流的例子。NET web应用程序。GitHub提供了大多数编程语言和框架的例子。</p>
+
+<pre><code class="language-yaml">name: Build
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet publish -o build 
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+</code></pre>
+
+<p>这个工作流被命名为<strong> build </strong>，每当变更被推送到<code>master</code>分支上的父Git仓库时，它就会触发一个单一的作业。准备和执行持续集成构建的步骤包括:</p>
+
+<ul>
+<li>恢复依赖关系</li>
+<li>执行构建</li>
+<li>运行所有测试</li>
+</ul>
+
+<p>我推荐阅读<a href="https://docs.github.com/en/actions/learn-github-actions" rel="nofollow"> GitHub的文档</a>来了解更多。这篇博文假设您熟悉使用GitHub操作构建工作流的基础知识。</p>
+
+<h2 id="getting-started-with-github-actions-for-octopus-deploy">Octopus Deploy的GitHub操作入门</h2>
+
+<p>为了说明如何为Octopus使用新的GitHub操作，我们将更新上面的示例构建脚本，以安装Octopus CLI，打包我们的构建工件并将其推送到Octopus，然后创建一个发布并将其部署到我们的开发环境中。</p>
+
+<p>完整的工作流文件可以在<a href="https://github.com/OctopusSamples/RandomQuotes/actions/workflows/dotnet.yml" rel="nofollow"> GitHub示例库</a>中找到:</p>
+
+<pre><code class="language-yaml">name: Build
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet publish -o build 
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+    - name: Install Octopus CLI 🐙
+      uses: OctopusDeploy/install-octopus-cli-action@v1.1.6
+      with:
+        version: latest
+    - name: Package build artifacts
+      run: octo pack --id="RandomQuotes" --format="zip" --version="1.0.${{github.run_number}}" --basePath="/home/runner/work/RandomQuotes/RandomQuotes/build/"
+    - name: Push packages to Octopus Deploy 🐙
+      uses: OctopusDeploy/push-package-action@v1.0.1
+      with:
+        api_key: ${{ secrets.OCTOPUS_APIKEY }}
+        server: ${{ secrets.OCTOPUS_SERVER }}
+        packages: "RandomQuotes.1.0.${{github.run_number}}.zip"
+    - name: Create a release in Octopus Deploy 🐙
+      uses: OctopusDeploy/create-release-action@v1.0.2
+      with:
+        api_key: ${{ secrets.OCTOPUS_APIKEY }}
+        server: ${{ secrets.OCTOPUS_SERVER }}
+        project: "Projects-141"
+        deploy_to: "Dev"
+
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/github-actions-for-octopus-deploy/github-action-secrets.png" class="zoom" data-title=""><img src="../Images/eea88e63caa0d2885dc368ec131fbe5c.png" class="img-fluid center" alt="GitHub Actions Secrets for the Octopus Server URL and an API key" data-original-src="https://i.octopus.com/blog/2021-06/github-actions-for-octopus-deploy/github-action-secrets.png"/></a>T2】</p>
+
+<p>注意，我们在这个配置中引用了两个秘密。一个是Octopus服务器URL，另一个是API密钥，用于验证和集成Octopus实例。在这种情况下，我使用的是一个<a href="https://octopus.com/docs/octopus-cloud"> Octopus云实例</a>，然而，如果它是可公开访问的，你也可以连接到一个<a href="https://octopus.com/docs/getting-started#self-hosted-octopus">自托管Octopus实例</a>。</p>
+
+<p>注意:这是建立一个微软。NET 5 web应用程序，但也可以是Spring (Java) web应用程序或NodeJS express服务等。重要的部分是GitHub对Octopus的操作如何使集成变得容易。</p>
+
+
+<h3 id="installing-the-octopus-cli">安装Octopus CLI</h3>
+
+<pre><code class="language-yaml">    - name: Install Octopus CLI 🐙
+      uses: OctopusDeploy/install-octopus-cli-action@v1.1.6
+      with:
+        version: latest
+</code></pre>
+
+<p>要与Octopus服务器集成，首先安装Octopus CLI。这是使用任何其他步骤的先决条件，因为它会使用适当的依赖项引导作业运行器来安装Octopus CLI。</p>
+
+<h3 id="pushing-build-artifacts-to-octopus">将构建工件推送到Octopus</h3>
+
+<pre><code class="language-yaml">    - name: Pack
+      run: octo pack --id="RandomQuotes" --format="zip" --version="1.0.${{github.run_number}}" --basePath="/home/runner/work/RandomQuotes/RandomQuotes/build/" --verbose
+    - name: Push a package to Octopus Deploy 🐙
+      uses: OctopusDeploy/push-package-action@v1.0.1
+      with:
+        api_key: ${{ secrets.OCTOPUS_APIKEY }}
+        server: ${{ secrets.OCTOPUS_SERVER }}
+        packages: "RandomQuotes.1.0.${{github.run_number}}.zip"
+</code></pre>
+
+<p>下一步是打包您的构建工件，并将它们推到一个包存储库中。在这种情况下，我们正在推进Octopus内置的包存储库，这是一个受欢迎的选择。</p>
+
+<p>打包和推送我的构建工件有两个步骤:</p>
+
+<ol>
+<li>将我的构建输出打包为ZIP文件。</li>
+<li>将包推送到我的Octopus实例。</li>
+</ol>
+
+<p>如前所述，我引用了存储在我的存储库配置中的两个秘密。一个是Octopus服务器URL，另一个是我的GitHub构建的API密钥。</p>
+
+<h3 id="creating-a-release-and-deploying-it-to-the-dev-environment">创建一个版本并将其部署到开发环境中</h3>
+
+<pre><code class="language-yaml">    - name: Create a release in Octopus Deploy 🐙
+      uses: OctopusDeploy/create-release-action@v1.0.2
+      with:
+        api_key: ${{ secrets.OCTOPUS_APIKEY }}
+        server: ${{ secrets.OCTOPUS_SERVER }}
+        project: "Projects-141"
+        deploy_to: "Dev"
+</code></pre>
+
+<p>我的构建过程的最后一步是创建我的项目的发布，并将其部署到我的开发环境中。这是一步完成的；我提供了我的项目ID和我想要部署到的环境名称。仅此而已。</p>
+
+<h3 id="success">成功！</h3>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/github-actions-for-octopus-deploy/github-build.png" class="zoom" data-title=""><img src="../Images/46d2c530560eb582101bfb3a82831733.png" class="img-fluid center" alt="Successful GitHub build" data-original-src="https://i.octopus.com/blog/2021-06/github-actions-for-octopus-deploy/github-build.png"/>T2】</a></p>
+
+<p>如果我们向我们的存储库提交一个commit，我们可以看到GitHub动作的运行及其输出。可能需要几次迭代来修正语法并获得正确的结果，但结果是一个成功的构建。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>针对Octopus Deploy的GitHub操作现已推出。该版本包括安装Octopus CLI和将包推送到Octopus实例的操作，以及创建和部署版本和执行操作手册的支持。</p>
+
+<p>您现在可以使用GitHub操作自动化您的构建，并与Octopus集成以满足您所有的部署和runbook自动化需求。</p>
+
+<p>我们计划为Octopus添加额外的动作。如果你想让我们添加什么，请在评论中告诉我们。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,211 @@
+<html>
+<head>
+<title>Golang for Automation in AWS - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Golang用于AWS - Octopus部署中的自动化</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/golang-for-automation-in-aws#2021-08-12">https://octopus.com/blog/golang-for-automation-in-aws#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/golang-for-automation-in-aws/go-aws-automation.png" class="zoom" data-title=""><img src="../Images/658a03a546efb0f707a3c9fc0b96104c.png" class="img-fluid center" alt="Golang for Automation in AWS" data-original-src="https://i.octopus.com/blog/2020-08/golang-for-automation-in-aws/go-aws-automation.png"/>T2】</a></p>
+
+<p>当我们想到自动化时，首先想到的是代码。我们可能会被问到的几个问题是:</p>
+
+<ol>
+<li>什么编程语言最适合自动化？</li>
+<li>团队需要学习什么样的简单明了的语言？</li>
+</ol>
+
+<p>默认情况下，Golang是一种基于过程的语言。这意味着它主要基于编写函数。当您想到自动化代码时，例如PowerShell或Python，您可能会想到为脚本编写一些函数。正因为如此，Golang是一个天然的选择。</p>
+
+<p>在这篇博文中，您将学习如何使用Golang实现AWS自动化，就像使用PowerShell或Python一样。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进这篇博文，您需要以下内容:</p>
+
+<ol>
+<li>GoLang的初级知识。</li>
+<li>AWS的初级知识。</li>
+<li><a href="https://code.visualstudio.com/" rel="nofollow"> Visual Studio代码(VS代码)</a>。</li>
+<li><a href="https://golang.org/doc/install" rel="nofollow"> Golang装机</a>。</li>
+<li>本地主机上的AWS配置。您可以通过安装AWS CLI并运行<code>aws configure</code>来做到这一点。</li>
+<li>正在运行的EC2实例。</li>
+</ol>
+
+<h2 id="figuring-out-what-packages-to-use">确定使用什么包</h2>
+
+<p>在运行任何代码之前，您需要导入一些包，也称为库。在Golang中导入AWS包的主要方法是直接指向包所在的<a href="https://github.com/" rel="nofollow"> GitHub库</a>。</p>
+
+<p>要开始添加Golang代码，您需要一个保存代码的地方。为了这篇博文的目的，您可以在桌面上保存一个目录，并在VS代码中打开它。</p>
+
+<ol>
+<li>创建一个新文件并命名为<code>main.go</code>来存储AWS的Golang代码。</li>
+<li>添加以下代码以创建主包并导入包列表:</li>
+</ol>
+
+<pre><code class="language-go">package main
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/aws/aws-sdk-go/aws"
+    "github.com/aws/aws-sdk-go/aws/session"
+    "github.com/aws/aws-sdk-go/service/ec2"
+)
+</code></pre>
+
+<p>特定于AWS的三个软件包是:</p>
+
+<ol>
+<li><a href="http://github.com/aws/aws-sdk-go/aws" rel="nofollow">github.com/aws/aws-sdk-go/aws</a>:允许您连接到AWS包，特别是认证和指定您想要在AWS中工作的区域。</li>
+<li><a href="http://github.com/aws/aws-sdk-go/aws/session" rel="nofollow">github.com/aws/aws-sdk-go/aws/session</a>:允许你创建一个新的会话来连接AWS。</li>
+<li><a href="http://github.com/aws/aws-sdk-go/service/ec2" rel="nofollow">github.com/aws/aws-sdk-go/service/ec2</a>:允许您处理特定的EC2服务数据，如EC2状态、负载平衡器、公共IP等。</li>
+</ol>
+
+<p>使用上面的软件包，您可以连接到AWS并开始使用可用的Golang EC2功能。</p>
+
+<h2 id="set-up-a-function">设置功能</h2>
+
+<p>上一节向您展示了如何设置主包和特定于AWS的包，需要导入这些包以便在编程级别与AWS进行交互。既然已经导入了AWS包，是时候开始编写<code>ListInstances</code>函数了，它将列出来自特定实例ID的元数据，您可以在运行时传入这些元数据。</p>
+
+<h3 id="the-aws-connection">AWS连接</h3>
+
+<ol>
+<li>在<code>import</code>下，设置一个名为<code>listInstances</code>的函数，在运行时传递一个名为<code>instanceID</code>的参数:</li>
+</ol>
+
+<pre><code class="language-go">func listInstances(instanceID string) {
+
+}
+</code></pre>
+
+<ol start="2">
+<li>在该函数中，要设置的第一段代码是使用本地主机上现有的AWS配置连接到AWS。该变量将被称为<code>awsConnect</code>，并包含错误处理。<code>session</code>包用于调用<code>aws</code>包来指向本地主机上现有的AWS配置。然后，指定一个特定的区域(如果需要，可以随意更改):</li>
+</ol>
+
+<pre><code class="language-go">awsConnect, err := session.NewSession(&amp;aws.Config{
+        Region: aws.String("us-east-2")},
+    )
+</code></pre>
+
+<h3 id="error-handling">错误处理</h3>
+
+<p>接下来，为变量中配置的<code>err</code>添加错误处理。如果出现错误，它会简单地输出到屏幕上:</p>
+
+<pre><code class="language-go">if err != nil {
+        fmt.Println(err)
+    }
+</code></pre>
+
+<h3 id="initiate-the-aws-connection">启动AWS连接</h3>
+
+<p>启动AWS连接是通过<code>EC2</code>包中的<code>New()</code>方法完成的，并使用指向本地AWS配置的<code>awsConnect</code>变量:</p>
+
+<pre><code class="language-go">ec2sess := ec2.New(awsConnect)
+</code></pre>
+
+<h3 id="output-the-ec2-information">输出EC2信息</h3>
+
+<p>为了输出EC2实例元数据，<code>ec2</code>包与<code>DescribeInstancesInput</code>方法一起使用。在<code>DescribeInstancesInput</code>方法中，<code>instanceID</code>变量被传入(关于<code>main</code>函数的<code>instanceID</code>参数将在下一节中详细解释)。</p>
+
+<p>传入实例ID后，有两个打印语句:</p>
+
+<ol>
+<li>让用户知道EC2信息正在打印。</li>
+<li>使用<code>DescribeInstances</code>方法打印实例信息:</li>
+</ol>
+
+<pre><code class="language-go">instanceInfo := &amp;ec2.DescribeInstancesInput{
+        InstanceIds: []*string{aws.String(instanceID)},
+    }
+    fmt.Println("Listing EC2 Instance info...")
+
+    fmt.Println(ec2sess.DescribeInstances(instanceInfo))
+}
+</code></pre>
+
+<h2 id="configure-the-main-function">配置主要功能</h2>
+
+<p>在上一节中，您配置了完成所有跑腿工作的主要功能。在本节中，您将配置主函数。main函数执行以下操作:</p>
+
+<ol>
+<li>运行<code>listInstances</code>功能。</li>
+<li>设置在<code>listInstances</code>功能中用作参数的<code>instanceID</code>变量。</li>
+</ol>
+
+<p>主函数中的<code>instanceID</code>变量使用了<code>os.Args</code>包，所以你可以在运行时传入值。这使得代码可以重用，因为它没有任何硬编码的EC2实例id:</p>
+
+<pre><code class="language-go">func main() {
+    instanceID := os.Args[1]
+
+    listInstances(instanceID)
+}
+</code></pre>
+
+<h2 id="running-the-code">运行代码</h2>
+
+<p>在前面三节中，您设置了检索EC2元数据信息所需的所有代码。整个程序应该是这样的:</p>
+
+<pre><code class="language-go">package main
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/aws/aws-sdk-go/aws"
+    "github.com/aws/aws-sdk-go/aws/session"
+    "github.com/aws/aws-sdk-go/service/ec2"
+)
+
+func main() {
+    instanceID := os.Args[1]
+
+    listInstances(instanceID)
+}
+
+func listInstances(instanceID string) {
+    awsConnect, err := session.NewSession(&amp;aws.Config{
+        Region: aws.String("us-east-2")},
+    )
+    if err != nil {
+        fmt.Println(err)
+    }
+
+    ec2sess := ec2.New(awsConnect)
+
+    instanceInfo := &amp;ec2.DescribeInstancesInput{
+        InstanceIds: []*string{aws.String(instanceID)},
+    }
+    fmt.Println("Listing EC2 Instance info...")
+
+    fmt.Println(ec2sess.DescribeInstances(instanceInfo))
+}
+</code></pre>
+
+<p>程序正确编写后，就该运行它了:</p>
+
+<ol>
+<li>打开终端，进入<code>main.go</code>程序所在的目录(<code>cd</code>)。</li>
+<li>运行以下命令来运行Golang程序:</li>
+</ol>
+
+<pre><code class="language-go">go run main.go instance_id
+</code></pre>
+
+<p>该程序成功完成后，您应该会看到类似于以下屏幕截图的输出:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/golang-for-automation-in-aws/images/1.png" class="zoom" data-title=""><img src="../Images/ebba5d8f1f0d545708f7f3fc6909edc9.png" class="img-fluid center" alt="Terminal output" data-original-src="https://i.octopus.com/blog/2020-08/golang-for-automation-in-aws/images/1.png"/></a>T2】</p>
+
+<p>恭喜你。您已经成功使用Golang从AWS检索EC2信息。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>自动化有几种方法，也有许多不同的编程语言来实现，但这并不意味着所有的编程语言都是自动化的最佳选择。当您为自动化编写脚本时，您需要一种易于阅读、直截了当并且为编写小函数而构建的编程语言。</p>
+
+<p>在这篇博文中，您了解了如何编写一个小函数来检索EC2实例上的元数据，以及如何在AWS中自动执行这些任务。</p>
+
+                    
+                    
+</body>
+</html>

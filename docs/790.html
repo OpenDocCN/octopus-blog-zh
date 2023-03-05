@@ -1,0 +1,474 @@
+<html>
+<head>
+<title>Variable update notification - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>可变更新通知-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/variable-update-notification#2022-01-31">https://octopus.com/blog/variable-update-notification#2022-01-31</a></blockquote>
+                        <p>沟通对一个成功的团队很重要。每天的单口相声、信息节目和电子邮件让每个人都了解事情的最新进展。不过，信息可能会在混乱中丢失，就像变量值被更新时一样。</p>
+
+<p>Octopus Deploy的<a href="https://octopus.com/docs/administration/managing-infrastructure/subscriptions">订阅</a>特性可以配置为在变量被电子邮件或webhook自动更新时通知用户。</p>
+
+<p>在这篇文章中，您将学习如何使用订阅功能通过Azure函数向Slack发布消息。</p>
+
+<h2 id="creating-azure-resources">创建Azure资源</h2>
+
+<p>在创建功能之前，首先需要创建一些Azure资源来准备部署。</p>
+
+<p>这篇文章中提出的解决方案使用了以下Azure资源:</p>
+
+<ul>
+<li>资源组</li>
+<li>存储帐户</li>
+<li>存储帐户消息队列</li>
+<li>两个Azure函数:<ul>
+<li>接受消息</li>
+<li>流程消息</li>
+</ul>
+</li>
+</ul>
+
+<p>这个解决方案的源代码可以在GitHub上的<a href="https://github.com/OctopusSamples/OctoSubscriber" rel="nofollow"> OctoSubscriber </a> repo的<strong> azure </strong>文件夹中找到。</p>
+
+<h3 id="resource-group">资源组</h3>
+
+<p>首先创建一个资源组来存放您将创建的所有其他资源。这使得您的工作易于清理，因为删除资源组将删除其中的所有资源。</p>
+
+<p>您可以通过Azure门户或通过将Azure CLI脚本添加到运行手册来创建资源组，如下所示:</p>
+
+<pre><code class="language-powershell">$resourceGroupName = "MyResourceGroup"
+$resourceGroupLocation = "westus3"
+
+if ((az group exists --name $resourceGroupName) -eq $false)
+{
+    Write-Output "Creating resource group $resourceGroupName in $resourceGroupLocation"
+    az group create --location $resourceGroupLocation --name $resourceGroupName 
+}
+</code></pre>
+
+<h3 id="storage-account">存储帐户</h3>
+
+<p>要使用Azure的队列功能，首先创建一个存储帐户。</p>
+
+<p>以下是创建存储帐户的Azure CLI命令:</p>
+
+<pre><code class="language-powershell"># Get variables
+$storageAccountName = "MyStorageAccount"
+$resourceGroupName = "MyResourceGroup"
+
+# Create Azure storage account
+Write-Host "Creating storage account ..."
+az storage account create --name $storageAccountName --resource-group $resourceGroupName
+</code></pre>
+
+<h3 id="storage-account-message-queue">存储帐户消息队列</h3>
+
+<p>邮件队列存在于存储帐户中。创建帐户后，使用以下命令创建队列:</p>
+
+<pre><code class="language-powershell"># Get variables
+$storageAccountName = "MyStorageAccount"
+$queueName = "MyMessageQueue"
+$resourceGroupName = "MyResourceGroup"
+
+# Get account keys
+$accountKeys = (az storage account keys list --account-name $storageAccountName --resource-group $resourceGroupName) | ConvertFrom-JSON
+
+# Create Azure storage queue
+Write-Host "Creating queue ..."
+az storage queue create --name $queueName --account-name $storageAccountName --account-key $accountKeys[0].Value
+
+</code></pre>
+
+<h3 id="azure-function-apps">Azure功能应用</h3>
+
+<p>这篇文章中的解决方案使用了两种不同的Azure函数:</p>
+
+<ul>
+<li>接受消息</li>
+<li>流程消息</li>
+</ul>
+
+<p>这两个功能都需要在Octopus Deploy中注册为目标。</p>
+
+<p>使用Azure功能最常见的计划是消费计划(sku Y1)，然而，我无法使用<a href="https://docs.microsoft.com/en-us/cli/azure/functionapp/plan?view=azure-cli-latest#az_functionapp_plan_create" class="alert-link" rel="nofollow">az function app Plan create</a>CLI命令，因为<code>Y1</code>不是受支持的sku。</p>
+
+
+<h4 id="accept-message">接受消息</h4>
+
+<p>Azure CLI也可以用来创建函数。接受消息函数是用Node编写的。JS，所以一定要为运行时指定<code>node</code>。</p>
+
+<pre><code class="language-powershell"># Get variables
+$resourceGroupName = "MyResourceGroup"
+$appServiceName = "Accept-Message"
+$appServiceRuntime = "node"
+$storageAccountName = "MyStorageAccount"
+$osType = "Windows"
+$functionsVersion = 3
+$azureLocation = "westus3"
+
+# Create App Service
+Write-Host "Creating Accept function app service ..."
+az functionapp create --name $appServiceName --consumption-plan-location $azureLocation --resource-group $resourceGroupName --runtime $appServiceRuntime --storage-account $storageAccountName --os-type $osType --functions-version $functionsVersion
+</code></pre>
+
+<h4 id="process-message">流程消息</h4>
+
+<p>Provisioning Process-Message类似于Accept-Message，只是它是用C#编写的，并且您需要将<code>dotnet</code>指定为运行时版本。</p>
+
+<pre><code class="language-powershell"># Get variables
+$resourceGroupName = "MyResourceGroup"
+$appServiceName = "Process-Message"
+$appServiceRuntime = "dotnet"
+$storageAccountName = "MyStorageAccount"
+$osType = "Windows"
+$functionsVersion = 3
+$azureLocation = "westus3"
+
+# Create App Service
+Write-Host "Creating Process function app service ..."
+az functionapp create --name $appServiceName --consumption-plan-location $azureLocation --resource-group $resourceGroupName --runtime "$appServiceRuntime" --storage-account $storageAccountName --os-type $osType --functions-version $functionsVersion
+</code></pre>
+
+<p>对于这两个功能，我都收到了一条消息，提示我没有配置应用洞察。CLI为您提供了配置它的参数，但是似乎没有办法告诉它您不需要洞察。</p>
+
+
+<p>配置完所有资源后，资源组的内容应该如下所示:</p>
+
+<p><figure> <a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-resource-group.png" class="zoom" data-title=""> <img src="../Images/cac006286b57a71c8253f2f30a4a3494.png" class="img-fluid" alt="Screenshot shows 1 to 7 records, with resources provisioned for both Test and Production environments" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-resource-group.png"/> </a> <figcaption>为测试和生产环境提供资源</figcaption> </figure></p>
+
+<h2 id="azure-functions">Azure函数</h2>
+
+<p>Accept-Message函数接收提交的正文，并将其放在消息队列中。将消息放入队列后，将触发Process-Message，解析消息并发布到Slack。</p>
+
+<h3 id="accept-message-1">接受消息</h3>
+
+<p>接受消息函数是用Node编写的。JS并且相当基础。如果你从未使用Node创建过Azure函数。JS，入门<a href="https://docs.microsoft.com/en-us/azure/azure-functions/create-first-function-vs-code-node" rel="nofollow">这个教程来自微软</a>。</p>
+
+<p>将以下内容添加到<code>index.js</code>:</p>
+
+<pre><code class="language-javascript">const { QueueClient, QueueServiceClient } = require("@azure/storage-queue");
+const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const queueName = process.env.QUEUE_NAME;
+const queueServiceClient = QueueServiceClient.fromConnectionString(connectionString);
+const queueClient = queueServiceClient.getQueueClient(queueName);
+
+module.exports = async function (context, req) {
+    if (req.body) {
+        // Base64 encode message
+        let message = req.rawBody;
+        let messageBuffer = new Buffer.from(message, 'utf-8');
+        let encodedMessage = messageBuffer.toString('base64');
+
+        //await queueClient.sendMessage(req.body.body);
+        await queueClient.sendMessage(encodedMessage);
+        context.res = {
+            body: "Message added!",
+            status: 200
+        }
+    } else {
+        context.res = {
+            status: 400,
+            body: "Request contains no body!"
+        };
+    }
+};
+</code></pre>
+
+<p>环境变量<code>AZURE_STORAGE_CONNECTION_STRING</code>和<code>QUEUE_NAME</code>是在你将函数部署到Azure时提供的。</p>
+
+<p>本教程将下载创建Azure函数所需的所有<code>node_modules</code>，但是，它不会将它们添加到<code>package.json</code>文件中。您需要添加引用来使您的函数工作。</p>
+
+
+<h3 id="process-message-1">流程消息</h3>
+
+<p>Process-Message函数由放入队列的消息触发。消息从JSON反序列化，解析，然后发送到Slack。Process-Message用C#编写，并使用以下NuGet包引用:</p>
+
+<ul>
+<li>微软。Azure.WebJobs .扩展.存储</li>
+<li>微软。函数</li>
+<li>纽顿软件。Json</li>
+<li>懈怠。Webhooks</li>
+</ul>
+
+<p>与接受消息类似，处理消息并不复杂:</p>
+
+<pre><code class="language-csharp">using System;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Slack;
+
+namespace process_message
+{
+    public static class process_message
+    {
+        [FunctionName("process_message")]
+        [StorageAccount("AzureWebJobsStorage")]
+        public static void Run([QueueTrigger("octopusdeploy", Connection = "")]string myQueueItem, ILogger log)
+        {
+            // Deserialize message into JSON object
+            dynamic subscriptionEvent = JsonConvert.DeserializeObject(myQueueItem);
+            string slackUrl = Environment.GetEnvironmentVariable("SlackUrl");
+            string slackChannel = Environment.GetEnvironmentVariable("SlackChannel");
+
+            // Create slack objects
+            Slack.Webhooks.SlackClient slackClient = new Slack.Webhooks.SlackClient(slackUrl);
+            Slack.Webhooks.SlackMessage slackMessage = new Slack.Webhooks.SlackMessage();
+
+            // Get Octopus Event information
+            string librarySetName = subscriptionEvent.Payload.Event.ChangeDetails.DocumentContext.Name;
+            System.Text.StringBuilder messageText = new System.Text.StringBuilder();
+
+            // Get message from event
+            messageText.AppendLine(subscriptionEvent.Payload.Event.Message.ToString());
+
+            if (subscriptionEvent.Payload.Event.ChangeDetails.Differences.Count &gt; 0)
+            {
+                // Loop through variables collection
+                foreach (var difference in subscriptionEvent.Payload.Event.ChangeDetails.Differences)
+                {
+                    // Split the path
+                    string[] parsedDifference = difference.path.ToString().Split("/", StringSplitOptions.RemoveEmptyEntries);
+
+                    if (parsedDifference[0] == "Variables")
+                    {
+                        // Get the variable index value
+                        int variableIndex = int.Parse(parsedDifference[1]);
+
+                        // Add to message
+                        messageText.AppendLine(string.Format("Variable: {0}", subscriptionEvent.Payload.Event.ChangeDetails.DocumentContext.Variables[variableIndex].Name));
+                        messageText.AppendLine(string.Format("Old value: {0} \r\n New value: {1}", subscriptionEvent.Payload.Event.ChangeDetails.DocumentContext.Variables[variableIndex].Value, difference.value));
+                    }
+                }
+            }
+
+            log.LogInformation($"Posting to Slack: {messageText.ToString()}");
+
+            // Post message to channel
+            slackMessage.Channel = slackChannel;
+            slackMessage.Text = messageText.ToString();
+            slackClient.Post(slackMessage);
+        }
+    }
+}
+
+</code></pre>
+
+<p>环境变量<code>SlackUrl</code>和<code>SlackChannel</code>是在部署过程中提供的。</p>
+
+<h2 id="building-and-packaging-the-functions">构建和打包功能</h2>
+
+<p>Process-Message是两个函数中唯一需要编译的函数，但是，它们都需要打包。</p>
+
+<p>GitHub repo包含一个GitHub操作构建定义作为示例:</p>
+
+<pre><code class="language-yaml"># This is a basic workflow to help you get started with Actions
+
+name: Azure Function
+
+on:
+  push:
+    paths:
+      - 'azure/**'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['3.1.x']
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup .NET Core SDK ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v1.7.2
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Create artifacts folder
+        run: |
+          mkdir "$GITHUB_WORKSPACE/artifacts"
+          mkdir "$GITHUB_WORKSPACE/artifacts/process-message"
+          mkdir "$GITHUB_WORKSPACE/azure/accept_message/node_modules"
+
+
+      - name: Restore dependencies for process-message
+        working-directory: azure/process_message/process_message
+        run: dotnet restore
+
+      - name: Build process-message
+        working-directory: azure/process_message/process_message
+        run: dotnet build --configuration Release --no-restore --output "$GITHUB_WORKSPACE/artifacts/process-message"
+
+      - name: Install Octopus CLI
+        uses: OctopusDeploy/install-octopus-cli-action@v1.1.1
+        with:
+          version: latest
+
+      - name: Pack and Push
+        working-directory: azure/accept_message
+        env:
+          OCTOPUS_URL: ${{ secrets.OCTOPUS_SERVER }}
+          OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_KEY }}  
+        run: |
+          npm ci --production
+          octo pack --id=OctoSubscriber-AcceptMessage-Function --format=Zip --version=2021.1.1.$GITHUB_RUN_NUMBER --basePath="$GITHUB_WORKSPACE/azure/accept_message"
+          octo pack --id=OctoSubscriber-ProcessMessage-Function --format=Zip --version=2021.1.1.$GITHUB_RUN_NUMBER --basePath="$GITHUB_WORKSPACE/artifacts/process-message"
+          octo push --package=OctoSubscriber-AcceptMessage-Function.2021.1.1.$GITHUB_RUN_NUMBER.zip --server=$OCTOPUS_URL --apiKey=$OCTOPUS_API_KEY --space="Target - Serverless"
+          octo push --package=OctoSubscriber-ProcessMessage-Function.2021.1.1.$GITHUB_RUN_NUMBER.zip --server=$OCTOPUS_URL --apiKey=$OCTOPUS_API_KEY --space="Target - Serverless"
+</code></pre>
+
+<h2 id="deploying-the-functions">部署功能</h2>
+
+<p>这篇文章假设你知道如何在Octopus Deploy中创建一个项目，并且不会涉及这个主题。如果您不熟悉，请查看我们的<a href="https://octopus.com/docs/getting-started">入门</a>指南。</p>
+
+<h3 id="variables">变量</h3>
+
+<p>在定义我们的部署流程之前，这两个功能都需要定义一些变量:</p>
+
+<ul>
+<li>项目。Azure.Storage.ConnectionString</li>
+<li>项目。Azure .存储.队列.名称</li>
+<li>项目。Slack.Url</li>
+<li>项目。松弛。频道。名称</li>
+</ul>
+
+<h4 id="project.azure.storage.connectionstring">项目。Azure.Storage.ConnectionString</h4>
+
+<p>这些函数需要Azure存储帐户的连接字符串才能访问队列。这个值可以通过导航到<strong> Azure存储帐户</strong>，然后是<strong>访问密钥</strong>来找到。默认情况下，Azure会创建两个密钥，任何一个都可以。点击<strong>显示键</strong>复制<strong>连接字符串</strong>属性的值。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-storage-connection-string.png" class="zoom" data-title=""><img src="../Images/66a32593da4c8f0e2678d1941b34cdfe.png" class="img-fluid center" alt="Microsoft Azure dashboard open on Access keys page with Show keys and Connection string highlighted" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-storage-connection-string.png"/>T2】</a></p>
+
+<h4 id="project.azure.storage.queue.name">项目。Azure .存储.队列.名称</h4>
+
+<p>您之前创建的消息队列的名称。</p>
+
+<h4 id="project.slack.url">项目。Slack.Url</h4>
+
+<p>这是Slack的集成webhook URL。建议您将此变量设为敏感值。</p>
+
+<h4 id="project.slack.channel.name">项目。松弛。频道。名称</h4>
+
+<p>这是您希望函数发布到的松弛通道的名称。</p>
+
+<h3 id="deployment-process">部署流程</h3>
+
+<p>部署流程的步骤如下:</p>
+
+<ul>
+<li>部署接受消息功能</li>
+<li>部署流程消息功能</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-deployment-process.png" class="zoom" data-title=""><img src="../Images/6a5fc9e170d0128a1e30b60b98d50d02.png" class="img-fluid center" alt="Screenshot of Process in Octopus showing step 1. Deploy Accept-Message Function and step 2. Deploy Process-Message Function" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-deployment-process.png"/>T2】</a></p>
+
+<h4 id="deploy-accept-message-function">部署接受消息功能</h4>
+
+<p>添加一个<strong>部署Azure应用服务</strong>步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-add-azure-step.png" class="zoom" data-title=""><img src="../Images/7726c914badf0143ad0418bfbc54970a.png" class="img-fluid center" alt="Octopus dashboard showing Deploy an Azure App Service step being selected" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-add-azure-step.png"/>T2】</a></p>
+
+<p>填写该步骤的表单字段:</p>
+
+<ul>
+<li><strong>代表:</strong>您的Azure Web应用目标被分配的角色</li>
+<li><strong>包</strong>:包含接受消息功能的包</li>
+<li><strong>应用程序设置</strong>:使用以下:</li>
+</ul>
+
+<pre><code class="language-json">[
+   {
+      "name": "AZURE_STORAGE_CONNECTION_STRING",
+      "value": "#{Project.Azure.Queue.ConnectionString}",
+      "slotSetting": false
+   },
+   {
+      "name": "QUEUE_NAME",
+      "value": "#{Project.Azure.Storage.Queue.Name}",
+      "slotSetting": false
+   }
+]
+</code></pre>
+
+<h4 id="deploy-process-message-function">部署流程消息功能</h4>
+
+<p>这使用与<strong>部署接受消息功能</strong>相同的步骤模板。填写该步骤的表单字段:</p>
+
+<ul>
+<li><strong>代表</strong>:你的Azure Web App目标被分配的角色</li>
+<li><strong>包</strong>:包含接受消息功能的包</li>
+<li><strong>应用程序设置</strong>:使用以下:</li>
+</ul>
+
+<pre><code class="language-json">[
+   {
+      "name": "SlackUrl",
+      "value": "#{Project.Slack.Url}",
+      "slotSetting": false
+   },
+   {
+      "name": "SlackChannel",
+      "value": "#{Project.Slack.Channel}",
+      "slotSetting": false
+   },
+   {
+      "name": "AzureWebJobsStorage",
+      "value": "#{Project.Azure.Queue.ConnectionString}",
+      "slotSetting": false
+   }
+]
+</code></pre>
+
+<h2 id="deployment">部署</h2>
+
+<p>部署函数看起来像这样:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-deploy-successful.png" class="zoom" data-title=""><img src="../Images/f9a2b523fcfadbb45ea24d0b11e0f47d.png" class="img-fluid center" alt="Octopus dashboard showing Task Summary with green ticks for every step" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-deploy-successful.png"/></a>T2】</p>
+
+<p>要调用这个函数，需要从Azure获取函数URL。</p>
+
+<p>打开Azure门户，导航到您的<strong>功能</strong>。点击<strong>功能</strong>然后链接到您的功能。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-portal-function.png" class="zoom" data-title=""><img src="../Images/b6f893905d66658d5d59b4021ab7408e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-portal-function.png"/>T2】</a></p>
+
+<p>点击<strong>获取功能Url </strong>，然后点击复制图标。这个留着以后用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-function-url.png" class="zoom" data-title=""><img src="../Images/3d802c3efabdd0945ffbade9f744a34a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/azure-function-url.png"/>T2】</a></p>
+
+<h2 id="testing-notifications">测试通知</h2>
+
+<p>部署完函数后，您可以在Octopus Deploy中配置一个订阅，以便在变量发生变化时通知您。</p>
+
+<p>要配置订阅，点击<strong>配置</strong>，然后<strong>订阅</strong>，然后<strong>添加订阅</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-create-subscription.png" class="zoom" data-title=""><img src="../Images/2d3f4332c2ee89722ccad48f4dc7f08e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/octopus-create-subscription.png"/>T2】</a></p>
+
+<p>填写以下字段</p>
+
+<ul>
+<li><strong>名称</strong>:给订阅命名</li>
+<li><strong>事件过滤器</strong>:从<strong>文档类型</strong>下拉列表中选择<strong>变量集</strong></li>
+<li><strong> PayloadURL </strong>:从Azure粘贴函数URL</li>
+</ul>
+
+<p>点击<strong>保存</strong>。</p>
+
+<p>现在，当变量发生变化时，您就可以接收时差通知了。要对此进行测试，请更新一个变量。几秒钟后，Octopus将处理订阅，调用Azure函数将Octopus有效负载放入队列。Process-Message函数将触发并发布到Slack。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-01/variable-update-notification/slack-message.png" class="zoom" data-title=""><img src="../Images/dfb113165cacbd4f67d0e1a19a8a22c3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-01/variable-update-notification/slack-message.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这篇文章演示了如何使用Octopus Deploy订阅来调用Azure函数，以便在变量发生变化时向Slack发布消息。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

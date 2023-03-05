@@ -1,0 +1,142 @@
+<html>
+<head>
+<title>The state of config file formats: XML vs. YAML vs. JSON vs. HCL - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>配置文件格式的状态:XML与YAML、JSON与HCL - Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/state-of-config-file-formats#2021-08-23">https://octopus.com/blog/state-of-config-file-formats#2021-08-23</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/state-of-config-file-formats/blogimage-config-as-code-explanation_2020.png" class="zoom" data-title=""><img src="../Images/75e8299e2859f313ef680a93d09c441a.png" class="img-fluid center" alt="The state of config file formats: XML vs. YAML vs. JSON vs. HCL" data-original-src="https://i.octopus.com/blog/2021-07/state-of-config-file-formats/blogimage-config-as-code-explanation_2020.png"/>T2】</a></p>
+
+<p>每个应用程序、环境或系统都需要某种级别的配置。配置格式，比如基于纯文本文件的<code>ini</code>格式，这些年来在流行程度上有所波动。随着应用程序和系统需求的发展，所需的配置复杂性和结构也在发展。</p>
+
+<p>如今，存在许多配置格式，但有些格式在云环境中更受欢迎。XML、JSON、YAML和HCL支持复杂的配置，它们各有优缺点。</p>
+
+
+
+<p>在第一批结构化配置语言中，XML是在1998年W3C的1.0版规范中引入的。XML是为通用和简单而设计的，它支持许多传输语言、服务和配置格式。</p>
+
+<p>尽管XML无处不在，但更新的配置语言正在取代XML的主导地位。尽管如此，在许多情况下，XML的结构化特性及其灵活性最适合复杂的配置。</p>
+
+<p>JSON等简单的配置语言适用于许多应用程序，但是当您需要适当的验证、模式和名称空间支持时，XML通常是最好的。</p>
+
+<h3 id="advantages-of-xml">XML的优势</h3>
+
+<ul>
+<li>XML是一种通用语言，它可以很容易地从一个公共语法中实现不同的格式。</li>
+<li>模式是为自定义类型的验证和创建而存在的，而命名空间可以避免元素之间的冲突。</li>
+<li>XPath和XQuery简化了对XML文档的复杂查询。</li>
+</ul>
+
+<h3 id="disadvantages-of-xml">XML的缺点</h3>
+
+<ul>
+<li>XML语言很冗长，通常包含冗余的语法。</li>
+<li>更高的详细程度会增加存储容量和带宽需求。</li>
+<li>由于元素的描述性，不容易被人理解。</li>
+</ul>
+
+
+
+<p>JSON在2013年被认可为正式规范，自21世纪初就已经存在。它在许多不同的应用程序中使用，强调可读性和简单的语法。</p>
+
+<p>JSON源自JavaScript，是独立于语言的。JSON解析器适用于许多不同的编程语言和工具。</p>
+
+<p>JSON是XML更简单的替代方案。凭借简洁易用的语法，JSON接管了许多配置设置。开发人员欣赏JSON提供的简单性和处理速度。</p>
+
+<p>JSON是当今使用最普遍的语言之一，尽管它的设计存在固有的缺点，但仍然很受欢迎。</p>
+
+<h3 id="advantages-of-json">Advantages of JSON</h3>
+
+<ul>
+<li>与XML相比，由于语法更紧凑，因此更易于阅读。</li>
+<li>有限标记的简单语法。</li>
+<li>快速系统和语言解析。</li>
+<li>JSONPath和XPath一样，可用于复杂的查询。</li>
+</ul>
+
+<h3 id="disadvantages-of-json">JSON的缺点</h3>
+
+<ul>
+<li>有限的数据类型支持，仅包含<em>字符串、数字、JSON对象、数组、布尔值和空值</em>。</li>
+<li>没有名称空间、注释或属性支持。</li>
+<li>简单的结构可能不支持复杂的配置。</li>
+</ul>
+
+
+
+<p>最初作为另一种标记语言而为人所知，官方定义改为表达数据焦点而不是文档焦点。YAML创建于2001年，没有正式的W3C规范。最新的YAML 1.2规范自2009年以来一直保持稳定。</p>
+
+<p>YAML非常易读，因为它旨在定义配置，而不是作为一种数据传输语言。</p>
+
+<p>尽管YAML看起来与JSON不同，但YAML是JSON的超集。作为JSON的超集，一个有效的YAML文件可以包含JSON。此外，JSON也可以转换成YAML。YAML本身也可以在其配置文件中包含JSON。</p>
+
+<h3 id="advantages-of-yaml">YAML的优势</h3>
+
+<ul>
+<li>异常易读的语法。</li>
+<li>紧凑语法，使用Python风格的缩进来表示结构。</li>
+<li>支持独立于语言的对象类型。<code>int</code>、<code>binary</code>、<code>str</code>、<code>bool</code>等定标器或<code>map</code>、<code>set</code>、<code>pairs</code>、<code>seq</code>等集合。</li>
+</ul>
+
+<h3 id="disadvantages-of-yaml">YAML的缺点</h3>
+
+<ul>
+<li>缩进格式容易出现语法和验证错误。</li>
+<li>由于缺乏跨所有语言的特性，某些类型的可移植性可能不存在。</li>
+<li>由于YAML的声明性，调试很困难。</li>
+<li>不存在断点和类似的功能。</li>
+</ul>
+
+
+
+<p>作为唯一列出的特定配置语言，HCL并不打算取代YAML或JSON等语言。HCL是一种工具专用语言，用于Terraform工具集。HCL在视觉上类似于JSON，只是添加了独特的数据结构。</p>
+
+<p>HCL是三个子语言的组合:</p>
+
+<ul>
+<li>结构的</li>
+<li>表示</li>
+<li>模板</li>
+</ul>
+
+<p>这些子语言共同创建了一个HCL配置。该模式有效地描述了环境配置，这是Terraform的主要目的。</p>
+
+<p>其他工具集和语言能够使用HCL吗？其他语言也有解析器，比如Go、Java和Python。在这种情况下，可以使用HCL作为配置语言。这些解析器通常不是本地包。</p>
+
+<h3 id="advantages-of-hcl">盐酸的优点</h3>
+
+<ul>
+<li>使用盐酸时，使用Terraform要容易得多。</li>
+<li>除了兼容之外，视觉上和功能上类似于JSON。</li>
+<li>通过属性和模板等特性，HCL比竞争语言(如JSON)功能更加全面。</li>
+</ul>
+
+<h3 id="disadvantages-of-hcl">盐酸的缺点</h3>
+
+<ul>
+<li>正如HashiCorp的名字所证明的那样，HCL主要是为其产品开发的，开发也是为了这些目的。</li>
+<li>尽管声明了与JSON的兼容性，但两种语言之间的严格转换由于映射某些语言结构的模糊性而变得复杂。</li>
+<li>作为一门新语言，许多特性仍在开发中，工具包的成熟度仍在提高。</li>
+</ul>
+
+<h2 id="conclusion">结论</h2>
+
+<p>配置语言有很多种，各有优缺点。XML、JSON、YAML和HCL在某种程度上是互操作的，但是根据您选择的语言，权衡是必要的。</p>
+
+<p>简单的应用程序和环境受益于结构化配置。随着配置复杂性的增加，一种语言相对于另一种语言的缺点也在增加。</p>
+
+<p>为了选择正确的语言，在应用程序生命周期的早期确定配置目标是有帮助的。</p>
+
+<p>随着配置本身成为DevOps环境和云计算中的一等公民，为您的应用选择正确的语言对于确保成功变得至关重要。尽管这些配置语言都可以很好地工作，但是您需要权衡成功的配置框架的优点和缺点。</p>
+
+<p>愉快的部署！</p>
+
+<hr/>
+
+<p>Adam Bertram拥有20多年的IT经验，是一名经验丰富的在线商务专家。他是多家科技公司的顾问、微软MVP、博客作者、培训师、出版作家和内容营销人员。在<a href="http://adamtheautomator.com/" rel="nofollow">adamtheautomator.com</a>关注亚当的文章，在<a href="https://www.linkedin.com/in/adbertram" rel="nofollow"> LinkedIn </a>联系，或者在<a href="https://twitter.com/adbertram" rel="nofollow"> @adbertram </a>的Twitter上关注他。</p>
+
+                    
+                    
+</body>
+</html>

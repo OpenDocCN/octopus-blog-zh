@@ -1,0 +1,100 @@
+<html>
+<head>
+<title>Certificates Feature - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>证书功能-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/certificates-feature#2022-07-21">https://octopus.com/blog/certificates-feature#2022-07-21</a></blockquote>
+                        <p><img src="../Images/f802c19c80eff566f9d46f5f98fbc850.png" alt="Octopus Certificates" data-original-src="https://i.octopus.com/blog/201702-img_blog_certificates_2017_01-TMM8.png"/></p>
+
+<h3>3.11版证书成为一流的八达通公民！</h3>
+
+<p><a href="https://octopus.com/blog/rfc-certificate-management">去年，我们就此功能的初始设计征求了您的反馈</a>。反应是积极的，很多。很明显，自动化证书是一个棘手的问题...部署管道。希望我们能稍微缓解一下。</p>
+
+<p><img src="../Images/912e0e2046e2cd9134d884e9d923d4bd.png" alt="Certificates in Octopus" data-original-src="https://i.octopus.com/blog/201702-certificate_list-BR7P.png"/></p>
+
+<p>证书功能允许您:</p>
+
+
+
+<h2>商店证书<a name="store-certificates"/></h2>
+
+<p><img alt="Add Certificate" src="../Images/ed8ef5fb38ff362703ee2ad270451893.png" data-original-src="https://i.octopus.com/blog/201702-add-certificate-X3GP.png"/></p>
+
+<p>证书可以以PFX、PEM或DER格式上传，并且可能包含私钥。它们的范围可以是环境和/或租户。您可以搜索证书，当证书即将到期时，它们会提供直观的指示。</p>
+
+<p><a name="certificate-variables"/></p>
+
+<h2>证书变量</h2>
+
+<p>您可以使用证书作为值来创建变量。</p>
+
+<p><img alt="Certificate Variables" src="../Images/ab8ce044cdf3aa8a909a384f8f6f409c.png" data-original-src="https://i.octopus.com/blog/201702-certificate-variables-scoped-PCKP.png"/></p>
+
+<p>这种类型化变量的概念对Octopus来说是新的。理解变量的类型打开了许多可能性，这些可能性在变量只是文本时是不存在的。你可以期待在未来看到其他类型的变量。</p>
+
+<p>证书变量由新的导入证书步骤使用，也可以在IIS绑定配置中使用。</p>
+
+<p>它们也可以用在您自己的自定义脚本中。正如我们在RFC文章中对该特性的建议，在部署时，证书变量被扩展成许多变量，本质上是使用点符号模拟O-O属性。有关可用属性，请参见我们的文档。</p>
+
+<p><a name="import-certificate-step"/></p>
+
+<h2>导入证书部署步骤</h2>
+
+<p><img alt="Import Certificate Step" src="../Images/d1edad8c443e18005bc3fd0863142c3a.png" data-original-src="https://i.octopus.com/blog/201702-import-certificate-step-select-F7NH.png"/></p>
+
+<p>我们添加了一个新的导入证书步骤，使得将由Octopus管理的证书导入Windows证书存储成为部署过程的一部分变得更加容易。</p>
+
+<p><img alt="Import Certificate Step details" src="../Images/20affb7ca646cf86e36ed39260c95ffb.png" data-original-src="https://i.octopus.com/blog/201702-import-certificate-step-edit-33GR.png"/></p>
+
+<p><a name="https-bindings"/></p>
+
+<h2>配置HTTPS绑定时引用证书变量</h2>
+
+<p>你可以...正如上面的标题所暗示的。</p>
+
+<p><img alt="Certificate in HTTPS binding" src="../Images/270d6f04168983cbb762af8dcd77057e.png" data-original-src="https://i.octopus.com/blog/201702-https-binding-certificate-RWJ2.png"/></p>
+
+<p><a name="export-certificates"/></p>
+
+<h2>出口证书</h2>
+
+<p>证书可以以PFX、PEM或DER格式导出。或者，您可以完全按照它们最初上传时的样子导出它们。</p>
+
+<p>对于PEM格式，您可以选择是否包含私钥。</p>
+
+<p><img alt="Download Certificate" src="../Images/e50afc71d9c2f144a94e656aa8988f04.png" data-original-src="https://i.octopus.com/blog/201702-download-certificate-dialog-XXPE.png"/></p>
+
+<p><a name="expiry-notifications"/></p>
+
+<h2>配置到期通知</h2>
+
+<p><a href="https://octopus.com/docs/administration/managing-infrastructure/subscriptions">可以创建Octopus订阅</a>以在证书到期后20天、到期后10天或到期时触发。</p>
+
+<p>订阅可以配置为发送电子邮件或张贴到URL。请参见下面的<a href="#integration">集成部分</a>了解这方面的一些想法。</p>
+
+<p><a name="replace-certificate"/></p>
+
+<h2>更换证书</h2>
+
+<p>当获得即将过期的证书的替换时，您可能希望用新证书替换过期证书的所有用法。替换功能通过允许您上传新的证书文件来支持这一点。新证书将继承旧证书的所有Octopus属性(名称、环境等)，包括ID。这使得所有引用变量现在都指向新证书。以前的证书被赋予了一个新的ID并被存档(因此如果需要，您仍然可以访问它)。</p>
+
+<p><a name="integration"/></p>
+
+<h2>综合</h2>
+
+<p>像Octopus中的所有东西一样，证书功能通过我们的HTTP REST API公开，并可通过我们的<a target="_blank" href="https://octopus.com/docs/octopus-rest-api/octopus.client">使用。NET客户端库</a>。这应该可以将Octopus证书集成到您的组织用来管理X.509证书的任何流程中。</p>
+
+<p>特别是，通过订阅的到期通知，结合Replace API端点，应该会带来一些有趣的可能性。这是我们希望在未来进一步写的东西。</p>
+
+<h2>反馈</h2>
+
+<p>一如既往，请告诉我们您的想法。我们喜欢听取用户的意见。</p>
+
+<p><em>愉快的(密码安全)部署！</em></p>
+
+                    
+                    
+</body>
+</html>

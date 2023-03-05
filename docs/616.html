@@ -1,0 +1,55 @@
+<html>
+<head>
+<title>RFC: Remote delta compression in Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC:Octopus-Octopus部署中的远程增量压缩</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-delta-compression#2015-09-25">https://octopus.com/blog/rfc-delta-compression#2015-09-25</a></blockquote>
+                        <p>许多自主开发的部署解决方案利用了Robocopy等工具，这些工具可以在执行部署时执行“同步”。这节省了时间和带宽，因为这意味着只需要在网络上推送已更改的文件。另一方面，Octopus Deploy使用NuGet包，总的来说，我们认为将单个文件——包——作为部署单元比同步松散的文件目录有很多优势。</p>
+
+<p>这个决定是有代价的——我们今天可能上传一个100 MB的包到一个服务器上，只是对包中的几个文件做了一个小的改变，却不得不再次重新上传整个包。将此乘以许多服务器，很明显会有潜在的带宽节省。</p>
+
+<p>如果我们能两全其美，那不是很好吗？</p>
+
+<p>上周，我花了一些时间阅读了两篇关于delta压缩的优秀论文:</p>
+
+
+
+<p>这个概念在应用于章鱼和触手时非常简单:</p>
+
+<p><img src="../Images/04440d9093aedfc349f72de4a820f77c.png" alt="How Octodiff will work in Octopus and Tentacle" data-original-src="https://i.octopus.com/blog/migrated/octodiff_stjpru.png"/></p>
+
+<p>关键的好处是，当部署一个100 MB的文件，其中只有1 MB的数据实际发生了变化时，我们会将大约1.3%的文件作为签名(1.3 MB)进行传输，加上增量，再加上由于填充而产生的少量额外数据，但总共不超过大约3 MB。</p>
+
+<p>一旦我理解了这些概念，我就开始寻找我们可以使用的实现。我真的很喜欢rdiff的外观，作为一个命令行工具，它有我们需要的那种语义，但是对在Windows上运行的支持似乎不是很好。此外，如果我们要这样做，我想这是我们想要维护自己的那种代码，我已经有一段时间没有坐下来编写这样的代码了。</p>
+
+<h1>Octodiff简介</h1>
+
+<blockquote>
+  <p>Octodiff.exe是远程增量压缩的100%托管实施。用法受rdiff启发，与rdiff一样，算法也基于rsync。Octodiff可以通过比较远程文件和本地文件来制作文件的增量，而不需要两个文件都存在于同一台机器上。</p>
+</blockquote>
+
+<p>Octodiff在GitHub 上，并获得Apache许可。它有三个不同的命令——创建一个<strong>签名</strong>，创建一个<strong>增量</strong>，应用一个增量(<strong>补丁</strong>)。</p>
+
+<h1>我需要你的帮助</h1>
+
+<p>NuGet包是ZIP文件，我认为ZIP文件不太适合delta压缩——我认为改变ZIP中的单个文件会导致整个ZIP变得不同。然而，事实证明并非如此——zip文件(或者至少是使用<code>System.IO.Packaging</code>创建的文件)使用块级压缩，因此对包中单个文件的更改往往被限制在包文件中的单个区域。在我所有的测试中，Octodiff运行得非常好。</p>
+
+<p>然而，将Octodiff添加到Octopus和touchs会带来一些风险，所以在我们开始实现它之前，如果发现在现实世界中它实际上并不能改善任何事情，我会非常感激您能帮助我:</p>
+
+<ol>
+<li><a href="https://github.com/OctopusDeploy/Octodiff/releases">下载Octodiff </a></li>
+<li>试着用Octopus部署的一些包，尤其是较大的包，但也有较小的包</li>
+<li>告诉我结果——增量有多大，你会节省多少带宽</li>
+<li>如果你认为这个功能对你有帮助，请告诉我</li>
+</ol>
+
+<p>一旦我们有了一些真实世界的数据，我们将更容易把它集成到Octopus中。</p>
+
+<p><em>此外，目前在较大的文件上创建增量确实需要几秒钟的时间——很遗憾没有人阅读这篇博文来优化它并发送拉取请求<strong>；——)</strong></em></p>
+
+                    
+                    
+</body>
+</html>

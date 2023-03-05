@@ -1,0 +1,89 @@
+<html>
+<head>
+<title>Coordinating Projects with the Deploy Release Step - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>用部署发布步骤协调项目- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-release-step/deploy-release-step#2021-07-07">https://octopus.com/blog/deploy-release-step/deploy-release-step#2021-07-07</a></blockquote>
+                        <p>除非你正在建造一个真正的整体，否则你的项目不会孤立存在。我们的行业越来越朝着系统由更细粒度的组件组成的方向发展。有人称之为面向服务的架构，有人称之为微服务，但是从发布管理的角度来看，关键是它需要协调。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/deploy-release-step/synchronized-swimming.jpg" class="zoom" data-title=""><img src="../Images/4032be950eaf5f178e20737357d42694.png" class="img-fluid center" alt="Synchronized Swimming" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/synchronized-swimming.jpg"/>T2】</a></p>
+
+<p>在Octopus总部，我们喜欢这种趋势，因为坦率地说，你的发布和部署过程中的移动部分越多，Octopus带来的价值就越大。</p>
+
+<p>这样做的自然结果是，用户希望能够在Octopus中协调多个项目的发布。这是我们最重要的<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/9811932-allow-project-dependencies-so-deploying-one-proj" rel="nofollow">用户声音建议</a>之一。</p>
+
+<p>两个关键场景是:</p>
+
+<ul>
+<li><strong> Bundle: </strong>您想要创建一个“Bundle”发布，以允许多个项目的发布在您的环境中一起进行。</li>
+<li><strong>依赖关系:</strong>您想要明确地建模项目A依赖于已经部署的项目B的特定版本。</li>
+</ul>
+
+<h2 id="introducing-the-deploy-a-release-step">介绍<em>部署发布</em>步骤</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/deploy-release-step/deploy-release-card.png" class="zoom" data-title=""><img src="../Images/7c005ea1da838484bf5a11b91feb537d.png" class="img-fluid center" alt="Deploy Release Step Card" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/deploy-release-card.png"/>T2】</a></p>
+
+<p>为了解决这个问题，我们创建了一个新的步骤:<a href="https://octopus.com/docs/deployment-process/coordinating-multiple-projects/deploy-release-step">部署一个发布版本</a>。<em> Deploy a Release </em>步骤允许您选择另一个Octopus项目进行部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/deploy-release-step/deploy-release-step-edit.png" class="zoom" data-title=""><img src="../Images/3b8101ba6a0f30ffd71c0482b8187971.png" class="img-fluid center" alt="Deploy Release Step - Select a Project" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/deploy-release-step-edit.png"/>T2】</a></p>
+
+<p>当您创建一个包含一个或多个<em> Deploy a Release </em>步骤的项目发布时，您可以选择要部署的子项目的发布版本。正如在创建包含部署包的步骤的项目发布时选择包的版本一样。</p>
+
+<p>【T2 <img src="../Images/bb71be9013f8cdae61a3284e3d9eee72.png" class="img-fluid center" alt="Deploy Release Step - Create Release" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/create-release-annotated.png"/></p>
+
+<p>将此作为一个步骤来实现的好处是，所有常规的Octopus功能都像预期的那样工作。您可以将<em>部署发布</em>步骤与其他步骤类型穿插在一起。例如，如果您正在创建一个bundle项目，那么您的第一步可能是一个<em>手动干预</em>步骤(批准发布)，而您的最后一步可能是发送一个Slack通知。<em> Deploy a Release </em>步骤也可以配置为仅针对特定的环境、渠道或租户运行，就像任何其他步骤一样。它们可以配置为并行或串行运行，就像任何其他步骤一样。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/deploy-release-step/voltron-project-process.png" class="zoom" data-title=""><img src="../Images/d97ac881c95e9ca37d4d63d5e51a503a.png" class="img-fluid center" alt="Example Project Process" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/voltron-project-process.png"/>T2】</a></p>
+
+<p>当<em>部署发布</em>步骤运行时，它触发指定项目的部署。这种部署与直接触发的部署没有什么不同。它将在八达通仪表板上可见。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/deploy-release-step/voltron-dashboard-annotated.png" class="zoom" data-title=""><img src="../Images/65ef01037ae4e92274aa562d1ac43345.png" class="img-fluid center" alt="Example Project Dashboard" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/voltron-dashboard-annotated.png"/>T2】</a></p>
+
+<h3 id="conditional-deployment">有条件部署</h3>
+
+<p>您可以配置部署子项目的条件:</p>
+
+<ul>
+<li>始终部署(默认)。</li>
+<li>如果所选版本不是环境中的当前版本。</li>
+<li>如果所选版本的版本高于环境中的当前版本。</li>
+</ul>
+
+<p>这允许您指定组件版本之间的关系。</p>
+
+<h4 id="microservice-example">微服务示例</h4>
+
+<p>例如，您正在部署一个应用程序，<em> Acme。店铺</em>，靠的是一个伐木微服务，<em>极致。装运</em>。</p>
+
+<p><em>到了极致。商店</em>项目可以包含一个<em>部署发布</em>步骤，该步骤被配置为部署<em> Acme。在<em>展开条件</em>字段设置为<code>If the selected release has a higher version than the current release in the environment</code>的情况下装运</em>。</p>
+
+<p>这将允许团队在<em> Acme上工作。发布</em>独立工作的微服务项目，在准备就绪时部署到Octopus环境中。</p>
+
+<p>当团队工作在<em>的极致时。商店</em>创建了一个版本，他们选择了<em> Acme的一个版本。发货</em>，例如<code>2.0.0</code>。这有效地指定了每个环境中必须有的最低版本。随着<em>的极致。车间</em>发布在环境中进行，它将触发<em> Acme的部署。只有当环境中还没有包含<em>极致的<code>&gt;= 2.0.0</code>时才发货</em>。装运</em>。</p>
+
+<h3 id="variables">变量</h3>
+
+<p>变量可以传递给由<em>部署发布</em>步骤触发的部署。就像任何其他项目变量一样，这些变量可用于子部署过程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/deploy-release-step/deploy-release-variables.png" class="zoom" data-title=""><img src="../Images/454dcdd901ee4a989b403933c18bf2cd.png" class="img-fluid center" alt="Pass Variables to Deployment" data-original-src="https://i.octopus.com/blog/2018-02/deploy-release-step/deploy-release-variables.png"/>T2】</a></p>
+
+<p><a href="https://octopus.com/docs/deployment-process/variables/output-variables">由<em>部署发布</em>步骤触发的部署的输出变量</a>被捕获，并作为<em>部署发布</em>步骤的输出变量公开。</p>
+
+<p>这允许父流程使用子部署的输出，甚至传递到由后续<em>部署发布</em>步骤触发的部署中。这使得许多协调场景成为可能。</p>
+
+<h2 id="when-can-i-get-my-hands-on-it">我什么时候能拿到它？</h2>
+
+<p>该功能将在Octopus 2018.2版本中提供，该版本将于2月初发布。</p>
+
+<p><em>愉快的(多项目)部署！</em></p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

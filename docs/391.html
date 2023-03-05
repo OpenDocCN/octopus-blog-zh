@@ -1,0 +1,202 @@
+<html>
+<head>
+<title>Integrating OAuth with Kubernetes - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>集成OAuth和Kubernetes - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/kubernetes-oauth#2021-08-12">https://octopus.com/blog/kubernetes-oauth#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-oauth/kubernetes-oauth.png" class="zoom" data-title=""><img src="../Images/8f6ddec414242ddbd59e46f72366beda.png" class="img-fluid center" alt="Kubernetes OAuth illustration showing a locked treasure chest representing Kubernetes" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-oauth/kubernetes-oauth.png"/>T2】</a></p>
+
+<p>对于组织中的任何基础设施来说，管理断开连接的用户数据库都是一个主要的难点，更不用说安全漏洞了。Kubernetes也不例外，因为默认情况下，系统的用户是特定于Kubernetes本身的。</p>
+
+<p>这个问题的一个常见解决方案是允许用户通过OAuth向Kubernetes进行身份验证，这意味着可以使用现有的登录提供商(如Google或Microsoft)来验证用户凭证。</p>
+
+<p>在这篇博文中，我们将看看如何将Minikube与Google集成，以在Kubernetes中提供基于浏览器的登录。</p>
+
+
+
+<h2 id="create-the-oauth-client">创建OAuth客户端</h2>
+
+<p>第一步是在Google中创建一个OAuth客户端。打开<a href="https://console.cloud.google.com/apis/credentials" rel="nofollow">https://console.cloud.google.com/apis/credentials</a>，从下拉列表中选择一个项目，或者创建一个新项目。接下来，从<strong>创建凭证</strong>下拉列表中选择<strong> OAuth客户端ID </strong>选项:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-oauth/oauth-client-id.png" class="zoom" data-title=""><img src="../Images/6535c00ab852e9cb9d3c8d69eb0ec48a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-oauth/oauth-client-id.png"/>T2】</a></p>
+
+<p>选择<strong>其他</strong>选项，将客户端名称设置为<strong> minikube </strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-oauth/other-client.png" class="zoom" data-title=""><img src="../Images/9b26daa709daeb1f66db579a9fe2256a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-oauth/other-client.png"/>T2】</a></p>
+
+<p>你现在会看到两个代码:客户端ID 和客户端密码<strong>。记下这两个代码，因为我们稍后会用到它们:</strong></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-oauth/codes.png" class="zoom" data-title=""><img src="../Images/86967b30091f0c1ec992550a2c7f605b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-oauth/codes.png"/>T2】</a></p>
+
+<p>生成这些代码后，我们就可以启动Minikube了。</p>
+
+<h2 id="configure-minikube-with-the-oauth-details">使用OAuth详细信息配置Minikube</h2>
+
+<p>要允许Minikube接受Google登录，我们需要传递以下参数:</p>
+
+<ul>
+<li><code>--extra-config=apiserver.authorization-mode=RBAC</code></li>
+<li><code>--extra-config=apiserver.oidc-issuer-url="https://accounts.google.com"</code></li>
+<li><code>--extra-config=apiserver.oidc-client-id=&lt;Client ID&gt;</code></li>
+<li><code>--extra-config=apiserver.oidc-username-claim=email</code></li>
+</ul>
+
+<p>这些值启用RBAC安全性，配置我们刚刚创建的OAuth客户端ID，并指定Google用户的电子邮件地址成为他们的Kubernetes用户名。</p>
+
+<p>因为我运行的是Windows和PowerShell，所以我的Minikube start命令如下所示:</p>
+
+<pre><code class="language-PowerShell">minikube start `
+--extra-config=apiserver.authorization-mode=RBAC `
+--extra-config=apiserver.oidc-issuer-url="https://accounts.google.com" `
+--extra-config=apiserver.oidc-client-id=471129667683-049fg2q12m993hk8c5hq1jhf0ji1ske5.apps.googleusercontent.com `
+--extra-config=apiserver.oidc-username-claim=email `
+--vm-driver hyperv `
+--hyperv-virtual-switch "External Switch"
+</code></pre>
+
+<p>您应该会看到如下所示的输出:</p>
+
+<pre><code>PS C:\Users\Matthew&gt; minikube start --extra-config=apiserver.authorization-mode=RBAC `
+&gt;&gt; --extra-config=apiserver.oidc-issuer-url="https://accounts.google.com" `
+&gt;&gt; --extra-config=apiserver.oidc-client-id=471129667683-049fg2q12m993hk8c5hq1jhf0ji1ske5.apps.googleusercontent.com `
+&gt;&gt; --extra-config=apiserver.oidc-username-claim=email `
+&gt;&gt; --vm-driver hyperv `
+&gt;&gt; --hyperv-virtual-switch "External Switch"
+* minikube v1.3.1 on Microsoft Windows 10 Pro 10.0.18362 Build 18362
+* Creating hyperv VM (CPUs=2, Memory=2000MB, Disk=20000MB) ...
+* Preparing Kubernetes v1.15.2 on Docker 18.09.8 ...
+  - apiserver.authorization-mode=RBAC
+  - apiserver.oidc-issuer-url=https://accounts.google.com
+  - apiserver.oidc-client-id=471129667683-8bsdnomeq3autchmmvut6949hrh74mpg.apps.googleusercontent.com
+  - apiserver.oidc-username-claim=email
+* Downloading kubeadm v1.15.2
+* Downloading kubelet v1.15.2
+* Pulling images ...
+* Launching Kubernetes ...
+* Waiting for: apiserver proxy etcd scheduler controller dns
+* Done! kubectl is now configured to use "minikube"
+</code></pre>
+
+<p>此时，Minikube已经用管理员凭证配置了一个本地<code>~/.kube/config</code>文件，所以我们可以直接使用<code>kubectl</code>。但是，任何操作都将以本地Kubernetes管理员的身份执行，而不是以Google用户的身份。不过，这没问题，因为我们还有一些额外的配置要做:</p>
+
+<pre><code>PS C:\Users\Matthew&gt; kubectl get nodes
+NAME       STATUS   ROLES    AGE     VERSION
+minikube   Ready    master   4m49s   v1.15.2
+</code></pre>
+
+<h2 id="adding-cluster-roles">添加集群角色</h2>
+
+<p>在为我们的新Google用户做准备时，我们需要定义一个<code>ClusterRole</code>来授予他们管理员访问权限，并定义一个<code>ClusterRoleBinding</code>来将用户绑定到角色。</p>
+
+<p>这里是<code>ClusterRole</code> YAML，它让用户管理员可以访问Minikube集群:</p>
+
+<pre><code class="language-yaml">kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admin-role
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+</code></pre>
+
+<p>下面是<code>ClusterRoleBinding</code> YAML，它将新用户(在本例中我是<code>matthew.casperson@octopus.com</code>)映射到我们上面定义的角色:</p>
+
+<pre><code class="language-yaml">kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admin-binding
+subjects:
+- kind: User
+  name: matthew.casperson@octopus.com
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin-role
+</code></pre>
+
+<p>将这些文件的内容保存到<code>clusterrole.yaml</code>和<code>clusterrolebinding.yaml</code>，然后用命令应用它们:</p>
+
+<pre><code>kubectl apply -f clusterrole.yaml
+kubectl apply -f clusterrolebinding.yaml
+</code></pre>
+
+<h2 id="generating-the-oauth-tokens">生成OAuth令牌</h2>
+
+<p>您可能已经熟悉OAuth登录，因为它们通常用于在web应用程序中对用户进行身份验证。</p>
+
+<p>然而，从控制台应用程序对用户进行身份验证略有不同。我们仍然需要用户打开一个网页并用Google验证自己，但是<code>kubectl</code>本身不会与web浏览器交互，所以我们需要一些其他的方法来生成这些代码。</p>
+
+<p>这就是<a href="https://github.com/micahhausler/k8s-oidc-helper" rel="nofollow"> k8s-oidc-helper </a>的用武之地。这个工具生成一个我们可以在浏览器中打开的URL。URL显示所需的Google令牌，然后我们可以将其粘贴回控制台，并且<code>k8s-oidc-helper</code>生成<code>kubectl</code>验证用户所需的代码。让我们看看这个过程是如何进行的。</p>
+
+<p>要安装<code>k8s-oidc-user</code>，确保安装了<a href="https://golang.org/doc/install" rel="nofollow"> Go工具</a>，然后运行:</p>
+
+<pre><code>go get github.com/micahhausler/k8s-oidc-helper
+</code></pre>
+
+<p>一旦安装完毕，我们就可以使用前一步生成的<strong>客户端ID </strong>和<strong>客户端秘密</strong>运行<code>k8s-oidc-helper</code>:</p>
+
+<pre><code>k8s-oidc-helper --client-id 471129667683-049fg2q12m993hk8c5hq1jhf0ji1ske5.apps.googleusercontent.com --client-secret Cz2FbfSsue2RI_KKd2EawEjG
+</code></pre>
+
+<p>系统将提示您打开一个URL:</p>
+
+<pre><code>PS C:\Users\Matthew\Desktop&gt; k8s-oidc-helper --client-id 471129667683-049fg2q12m993hk8c5hq1jhf0ji1ske5.apps.googleusercontent.com --client-secret Cz2FbfSsue2RI_KKd2EawEjG                                                         
+Open this url in your browser: https://accounts.google.com/o/oauth2/auth?redirect_uri=urn:ietf:wg:oauth:2.0:oob&amp;response_type=code&amp;client_id=471129667683-049fg2q12m993hk8c5hq1jhf0ji1ske5.apps.googleusercontent.com&amp;scope=openid+email+profile&amp;approval_prompt=force&amp;access_type=offline          
+
+Enter the code Google gave you:  
+</code></pre>
+
+<p>打开网址，出现熟悉的谷歌登录页面。一旦您确认了您的帐户详细信息，Google将提供一个代码粘贴回控制台:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/kubernetes-oauth/code.png" class="zoom" data-title=""><img src="../Images/bfbda83ae597cc96f26b2f4eb2a74305.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-10/kubernetes-oauth/code.png"/>T2】</a></p>
+
+<p>然后，<code>k8s-oidc-helper</code>会给你一份部分完整的<code>~/.kube/config</code>文件副本，供你保存在本地。</p>
+
+<p>在<code>users</code>部分下的代码就是我们所需要的，所以替换<code>~/.kube/config</code>文件中现有的<code>users</code>部分，并将<code>contexts.user</code>参数更改为新的用户名。您将得到一个类似这样的<code>~/.kube/config</code>文件:</p>
+
+<pre><code class="language-yaml">apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: C:\Users\Matthew\.minikube\ca.crt
+    server: https://10.1.1.94:8443
+  name: minikube
+contexts:
+- context:
+    cluster: minikube
+    # Make sure this is the same as the user below
+    user: matthew.casperson@octopus.com
+  name: minikube
+current-context: minikube
+kind: Config
+preferences: {}
+users:
+# This section came from k8s-oidc-helper
+- name: matthew.casperson@octopus.com
+  user:
+    auth-provider:
+      config:
+        client-id: 471129667683-049fg2q12m993hk8c5hq1jhf0ji1ske5.apps.googleusercontent.com
+        client-secret: Cz2FbfSsue2RI_KKd2EawEjG
+        id-token: eyJhbGciOiJSUzI1NiIsImtpZCI6ImY2ZjgwZjM3ZjIxYzIzZTYxZjJiZTQyMzFlMjdkMjY5ZDY2OTUzMjkiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJhY2NvdW50cy5nb29nbGUuY29tIiwiYXpwIjoiNDcxMTI5NjY3NjgzLTA0OWZnMnExMm05OTNoazhjNWhxMWpoZjBqaTFza2U1LmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29tIiwiYXVkIjoiNDcxMTI5NjY3NjgzLTA0OWZnMnExMm05OTNoazhjNWhxMWpoZjBqaTFza2U1LmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29tIiwic3ViIjoiMTAyNjAzOTY1MzQzNTAzMjY0MDc5IiwiaGQiOiJvY3RvcHVzLmNvbSIsImVtYWlsIjoibUVFYufyutfBV5jYXNwZXJzb25Ab2N0b3B1cy5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiYXRfaGFzaCI6InlMSjhGRHZVdjhQVUktVDduN0hRSEEiLCJpYXQiOjE1NjcwNDk1MTIsImV4wegvfiye2NzA1MzExMn0.Rhz_aiPvUVt3kotiv6nPeqK0JYJHjaOaaCPhMpEuEWUcNNaQjmFhIrMvbRYggtvSSnD7NYlrY02fTl9XfeBCssqhMcNpYpzehO08844w7_mjPZOLPRygZrVnWWTHvMdIHk4_oolDBYA1w6_whJ7T2ZTlRViEJJMEwkTaRCaG8BXdNg0CgvzhCpNB7BC-Dv9Xc2hvRmkzwZBJyDbtnkFfeDX9TDrQtdwbKtrhjWlTFdtlq8o0lJQKSfXRrL6fF36kQvWwSTHbB8GSfAZESsT6yaBfhKHsoByzahPw5uYjt3n5dtOoUt8kVgJfSTBzNedpsiVwpNM1YLzaBJQUGYNypQ
+        idp-issuer-url: https://accounts.google.com
+        refresh-token: 1/_lGBydf3ymsn4ybwrLZWqPVNtggmDFgrYIqDfKrpSzVK0ZjkigfuNX2ze9cyNc3-b
+      name: oidc
+
+</code></pre>
+
+<p>此时，当您使用<code>kubectl</code>时，您将被认证为Google用户。</p>
+
+<p>请注意，任何潜在的Google用户都可以生成使用<code>kubectl</code>的代码，但是如果没有相应的<code>ClusterRoleBinding</code>，这些用户将实际上无权做任何事情。</p>
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>将Kubernetes与OAuth提供者集成在一起，就不需要再维护另一个由Kubernetes自己管理的断开连接的用户数据库，而且它允许您利用已经配置好的任何现有帐户提供者。<code>k8s-oidc-user</code>提供了一种生成所需代码的方法，之后<code>kubectl</code>就像对任何其他Kubernetes帐户一样工作。</p>
+
+                    
+                    
+</body>
+</html>

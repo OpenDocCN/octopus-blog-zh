@@ -1,0 +1,139 @@
+<html>
+<head>
+<title>Scheduled Recurring Deployments RFC - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>计划的重复部署RFC - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/scheduled-recurring-deployments-rfc#2021-07-07">https://octopus.com/blog/scheduled-recurring-deployments-rfc#2021-07-07</a></blockquote>
+                        <blockquote class="blockquote">
+<p>在我们的用户呼声中，第五高的投票项目是能够<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/6599104-recurring-scheduled-deployments" rel="nofollow">安排重复部署</a>。</p>
+</blockquote>
+
+<p>这篇文章是对我们现阶段想法的征求意见。</p>
+
+
+
+<h2 id="what-are-we-trying-to-solve">我们要解决什么？</h2>
+
+<p>我们有很多客户告诉我们，他们希望能够制定一个计划，让Octopus自动向某个环境推广或部署一个版本。</p>
+
+<p>目前有很多方法可以通过使用我们全面的API来做到这一点。但是它涉及到设置一个调度任务，该任务调用一个脚本(或者创建一个Azure函数),该脚本调用Octopus API来升级/部署有问题的版本。对于许多其他CI/CD工具现成提供的东西来说，这可能是一个相当麻烦的解决方案。</p>
+
+<p>根据我们的内部讨论和对UserVoice项目发表评论的客户，我们确定我们有几个如何实现该功能的选项。</p>
+
+<h3 id="project-triggers">项目触发器</h3>
+
+<p>项目触发器的优势在于，您可以指定在决定推广或部署哪个版本时应该使用哪个渠道，并且可用的环境也将由渠道中使用的生命周期决定。项目触发器也有不好的一面，因为您必须在每个项目上指定触发器。</p>
+
+<p>计划的重复部署配置位于项目的<code>Triggers</code>选项卡下:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-triggers-tab.png" class="zoom" data-title=""><img src="../Images/f9bd8e8a47f858dd69cdb4da42dd993d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-triggers-tab.png"/>T2】</a></p>
+
+<p>创建新的调度部署触发器会将您带到一个新页面，在该页面中，您可以配置调度详细信息以及触发器运行时应该执行的操作。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-scheduled-trigger.png" class="zoom" data-title=""><img src="../Images/0f94d48b5910969b8a84c1396b98afb6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-scheduled-trigger.png"/>T2】</a></p>
+
+<p>添加新触发器后，它将出现在已配置的触发器列表中，并允许您编辑、禁用、克隆或删除触发器。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-scheduled-triggers-list.png" class="zoom" data-title=""><img src="../Images/2dbffe92024a0a48307a525b66c5ca33.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-scheduled-triggers-list.png"/>T2】</a></p>
+
+<h3 id="lifecycle-triggers">生命周期触发器</h3>
+
+<p>如果您的项目使用通道，则生命周期触发器将只能部署到默认通道(因为通道是特定于项目的)。另一方面，生命周期触发器的优点是您可以在许多项目中共享相同的计划，而不是必须在每个项目中指定它。</p>
+
+<p>定期重复部署配置将位于生命周期的右侧。</p>
+
+<p>【T2 <img src="../Images/aa664d53ef0ffcb4debe536fa52e8bba.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-triggers-on-lifecycle.png"/></p>
+
+<p>创建新的计划部署触发器将打开一个对话框，您可以在其中配置计划详细信息以及在触发器运行时应该采取的操作。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-add-trigger-on-lifecycle.png" class="zoom" data-title=""><img src="../Images/ab184351ef464d4853a9a80db9dc2da4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-add-trigger-on-lifecycle.png"/>T2】</a></p>
+
+<h3 id="trigger-schedules">触发计划</h3>
+
+<p>以下触发器计划用于配置触发器运行的时间</p>
+
+<ul>
+<li>每天地；天天地</li>
+<li>每周天数</li>
+<li>每月天数</li>
+<li>自定义<code>CRON</code>表达式</li>
+</ul>
+
+<p>每日和每周天数计划允许选择时间间隔，可用的时间间隔有:</p>
+
+<ul>
+<li>每天一次</li>
+<li>每隔x小时</li>
+<li>每隔x分钟</li>
+</ul>
+
+<h4 id="daily-schedule">每日计划</h4>
+
+<p>从指定的开始时间开始，按照每天选择的时间间隔跑步。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-daily-trigger.png" class="zoom" data-title=""><img src="../Images/8fc57c8b5b5a1e2b2f08cca70e1edc4c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-daily-trigger.png"/>T2】</a></p>
+
+<h4 id="days-per-week-schedule">每周天数计划</h4>
+
+<p>从指定的开始时间开始，使用在指定日期选择的时间间隔跑步。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-days-per-week-trigger.png" class="zoom" data-title=""><img src="../Images/c4ba247783ef91c340f67144d148638a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-days-per-week-trigger.png"/>T2】</a></p>
+
+<h4 id="days-per-month-schedule">每月天数计划</h4>
+
+<p>在一个月中的某一天，或一个月中的第n个特定工作日，在指定的开始时间运行。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-days-per-month-trigger.png" class="zoom" data-title=""><img src="../Images/8622d883526d83ddba981ac9536c5cdc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-days-per-month-trigger.png"/>T2】</a></p>
+
+<h4 id="custom-cron-expression">自定义<code>CRON</code>表达式</h4>
+
+<p>根据一个<a href="https://en.wikipedia.org/wiki/Cron#CRON_expression" rel="nofollow"> CRON表达式</a>运行。</p>
+
+<blockquote class="blockquote">
+<p>CRON表达式是一个字符串，包含由空格分隔的五或六个字段，表示一组时间，通常作为执行某个例程的时间表。</p>
+</blockquote>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-cron-trigger.png" class="zoom" data-title=""><img src="../Images/5267fd927c9c16af7e8184eaac992ae7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-cron-trigger.png"/></a>T2】</p>
+
+<h3 id="trigger-actions">触发动作</h3>
+
+<p>以下触发操作可用于配置运行计划部署时应该发生的情况:</p>
+
+<ul>
+<li>推广最新版本</li>
+<li>部署最新版本</li>
+<li>部署新版本</li>
+</ul>
+
+
+
+<p>将所选源环境中最新的<strong>成功的</strong>版本升级到所选目标环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-promote-latest-release.png" class="zoom" data-title=""><img src="../Images/6214e964792cd30b145f3549f7f006e8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-promote-latest-release.png"/>T2】</a></p>
+
+<h4 id="deploy-latest-release">部署最新版本</h4>
+
+<p>将项目中最新的<strong>成功</strong>版本部署到所选的环境中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-deploy-latest-release.png" class="zoom" data-title=""><img src="../Images/d04988f2253e11f0c78ca53a95f0231a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-deploy-latest-release.png"/>T2】</a></p>
+
+<h4 id="create-and-deploy-new-release">创建和部署新版本</h4>
+
+<p>创建一个新版本，并将其部署到所选的环境中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-scheduled-trigger-deploy-new-release.png" class="zoom" data-title=""><img src="../Images/1182d52b622c58cd0b692d526804b93a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-scheduled-trigger-deploy-new-release.png"/>T2】</a></p>
+
+<p><strong>部署带有提示值(如包版本和提示变量)的新版本</strong> <a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/srd-new-scheduled-trigger-deploy-new-release-prompted-vars.png" class="zoom" data-title=""> <img src="../Images/e30247458b1f1874a10fd25a45676285.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-10/srd-new-scheduled-trigger-deploy-new-release-prompted-vars.png"/> </a></p>
+
+<h2 id="feedback">反馈</h2>
+
+<p><strong>我们非常希望收到您的来信！也许我们在你的场景中遗漏了一些拼图？</strong></p>
+
+<p>如果您对计划的周期性部署有任何其他想法或意见，请在下面添加您的评论或评论并关注开放的<a href="https://github.com/OctopusDeploy/Issues/issues/3633" rel="nofollow"> GitHub标签#3363 </a>。</p>
+
+                    
+                    
+</body>
+</html>

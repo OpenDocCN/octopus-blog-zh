@@ -1,0 +1,146 @@
+<html>
+<head>
+<title>Octopus Deploy 3.4 EAP - Beta 1 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通部署3.4 EAP - Beta 1 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-deploy-3.4-eap-beta1#2016-08-24">https://octopus.com/blog/octopus-deploy-3.4-eap-beta1#2016-08-24</a></blockquote>
+                        <p><strong> Octopus Deploy 3.4已经发货！阅读<a href="https://octopus.com/blog/octopus-deploy-3.4">博文</a>和<a href="https://octopus.com/downloads">今天就下载</a>！</strong></p>
+
+<p>我们很自豪地宣布Beta 1的发布，作为Octopus Deploy 3.4的<a href="http://docs.octopusdeploy.com/display/ODEAP/Octopus+Deploy+EAP">早期访问计划(EAP) </a>的一部分！还有时间参与进来，<a href="#feedback">让我们知道你的想法</a>！</p>
+
+
+
+<h2>Octopus Deploy 3.4 Beta 1中有哪些功能？<a name="what-is-available"/></h2>
+
+<p>在这个版本中，我们已经完成了我们计划发布的核心部署功能，编写了指南来帮助您开始，并且我们已经在内部测试了所有这些功能几个星期。</p>
+
+<h3>多租户部署<a name="multi-tenant-deployments"/></h3>
+
+<p>多租户部署基本上已经完成，除了一些<a href="#notable-omissions">值得注意的遗漏</a>，并且已经准备好让您开始认真测试。</p>
+
+<p>开始多租户部署的最佳地方是我们的<a href="http://docs.octopusdeploy.com/display/OD/Multi-tenant+deployments">指南</a>。</p>
+
+<p><img src="../Images/599778a0278972f47a0ac2de5987eaa3.png" alt="" data-original-src="https://i.octopus.com/blog/201606-showdeploymentprogressondashboard-5N67.gif"/></p>
+
+<h3>支持弹性和瞬态环境<a name="elastic-and-transient-environments"/></h3>
+
+<p>我们已经完成了针对弹性和瞬态环境的特性集，包括<a href="http://docs.octopusdeploy.com/display/OD/Machine+Policies">机器策略</a>、新项目配置选项、<a href="http://docs.octopusdeploy.com/display/OD/Keeping+deployment+targets+up+to+date">项目触发器</a>(自动部署)，以及一个您可以添加到部署流程中的新健康检查步骤。</p>
+
+<p><img src="../Images/b640188e3ef8e525cf8b9a757d415742.png" alt="" data-original-src="https://i.octopus.com/blog/201606-projecttrigger-37VL.png"/></p>
+
+<p>您可以结合这些功能来实现以下场景:</p>
+
+<ul>
+<li>根据需求自动扩展web服务器</li>
+<li>更新经常与公司网络断开连接的工作站/笔记本电脑上的应用程序</li>
+<li>通过不可靠或缓慢的网络连接优雅地处理远程部署目标</li>
+</ul>
+
+<p>开始使用弹性和瞬态环境支持的最佳地方是我们的<a href="http://docs.octopusdeploy.com/display/OD/Elastic+and+Transient+Environments">指南</a>。</p>
+
+<h3>云区<a name="cloud-regions"/></h3>
+
+<p>当我们发布Octopus 3.0时，我们认为我们在部署目标<a href="http://docs.octopusdeploy.com/display/OD/Azure+Cloud+Service+Target"> Azure云服务</a>和<a href="http://docs.octopusdeploy.com/display/OD/Azure+Web+Apps"> Azure Web App </a>方面做了一件好事——事实也的确如此。部署目标解决了一组需求，替换的<a href="http://docs.octopusdeploy.com/display/OD/Deploying+a+package+to+an+Azure+Cloud+Service"> Azure云服务</a>和<a href="http://docs.octopusdeploy.com/display/OD/Deploying+a+package+to+an+Azure+Web+App"> Azure Web App </a>部署步骤解决了另一组需求。我们在之前的博客文章中写了更多关于这个的内容。</p>
+
+<p>现在，我们引入了<a href="http://docs.octopusdeploy.com/display/OD/Cloud+Regions">云区域</a>作为弥合这一差距的一种方式，并使得为多区域云应用设计<a href="http://docs.octopusdeploy.com/display/OD/Rolling+deployments">滚动部署</a>变得更加容易。基于此，我们将开始放弃部署目标的过程。您可以在下面的中了解有关此<a href="#deprecating-azure-targets">的更多信息，我们将为您提供迁移所需的所有详细信息，作为我们文档中升级指南的一部分。</a></p>
+
+<p><img src="../Images/34261b3ece3ec67466fdbdcffbf80c0d.png" alt="" data-original-src="https://i.octopus.com/blog/201606-cloudregions-4RSW.png"/></p>
+
+<h3>触手通信的代理支持<a name="tentacle-proxy-support"/></h3>
+
+<p>我们在Octopus服务器与触手通信的协议中实现了对HTTP代理服务器的支持。这对轮询和监听触角都有效。如果需要，每个触手可以配置成使用不同的代理。您甚至可以使用一个代理将触手连接到Octopus服务器，并使用另一个代理处理一般的web请求。</p>
+
+<p><img src="../Images/4b20a4d818ae2c66a4140d6d257208da.png" alt="" data-original-src="https://i.octopus.com/blog/201606-2016-06-2113_48_16-editdeploymenttarget-proxyselection-octopusdeploy-H98F.png"/></p>
+
+<h3>Octopus Deploy 3.4 Beta 1 <a name="notable-omissions"/>中的一些值得注意的遗漏</h3>
+
+<p>为了更快地向我们的客户发布这个测试版，并利用您的反馈，我们做出了一些艰难的决定。</p>
+
+<ul>
+<li>在Beta 1中，您可以使用web门户或API来部署发布，但是您不能使用<code>octo.exe</code>或任何构建服务器扩展。我们希望在Beta 2中更新这些内容。</li>
+<li>在Beta 1中，您可以显式地使用一个或多个租户来实现基于租户的安全性，但是在Beta 1中您不能使用租户标签。现在不要使用租户标签，只需显式地将租户添加到您的团队中。我们希望在Beta 2中完成使用租户标签的基于租户的安全性。</li>
+<li>我们决定推迟一些额外的特性，这些特性将使处理大量租户和部署目标变得更加容易。</li>
+<li>我们计划调整计算租户部署中包含哪些部署目标的方法，但我们未能在Beta 1中及时完成。目前，没有租户筛选的部署目标被视为“对所有租户可用”。在Beta 1中，最安全的方法是对所有环境使用租户，包括测试环境。在Beta 2(以及更高版本)中，我们希望将该模型简化为:<ul>
+<li>租用的部署使用租用的部署目标(具有某种租户过滤器的目标)。</li>
+<li>未租用的部署使用未租用的部署目标(没有任何类型的租户过滤器的目标)。</li>
+</ul></li>
+<li>我们还没有完成对API的审查，我们预计它会在Beta 1和Beta 2之间发生变化。我们小心翼翼地使用典型的API优先的方法来构建Octopus 3.4，但是在我们认为它稳定之前，我们想从几个不同的角度来审查这个API。</li>
+</ul>
+
+<h2>重大变更和废弃通知<a name="breaking-changes"/></h2>
+
+<h3>反对Azure部署目标<a name="deprecating-azure-targets"/></h3>
+
+<p>我们开始反对支持<a href="http://docs.octopusdeploy.com/display/OD/Azure+Cloud+Service+Target"> Azure云服务</a>和<a href="http://docs.octopusdeploy.com/display/OD/Azure+Web+Apps"> Azure Web App </a>部署目标。</p>
+
+<p>别担心，在Octopus 3.4中，你可以查看和编辑现有的Azure部署目标，并开始迁移它们以使用<a href="http://docs.octopusdeploy.com/display/OD/Deploying+a+package+to+an+Azure+Cloud+Service"> Azure云服务</a>和<a href="http://docs.octopusdeploy.com/display/OD/Deploying+a+package+to+an+Azure+Web+App"> Azure Web App </a>部署步骤和<a href="#cloud-regions">云区域</a>。</p>
+
+<p>在Octopus Deploy的未来版本中，我们将停止对Azure云服务和Azure Web App部署目标的支持。</p>
+
+<h3>运行状况检查结果的更改</h3>
+
+<p>我们为<a href="#elastic-and-transient-environments">弹性和瞬态环境</a>引入了一个新的属性<code>MachineResource.HealthStatus</code>，它可以是<code>Healthy</code>、<code>HealthyWithWarnings</code>、<code>Unhealthy</code>和<code>Unavailable</code>。在Octopus 3.4中，你可以继续使用现有的<code>MachineResource.Status</code>，它可以是<code>Online</code>或<code>Offline</code>，但是我们已经将<code>Status</code>属性标记为<code>Obsolete</code>，并将在未来的版本中删除它。</p>
+
+<h3>触手已被修补，以配合章鱼3.4 <a name="breaking-tentacle"/></h3>
+
+<p>如果你使用的是旧版本的触手，用Octopus 3.4注册一个全新的触手会失败。发生这种情况是因为老触手不理解<a href="#cloud-regions">云区域</a>并且不能反序列化它们。我们已经修补了触手，以便在未来更能适应这种变化。</p>
+
+<p><strong>注意</strong>:这个问题只影响<strong>向你的章鱼服务器注册新的触手</strong>。现有的触手将继续正常工作。</p>
+
+<ul>
+<li><strong>注册3.0.x触须(用于老年人。NET 4.0-only服务器)</strong>:请下载<a href="https://octopus.com/downloads/3.0.26">触手3.0.26 </a>已经打了补丁，可以和Octopus 3.4一起使用。</li>
+<li><strong>注册新版本的触手</strong>:请开始使用a 3.4.x触手版本(我们推荐最新的)。</li>
+</ul>
+
+<h3>对内置存储库错误代码的更改</h3>
+
+<p>当您将一个重复的包推送到<a href="http://docs.octopusdeploy.com/display/OD/Pushing+packages+to+the+Built-In+repository">内置的包存储库</a>时，我们现在将用HTTP状态码<code>409 Conflict</code>而不是<code>400 Bad Request</code>来响应。像<code>nuget.exe</code>这样的客户端只会显示HTTP状态代码，丢弃Octopus返回的原因，解释为什么这是一个错误的请求。在这种情况下使用<code>409 Conflict</code>会使诊断更容易。参考<a href="https://github.com/OctopusDeploy/Issues/issues/2419">本GitHub问题</a>了解更多信息。</p>
+
+<h2>在我们发布Octopus 3.4之前还需要做些什么？<a name="leftovers"/></h2>
+
+<p>除了与我们出色的Octopus社区合作提供反馈，我们还需要:</p>
+
+<ul>
+<li>实现一些额外的特性，这些特性在处理大量租户和部署目标时会很好。</li>
+<li>继续充实我们的指南，帮助您充分利用这些新功能。</li>
+<li>使用API为租户迁移到Octopus 3.4提供指导。</li>
+<li>进一步提高具有数百个租户、环境和部署目标的大型安装的性能。</li>
+</ul>
+
+<p>我们非常兴奋地宣布，其他一些尚未为Beta 1做好准备，但将在Beta 2中发布的产品有:</p>
+
+
+
+
+
+
+
+<h2>已知问题<a name="known-issues"/></h2>
+
+<ul>
+<li>我们将继续在仪表盘上工作，它仍然有一些显示/数据问题。请随时将您在仪表盘上的<a href="#feedback">反馈</a>写给我们，以便我们将其纳入最终设计。</li>
+<li>旧的触角将无法注册与章鱼3.4与以下信息:<code>Octopus.Client.Exceptions.OctopusDeserializationException: Unable to process response from server: The given key was not present in the dictionary.</code> -见<a href="#breaking-tentacle">突破性的变化</a>。</li>
+</ul>
+
+<h2>Octopus Deploy Beta 1入门<a name="getting-started"/></h2>
+
+<p>使用来宾帐户在我们的<a href="http://octopus34beta1.southeastasia.cloudapp.azure.com/"> Beta 1演示服务器</a>上试用它，或者联系我们的支持团队获取提升的凭证。</p>
+
+<p><strong>订阅Azure？</strong>你可以使用我们在Azure Marketplace新发布的<a href="https://azure.microsoft.com/en-us/marketplace/?term=Octopus+Deploy">模板，使用你自己的Azure订阅来建立一个完整的Octopus设置</a>。<em>这将在虚拟机上安装最新稳定版本的Octopus服务器，但是您可以使用远程桌面将Octopus服务器升级到EAP版本。最后，完成后，您可以轻松地删除整个资源组！</em></p>
+
+<h3>想自己装？</h3>
+
+<p>Octopus Deploy附带45天的企业试用许可。<a href="http://docs.octopusdeploy.com/display/ODEAP/Octopus+Deploy+EAP">下载Octopus 3.4 Beta 1 </a>版本，浏览发行说明。我们将支持从这些测试版升级到正式版的Octopus 3.4，但不支持降级到以前的Octopus版本。如果你想升级现有的Octopus服务器，不要忘记备份和测试你的数据库。否则，我们建议安装在试用服务器上。</p>
+
+<h2>您的反馈确实很重要<a name="feedback"/></h2>
+
+<p>请在我们的<a href="http://help.octopusdeploy.com/discussions/beta-testing-feedback">论坛</a>发表反馈并加入讨论。</p>
+
+<p>来吧，参与进来，帮助我们构建迄今为止最好的Octopus部署。<em>部署愉快！</em></p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,146 @@
+<html>
+<head>
+<title>Deploying to Wildfly from Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从Octopus Deploy - Octopus Deploy部署到Wildfly</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/wildfly-deploy#2022-07-15">https://octopus.com/blog/wildfly-deploy#2022-07-15</a></blockquote>
+                        <p>这篇文章是为老版本的Octopus写的，在加入原生野生支持之前。</p>
+<p>请访问<a href="https://octopus.com/docs/guides?destination=WildFly" class="alert-link">章鱼指南</a>获取关于部署到野外的最新说明。</p>
+
+
+<p>在Octopus，我们已经开始了一个项目，研究如何更好地支持Java开发人员。在之前的一篇博客文章中，我谈到了如何使用Octopus Deploy 将WAR文件部署到Tomcat。Tomcat无疑是当今产品中最受欢迎的Java应用服务器(根据来自<a href="https://plumbr.eu/blog/java/most-popular-java-application-servers-2017-edition" rel="nofollow"> Plumbr </a>和<a href="https://zeroturnaround.com/rebellabs/java-tools-and-technologies-landscape-for-2014/8/" rel="nofollow"> Rebel Labs </a>的统计，Tomcat占据了超过50%的市场份额)。下一个最受欢迎的应用服务器是JBoss/wildly，在这篇文章中，我将向您展示如何将WAR文件部署到Wildfly 11(目前在Alpha中)。</p>
+
+<p>像Tomcat一样，将WAR文件部署到Wildfly可以简单到只需将它复制到一个特殊的目录。在Wildfly的情况下，将WAR文件复制到<code>standalone/deployments</code>目录将触发Wildfly部署并运行应用程序。这是一个非常有效的部署方法，如果这对您有用，那么关于部署到Tomcat的博文同样适用于Wildfly。</p>
+
+<p>然而，有些情况下简单的文件拷贝在Wildfly中不起作用。特别是，部署到Wildfly域控制器通常是通过JBoss CLI工具完成的。</p>
+
+<h2 id="challenges-with-cli-deployments">CLI部署面临的挑战</h2>
+
+<p>当从Octopus Deploy部署WAR文件时，理想情况下，我们希望这些步骤是等幂的。幂等只是一种花哨的说法，表示部署可以运行任意次，最终结果都是一样的。</p>
+
+<p>JBoss CLI工具中的部署操作不是这样的。您不能执行CLI命令，如</p>
+
+<pre><code>deploy myApplication.war --all-server-groups
+</code></pre>
+
+<p>多次，因为一旦文件<code>myApplication.war</code>在Wildfly内容存储库中，如果没有像<code>--force</code>这样的选项，它就不能被覆盖。这自然会让您尝试运行这样的命令</p>
+
+<pre><code>deploy myApplication.war --all-server-groups --force
+</code></pre>
+
+<p>这是行不通的。您不能在一个命令中强制上传文件并将其部署到服务器组。</p>
+
+<p>这意味着，如果您希望能够将应用程序部署和重新部署到域环境中，您需要做一些额外的工作来确保正在运行的命令能够正常工作，无论该应用程序是否存在于Wildfly content repository中，它是否被分配到服务器组，以及它是否被启用或禁用。</p>
+
+<h2 id="a-groovy-solution">绝妙的解决方案</h2>
+
+<p>当我们谈到部署到一个Wildfly域时，我们希望完成两项任务:</p>
+
+<ul>
+<li>在Wildfly内容存储库中创建或更新WAR文件的内容。</li>
+<li>可以选择将WAR文件分配给处于启用或禁用状态的服务器组。</li>
+</ul>
+
+<p>这个Groovy脚本通过几个命令行参数公开了这些任务。在幕后，做了大量的工作来允许部署根据需要重新运行多次，并利用Spring retry框架来确保部署确实到达了Wildfly服务器。</p>
+
+<h2 id="leveraging-the-power-of-octopus-deploy">利用Octopus Deploy的力量</h2>
+
+<p>我们可以使用两种方法将文件放入Wildfly域控制器。</p>
+
+<p>第一种方法是通过管理界面将文件直接上传到Wildfly服务器。在这种情况下，Wildfly服务器将在公共IP地址上公开其管理端口，而Octopus Deploy服务器本身将运行脚本，将文件上传到Wildfly服务器。</p>
+
+<p>这种解决方案有一些缺点。</p>
+
+<ul>
+<li>这些文件的上传没有经过优化，这意味着当您上传100 MB的WAR文件时，您必须在每次重新部署时发送该数据的每个字节。</li>
+<li>您的Wildfly服务器需要在公共IP地址上公开管理接口。</li>
+<li>运行脚本的负担放在Octopus Deploy服务器上</li>
+</ul>
+
+<p>第二种方法是通过Octopus deploy package步骤将文件分发到Wildfly服务器，然后使用CLI工具的本地副本将文件上传到运行在同一实例上的Wildfly服务器。</p>
+
+<p>这个解决方案解决了第一种情况的缺点。</p>
+
+<ul>
+<li>通过Octopus Deploy分发的文件可以利用<a href="https://octopus.com/docs/deployments/packages/delta-compression-for-package-transfers">增量复制</a>。这意味着可能只复制包中已更改的部分，从而减少网络流量并缩短部署时间。</li>
+<li>Wildfly服务器只需要将其管理接口暴露给本地主机适配器，因为所有CLI命令都将从本地服务器运行。</li>
+<li>Octopus Deploy服务器只负责复制文件和脚本，而Wildfly服务器本身将在本地运行脚本。</li>
+</ul>
+
+<p>鉴于第二种方法的明显优势，这就是我们将如何进行。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>Wildfly域控制器服务器需要安装以下软件包:</p>
+
+<ul>
+<li>Groovy，由将部署WAR文件的脚本使用。</li>
+<li>章鱼部署乌贼所用的单色。</li>
+</ul>
+
+<p>使用<a href="http://sdkman.io/" class="alert-link" rel="nofollow"> SDKMAN </a>安装Groovy。它通常比您的Linux发行版附带的软件包做得更好。</p>
+
+
+<p>您需要将一个WAR文件打包并推送到Octopus Deploy服务器。参见关于部署到Tomcat 的博文，了解如何打包一个WAR文件并将其推送到Octopus。</p>
+
+<p>您还需要将Wildfly域控制器添加到Octopus环境中。正如我们在Tomcat示例中所做的，Wildfly服务器很可能使用SSH连接。</p>
+
+<p>最后，Wildfly服务器需要将Groovy脚本和<code>jboss-cli.xml</code>文件复制到一个位置，该位置可以被章鱼用来连接Wildfly服务器的SSH用户访问。我把<a href="https://github.com/OctopusDeploy/JBossDeployment.git" rel="nofollow">https://github.com/OctopusDeploy/JBossDeployment.git</a>回购克隆到了<code>/opt</code>，所以所有的文件都在<code>/opt/JBossDeployment</code>下。</p>
+
+<h2 id="deploying-to-a-wildfly-domain-controller">部署到Wildfly域控制器</h2>
+
+<p>将包部署到Wildfly将是一个两步的过程。</p>
+
+<h3 id="deploy-the-package">部署包</h3>
+
+<p>第一步将利用<code>Deploy a package</code>步骤将WAR文件放到Wildfly域控制器文件系统中。点击<code>Configure features</code>链接，勾选<code>Custom installation directory</code>选项。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/custom-installation-directory.png" class="zoom" data-title=""><img src="../Images/45e86617507397057988f50b094df41a.png" class="img-fluid center" alt="Custom Installation Directory" data-original-src="https://i.octopus.com/blog/2017-06/custom-installation-directory.png"/>T2】</a></p>
+
+<p>然后在<code>Install to</code>字段中定义保存WAR文件的目录。我用过目录<code>/var/deployments</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/copy-war-file.png" class="zoom" data-title=""><img src="../Images/06bf1208a945984ec095c2e435490a5b.png" class="img-fluid center" alt="Install to" data-original-src="https://i.octopus.com/blog/2017-06/copy-war-file.png"/>T2】</a></p>
+
+<p>确保Octopus连接到Wildfly服务器的SSH用户拥有将文件复制到该目录的权限，否则该步骤将失败。</p>
+
+
+<h3 id="run-the-script">运行脚本</h3>
+
+<p>第二步将利用<code>Run a Script</code>步骤从Bash启动Groovy脚本。</p>
+
+<p>将<code>Run on</code>选项设置为<code>Deployment targets</code>，选择<code>Bash</code>作为脚本类型，并输入以下内容作为脚本体:</p>
+
+<pre><code>cd /opt/JBossDeployment
+./deploy-app.groovy --controller=localhost --user=user --password=password --application=/var/deployments/demo.war --enabled-server-group=main-server-group
+</code></pre>
+
+<p>脚本第一次运行可能需要几分钟，因为它将下载Maven依赖项(由Groovy脚本中的<code>@Grab</code>注释引用)并将它们存储在本地缓存中。</p>
+
+<p>如果您想查看下载进度，请像这样运行脚本:</p>
+<pre><code>cd /opt/JBossDeployment
+groovy -Dgroovy.grape.report.downloads=true deploy-app.groovy --user=user --password=password --application=/var/deployments/demo.war --enabled-server-group=main-server-group
+</code></pre>
+
+
+<p>一旦下载了所有的依赖项，部署脚本将把WAR文件上传到Wildfly，将其添加到<code>main-server-group</code>服务器组，并启用它。</p>
+
+<h2 id="deploying-to-a-standalone-wildfly-instance">部署到独立的Wildfly实例</h2>
+
+<p>为独立Wildfly实例部署包的过程与部署到域控制器非常相似。唯一的区别是传递给Groovy脚本的参数。</p>
+
+<p>因为独立服务器没有服务器组的概念，所以删除了参数<code>enabled-server-group</code>。否则所有步骤保持不变。</p>
+
+<pre><code>cd /opt/JBossDeployment
+./deploy-app.groovy --controller=localhost --user=user --password=password --application=/var/deployments/demo.war
+</code></pre>
+
+<h2 id="next-steps">后续步骤</h2>
+
+<p>我们将使用像这里的脚本这样的实验来指导Octopus将来对Java和Wildfly这样的应用服务器的支持。在接下来的几周里，我们将为计划中的Java支持准备一份RFC，如果您对Java支持感兴趣，我们将非常感谢您的反馈。</p>
+
+                    
+                    
+</body>
+</html>

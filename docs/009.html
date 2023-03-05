@@ -1,0 +1,54 @@
+<html>
+<head>
+<title>What's new in Octopus 2.2 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2.2的新特性- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/2.2#2015-09-25">https://octopus.com/blog/2.2#2015-09-25</a></blockquote>
+                        <p>我们刚刚发布了章鱼部署2.2的预发布版本。这个版本包含了许多错误修复和小的增强，以及一些新的功能。</p>
+
+<h2>脚本控制台</h2>
+
+<p>对于管理员来说，2.2引入了一个新的<a href="http://docs.octopusdeploy.com/display/OD/Script+Console">脚本控制台</a>，它可以用来使用PowerShell执行特定的管理任务。这使得在多台机器上运行PowerShell代码片段变得容易，并且可以在一个地方查看结果。</p>
+
+<p><img src="../Images/3d312a481bca45a1e687a42d73f86af6.png" alt="Using the Octopus Script Console to execute one-off admin tasks" data-original-src="https://i.octopus.com/blog/migrated/2014-02-25_18_29_05-Script_Console_-_Octopus_Deploy_qemeut.png"/></p>
+
+<p>当脚本运行时，所有服务器的所有输出都显示在任务输出中:</p>
+
+<p><img src="../Images/aacba2fd3cb3bf759631d75a4c2c782b.png" alt="Output from the script" data-original-src="https://i.octopus.com/blog/migrated/2014-02-25_18_36_44-Script_run_from_management_console_-_Octopus_Deploy_cf5hqa.png"/></p>
+
+<p>以这种方式运行的脚本也会出现在审核日志中，您可以随时查看运行的脚本。我认为这是使用远程桌面或PowerShell Remoting来远程执行任务的一个很好的替代方法。</p>
+
+<h2>在Octopus中定义部署脚本</h2>
+
+<p>大多数时候，当您需要在Octopus中执行自定义操作时，您可以使用嵌入在NuGet包中的PowerShell脚本来执行它们。我们还支持将PowerShell脚本作为独立步骤运行的能力。</p>
+
+<p>但是有时您需要在包部署期间运行一个脚本(这样您就有了所有可用的变量)，但是不需要将它们嵌入到NuGet包中。现在，您可以使用包装步骤中的新功能来实现这一点:</p>
+
+<p><img src="../Images/e2fa88fa8bf1e175931b7dcb686d54bd.png" alt="Scripts feature" data-original-src="https://i.octopus.com/blog/migrated/2014-02-25_19_27_44-New_step_-_Octopus_Deploy_vovtkq.png"/></p>
+
+<p>启用该特性后，您的部署脚本现在可以在Octopus UI中编辑，而不是在NuGet包中编辑:</p>
+
+<p><img src="../Images/8421dbd12c9d409e73277a67486fa7e5.png" alt="Editing PowerShell scripts" data-original-src="https://i.octopus.com/blog/migrated/2014-02-25_19_30_47-New_step_-_Octopus_Deploy_rmagdx.png"/></p>
+
+<p>注意，通常我们仍然建议将定制的部署逻辑放在NuGet包中；这个特性实际上只适用于少数不可能实现这一点的场景。</p>
+
+<h2>全屏PowerShell编辑</h2>
+
+<p>在上面的屏幕截图中，您可能已经注意到，脚本编辑控件现在显示了一个按钮，使PowerShell编辑器全屏显示。不再编辑微小的文本区域！</p>
+
+<h2>IIS绑定可以是...束缚</h2>
+
+<p>另一个变化是，当使用自动IIS站点创建功能时，您现在可以在为站点定义的HTTP/HTTPS绑定上绑定字段。</p>
+
+<p><img src="../Images/02a87017dd9ea7e4b4dd6e287adf9a0c.png" alt="Binding the bindings" data-original-src="https://i.octopus.com/blog/migrated/2014-02-25_19_38_42-Octofront_Web_-_Octopus_Deploy_fd9se9.png"/></p>
+
+<h2>错误修复</h2>
+
+<p>相当多的小错误和改进也在这个版本中出现了——详情请查看<a href="http://octopusdeploy.com/downloads/2.2.1">版本说明</a>。愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

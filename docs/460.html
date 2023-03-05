@@ -1,0 +1,116 @@
+<html>
+<head>
+<title>Octopus 3.0 pre-release is here - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 3.0预发布已经发布- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-3.0-pre-release-is-here#2015-09-17">https://octopus.com/blog/octopus-3.0-pre-release-is-here#2015-09-17</a></blockquote>
+                        <p>因此，我们一直在等待的大消息，<a href="http://octopusdeploy.com/downloads/3.0.0">章鱼3.0预发布</a>现在向公众发布！</p>
+
+<p>我们知道我们花了比预期更长的时间，这是一个巨大的变化。这篇文章会给你一个主要的概述。</p>
+
+<p>对于TL；博士，仔细读下一点。</p>
+
+<p>这是一个预发布版本，这意味着它不是Octopus Deploy的官方支持版本(还有几周时间)。这意味着下载它，安装它，使用它，并通过给我们反馈和让我们知道您可能发现的任何错误来帮助我们改进它。但它可能并不完美，也不是最终版本。</p>
+
+<p>这也意味着我们以不同的方式对待反馈和错误报告。</p>
+
+<h2>这很重要。</h2>
+
+<p>对于Octopus Deploy 3.0预发布支持，反馈和错误报告请使用我们新的<a href="http://community.octopusdeploy.com/">社区论坛</a>。我们在那里张贴了很多，所以这是获得所有最新信息的地方。我们有一些如何张贴在那里，最终将成为博客帖子或文档的一部分。您还可以订阅预发布论坛，以便在有新活动时收到电子邮件。我们将在下载页面发布大部分版本，但我们可能会将一些临时版本直接发布到论坛。</p>
+
+<p>两个人的。*支持，使用我们的常规支持渠道(<a href="mailto:support@octopusdeploy.com">support@octopusdeploy.com</a>和<a href="http://help.octopusdeploy.com/home">我们的支持论坛</a>)。</p>
+
+<p>好了，关于细节，您可以阅读或观看我们的网络研讨会视频，更直观地了解新内容。</p>
+
+<iframe src="https://www.youtube.com/embed/eUT2Vtw3L54" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2>体系结构</h2>
+
+<p>在3.0中，我们花了很多时间，因为我们希望在性能和可支持性方面对架构进行一些更改。</p>
+
+<h3>SQL Server</h3>
+
+<p>这是你们期待已久的大日子。从3.0开始，我们已经从<a href="http://octopusdeploy.com/blog/tag/ravendb"> RavenDB迁移到SQL Server </a>作为数据存储。我们有几篇博文解释了这一变化的原因和方式，你<a href="http://octopusdeploy.com/blog/tag/ravendb">可以阅读</a>。这样做的结果是一个更快的产品，一个可伸缩性更好的产品，一个我们更容易支持的产品。这是以我们的安装体验为代价的，我们选择不捆绑嵌入式SQL Server实例，但我们也知道SQL Server安装对我们的客户来说是非常熟悉的事情。<a href="http://docs.octopusdeploy.com/display/OD3/SQL+Server+Database+Requirements">我们支持SQL Server 2008及更高版本</a>和Express edition，以及企业版和Azure SQL实例。</p>
+
+<h3>大比目鱼，我们的新通信栈</h3>
+
+<p>在章鱼2里。*我们使用了一个名为Pipefish的库，这是一个类似于Akka.NET的Actor框架，用于我们的通信。在3.0中，我们用我们称之为<a href="http://octopusdeploy.com/blog/tag/halibut">大比目鱼</a>的东西取代了它，这简化了我们的代码库，也给了我们更容易跟踪和调试的东西，这意味着更容易支持。如果你想去看看它是如何工作的，它也是<a href="https://github.com/OctopusDeploy/Halibut">开源的</a>。</p>
+
+<h2>表演</h2>
+
+<p>除了我们看到的这两个变化在开发成本和可支持性方面的收益之外，它们还使Octopus <a href="http://octopusdeploy.com/blog/tag/performance">速度更快，可伸缩性更强。我们将在未来几周与您分享更多的指标，因为我们会进一步推动它。</a></p>
+
+<h3>鱿鱼</h3>
+
+<p>在3.0中，我们还改变了触手架构。触须用来包含所有的代码来完成包的部署，运行我们的约定(例如，改变配置文件等)以及完成像IIS配置这样的任务。这使得它与Octopus版本紧密耦合。我们现在把它分成两部分。触手是一个代理，除了安全地传输文件和运行命令之外，它什么也不做，所有的逻辑都在<a href="http://octopusdeploy.com/blog/tag/calamari"> Calamari </a>中。较新的卡拉马里软件包作为健康检查过程的一部分被推送到触手，所以这意味着触手升级较少。Calamari也是<a href="https://github.com/OctopusDeploy/Calamari">开源</a>。这对您来说意味着您可以针对您的环境派生和调整它，并拥有一些您自己的部署代码。</p>
+
+<h2>新功能</h2>
+
+<p>我们最终将<a href="http://octopusdeploy.com/blog/tag/delta%20compression"> Delta压缩库</a>添加到Octopus中用于包传输。根据Nuget包的内容，您应该会看到需要在版本之间传输到触手的数据量显著减少。对于许多客户来说，这将大大节省时间和网络利用率。</p>
+
+<h2>部署目标</h2>
+
+<p>我们在过去已经谈过一些关于<a href="http://octopusdeploy.com/blog/tag/deployment%20targets">部署目标</a>的内容，但是我们已经把“机器”的概念变得更加通用了。</p>
+
+<h3>离线部署</h3>
+
+<p>离线部署是一个新的部署目标。很多人一直在寻求的。如果您是我们的客户之一，并且目前拥有用于部署到完全隔离的环境的自定义安装脚本，那么您现在可以添加一个离线部署目标。当您部署到这里时，我们将打包Nuget包、一个Calamari副本、一个包含发布变量的JSON文件和一个可以在目标机器上运行的引导脚本。这里有一个<a href="http://community.octopusdeploy.com/t/offline-deployments/40/8">“入门”</a>的帖子，如果你想用的话可以看看。</p>
+
+<p>这是把乌贼和触手分开的原因之一。现在，我们可以将所有的部署工具打包成这个包的一部分，您可以随身携带！</p>
+
+<h3>Azure网站</h3>
+
+<p>以前，我们的<a href="https://library.octopusdeploy.com/#!/listing">库</a>中有一个WebDeploy脚本，它使用Web Deploy将包的内容推送到Azure网站。这现在作为部署目标内置。</p>
+
+<h3>云服务</h3>
+
+<p>我们还改进了对云服务的支持。作为其中的一部分，您现在可以对您的包执行任何约定(变量、配置转换等),因为我们将解包您的。cspkg，运行约定，然后在推送到Azure之前重新打包。</p>
+
+<p>关于我们Azure支持的详细信息，<a href="http://community.octopusdeploy.com/t/azure-integration-in-octopus-deploy-3-0-an-overview/73">可以看看这个帖子</a>。</p>
+
+<h3>SSH部署</h3>
+
+<p>我们已经关注SSH和Linux支持很久了，现在它就在这里！为此，我们让卡拉马里与<a href="http://www.mono-project.com/">单声道</a>兼容，所以你需要在你的目标机器上安装。我们这样做是为了维护这些工具的单一代码库，并且Linux支持不会成为二等公民。此外，现在触手只是一个代理，这意味着我们两个平台的架构非常相似。要阅读更多关于我们的SSH支持<a href="http://community.octopusdeploy.com/t/introducing-the-ssh-endpoint/70">的内容，请阅读这篇文章</a>，为了浏览一下如何设置自己的<a href="http://community.octopusdeploy.com/t/my-first-ssh-endpoint/71">，我们还有另一个</a>。</p>
+
+<h2>移居者</h2>
+
+<p><a href="http://octopusdeploy.com/blog/tag/migrator">迁移器特性</a>是Octopus服务器管理器的一部分，也可以从命令行获得。该工具将:</p>
+
+<ul>
+<li>将2.6版本的备份导入3.0版本</li>
+<li>将3.0项目配置导出到JSON文件目录中</li>
+<li>将3.0 JSON文件导入Octopus Deploy</li>
+</ul>
+
+<p>这将帮助您将现有的Octopus配置升级到3.0。它将帮助您将3.0 POC或试运行过渡到生产环境。通过一些脚本，您还可以构建一些东西，从staging Octopus实例中导出项目，并将它们推送到生产实例中。</p>
+
+<p>通过一些脚本，您还可以...(要说出令人吃惊或高兴的事情)听着...将您的整个Octopus部署配置提交到Git(或者您选择的VCS)中！！！！！！</p>
+
+<h2>一些你看不到的东西</h2>
+
+<p>你可能会注意到Octopus 3.0目前看起来和2.6很像。当我们发布最终版本时，这种情况将会改变。我们将在接下来的几周内对它的外观和感觉进行一些改动，但我们希望能推出一些功能供您测试。</p>
+
+<p>您可能还会注意到，FTP没有作为部署目标。FTP是我们很难支持的另一个项目。我们使用的组件在某些环境下有效，而在其他环境下无效。由于使用FTP步骤的人非常少(我们认为他们中的很多人都是为Azure网站服务的)，我们决定不将该功能移植到3.0。您仍然可以用PowerShell步骤实现相同的目标，我们可以考虑在库中提供一个。</p>
+
+<p>如果这是你的一个问题，请让我们知道，我们会帮助你。</p>
+
+<p>你可能会遇到的另一件事是，因为我们已经完全改进了我们的云服务支持，旧的Azure Web角色支持不是migrator将带来的东西。如果你在2.6中使用这个特性，你需要做一些手工移植。</p>
+
+<h2>所以让我们开始吧</h2>
+
+<p>正如我在文章开头所说，社区论坛是获取更多信息、反馈、错误报告和讨论的地方。任何章鱼2。*应通过正常渠道提供支持。</p>
+
+<p>一旦我们退出预发布，这种情况将会改变，我们希望社区论坛作为一个讨论更多一般事情的地方继续存在。因此，去抓住位，并开始！</p>
+
+<h2>关于许可的快速说明</h2>
+
+<p>有几个人问过这个问题。如果您与我们签订了有效的维护协议(即，您在过去12个月内购买了Octopus或更新了维护协议),则3.0是免费升级。如果您的维护已过期，您需要续订才能升级。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

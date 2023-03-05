@@ -1,0 +1,102 @@
+<html>
+<head>
+<title>Selenium series: Preparing the resources - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Selenium系列:准备资源- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/selenium/29-preparing-the-resources/preparing-the-resources#2021-07-07">https://octopus.com/blog/selenium/29-preparing-the-resources/preparing-the-resources#2021-07-07</a></blockquote>
+                        <p>这篇文章是关于<a href="/blog/selenium/0-toc/webdriver-toc">创建Selenium WebDriver测试框架</a>的系列文章的一部分。</p>
+
+<p>当作为AWS Lambda运行代码时，我们负责在每次应用程序运行时配置环境。虽然Lambda通常被称为<em>无服务器</em>计算(这是我们在上一篇文章中安装的无服务器应用程序的名称的灵感来源)，但仍然涉及到服务器。术语“无服务器”指的是这样一个事实，即服务器不需要由我们作为最终用户来提供或管理，并且在大多数情况下，我们可以运行我们的代码，而不必太担心托管它的服务器的细节。</p>
+
+<p>然而，针对一个无头Chrome浏览器运行WebDriver测试确实需要我们配置环境，以确保我们需要的资源可用。也就是说，我们需要Chrome浏览器和可供WebDriver使用的二进制驱动程序。</p>
+
+<p>尽管我们的代码将在Linux服务器上运行，但我们没有从包管理器安装Chrome的奢侈。事实上，我们甚至不能下载和运行Chrome的标准发行版，因为托管Lambda函数的Linux环境还不够标准，不足以让这些官方版本工作。</p>
+
+<p>在<a href="https://medium.com/@marco.luethy/running-headless-chrome-on-aws-lambda-fa82ad33a9eb" rel="nofollow"> Medium </a>上有一个详细的帖子，讨论了如何编译Chrome的定制版本以在Lambda环境中运行。不用说，为Lambda构建Chrome的过程并不是特别容易。好消息是这篇博文的作者已经自动化了这个过程，并在https://github.com/adieuadieu/serverless-chrome/releases的<a href="https://github.com/adieuadieu/serverless-chrome/releases" rel="nofollow">为Lambda提供了定期更新的Chrome版本。我们将在自己的环境中使用这些版本。</a></p>
+
+<p>我们需要配置的第二个资源是Chrome二进制驱动程序。正如我们在本地运行WebDriver测试时所做的那样，作为测试的一部分，需要下载、提取和配置这个二进制驱动程序。</p>
+
+<p>当在本地运行测试时，将这个二进制驱动程序放在<code>PATH</code>上的一个目录中是很方便的。我们在Lambda环境中没有这种奢侈，因为它受到严格限制，我们没有权限将文件放在通常可能在<code>PATH</code>上的位置。但是这没关系，正如我们在之前的帖子中看到的，我们可以设置<code>webdriver.chrome.driver</code>系统属性指向二进制驱动的位置。</p>
+
+<p>Lambda还对Lambda包的大小进行了限制。今天，我们被限制在50MB的封装大小。正如我们将在下一篇文章中看到的，我们的代码已经占用了大量的限制，没有留下足够的空间来打包像Chrome发行版和二进制驱动程序这样的文件。</p>
+
+<p>Lambda确实允许我们在运行时下载和提取额外的文件，我们将利用这一点在每次测试中下载Chrome发行版和驱动程序。为了使下载这些文件的过程尽可能快，我们需要将它们托管在S3，它可以通过高速连接由Lambda函数访问，因为Lambda和S3都是由AWS托管的服务。</p>
+
+<p>首先，我们在本地下载这些文件。打开<a href="https://github.com/adieuadieu/serverless-chrome/releases" rel="nofollow">https://github.com/adieuadieu/serverless-chrome/releases</a>，下载Chrome发行版的64版本。</p>
+
+<p>在我的测试中，当从AWS Lambda调用时，版本65、66和67不能正常工作，所以我们必须专门使用版本64。</p>
+
+<p>一些版本的Chrome不工作的事实突出了我们在这里使用的代码应该被认为是实验性的。</p>
+
+
+<p>【T2 <img src="../Images/edf58489d59f8907bce5c64b23635806.png" class="img-fluid center" alt="C:\28ca95431547e5da83c8e95b3a3b6bd2" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image1.png"/></p>
+
+<p>然后打开<a href="https://sites.google.com/a/chromium.org/chromedriver/downloads" rel="nofollow">https://sites . Google . com/a/chromium . org/Chrome driver/downloads</a>找到支持Chrome 64的Linux二进制驱动的版本。从驱动列表中我们可以看到2.37版本支持Chrome 64。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image2.png" class="zoom" data-title=""><img src="../Images/6980e31b11a832c747a86238e474a7c6.png" class="img-fluid center" alt="C:\1a719eb43daf93909897f3f65732b248" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image2.png"/>T2】</a></p>
+
+<p>打开<a href="https://chromedriver.storage.googleapis.com/index.html?path=2.37/" rel="nofollow">https://chromedriver.storage.googleapis.com/index.html?path=2.37/ </a>下载Linux二进制驱动。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image3.png" class="zoom" data-title=""><img src="../Images/caa944e8f3c7ee0000479847283ce40a.png" class="img-fluid center" alt="C:\5225e05126dcf968a5ce5a38de270665" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image3.png"/>T2】</a></p>
+
+<p>然后，我们将把这些文件上传到S3，就像我们创建测试公共网站一样。</p>
+
+<p>从AWS控制台选择<span class="path">服务➜ S3 </span>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image4.png" class="zoom" data-title=""><img src="../Images/b4e448c245011d237bd84fb6a6078a19.png" class="img-fluid center" alt="C:\cd06dde8c14442ce9c2aab90fa2ea768" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image4.png"/>T2】</a></p>
+
+<p>我们将创建一个新的存储桶来存放这些文件，因此单击<code>Create bucket</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image5.png" class="zoom" data-title=""><img src="../Images/7f4dc619fe601745ab913c3718c28ecc.png" class="img-fluid center" alt="C:\2dacaadbf73502e50848ded228b6e551" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image5.png"/>T2】</a></p>
+
+<p>为您的存储桶命名，然后单击<code>Create</code>按钮。</p>
+
+<p>请记住，存储桶名称必须是全局唯一的，因此您将无法使用此处显示的名称。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image6.png" class="zoom" data-title=""><img src="../Images/72047e3941b5cf388474bf9f384f469f.png" class="img-fluid center" alt="C:\efc40bb0f38c8ecff615823743f260f6" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image6.png"/>T2】</a></p>
+
+<p>打开新创建的存储桶。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image7.png" class="zoom" data-title=""><img src="../Images/68916599917af486322f25ae454c0e5a.png" class="img-fluid center" alt="C:\15a6b421a9b0c264bb584f21ac49ab28" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image7.png"/>T2】</a></p>
+
+<p>点击<code>Upload</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image8.png" class="zoom" data-title=""><img src="../Images/d235c33bde7aefe946103ca9fa5c1407.png" class="img-fluid center" alt="C:\0b1219f9f544b6e824b80c0055092200" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image8.png"/>T2】</a></p>
+
+<p>点击<code>Add files</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image9.png" class="zoom" data-title=""><img src="../Images/36e46482c1af425bfe0892fc4b63ed87.png" class="img-fluid center" alt="C:\9f3dfc0744d007bd563f9f98faf0322b" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image9.png"/>T2】</a></p>
+
+<p>选择之前下载的两个文件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image10.png" class="zoom" data-title=""><img src="../Images/fb36f43e09882982498262a35ace9bb4.png" class="img-fluid center" alt="C:\4ae578d1200a04955228b4eef40dda0a" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image10.png"/>T2】</a></p>
+
+<p>点击<code>Upload</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image11.png" class="zoom" data-title=""><img src="../Images/4ab7f4a8b2b0f5cd744b22da4f56d059.png" class="img-fluid center" alt="C:\2caee4c1a0e3af9bc1c066180b7dbdcb" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image11.png"/>T2】</a></p>
+
+<p>文件上传后，选择它们并点击<span class="path">更多➜公开</span>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image12.png" class="zoom" data-title=""><img src="../Images/6e3a213346eacf76746d8d7a6f50b6e0.png" class="img-fluid center" alt="C:\8b04930793957539c633e96af224824b" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image12.png"/>T2】</a></p>
+
+<p>然后点击<code>Make public</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image13.png" class="zoom" data-title=""><img src="../Images/0d3fe9cbf0b3ddb8883fd871a3e90f5e.png" class="img-fluid center" alt="C:\fd218d4d8cdf2041c6064402cda7c80a" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image13.png"/>T2】</a></p>
+
+<p>要找到可用于下载这些文件的URL，请单击该文件并查看<code>Overview</code>选项卡中的链接。记下这些URL，因为我们在后面的帖子中需要它们来下载文件和准备Lambda环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image14.png" class="zoom" data-title=""><img src="../Images/8f548320824aa0c68e0e34696750f527.png" class="img-fluid center" alt="C:\83190cfd50328b1ba7f94aaa4c7aea2e" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image14.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image15.png" class="zoom" data-title=""><img src="../Images/8b2891394b6c4307e334ec9e7d507891.png" class="img-fluid center" alt="C:\aca44dddfa627539c0a74daa0d71722c" data-original-src="https://i.octopus.com/blog/2018-10/selenium/29-preparing-the-resources/image15.png"/>T2】</a></p>
+
+<p>将定制的Chrome发行版和适当的Chrome驱动程序上传到S3后，我们可以继续创建一个包含Java代码的包，这些代码将作为Lambda函数执行。</p>
+
+<p>这篇文章是关于<a href="/blog/selenium/0-toc/webdriver-toc">创建Selenium WebDriver测试框架</a>的系列文章的一部分。</p>
+
+                    
+                    
+</body>
+</html>

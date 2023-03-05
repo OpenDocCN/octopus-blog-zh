@@ -1,0 +1,151 @@
+<html>
+<head>
+<title>Interacting with the Octopus Deploy API using PowerShell - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用PowerShell与Octopus Deploy API交互</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/interacting-with-the-octopus-deploy-api-using-powershell#2021-08-23">https://octopus.com/blog/interacting-with-the-octopus-deploy-api-using-powershell#2021-08-23</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/octopus-api-powershell.png" class="zoom" data-title=""><img src="../Images/90290efb3501719f475010f9dcabf83b.png" class="img-fluid center" alt="Interacting with the Octopus Deploy API using PowerShell" data-original-src="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/octopus-api-powershell.png"/>T2】</a></p>
+
+<p>任何平台或解决方案都需要一个应用编程接口(API)来与之交互，而不需要通过UI点击上百万个按钮。API是引擎盖下的引擎。它是您在编程级别与应用、平台甚至物联网(IoT)设备进行交互的方式。</p>
+
+<p>在这篇博文中，您将学习如何使用微软和Azure领域中最流行的编程语言之一PowerShell与Octopus Deploy API进行交互。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进这篇博文，您需要以下内容:</p>
+
+<ul>
+<li>PowerShell的中级知识。</li>
+<li>例如，一个文本编辑器或IDE，<a href="https://code.visualstudio.com/download" rel="nofollow">对代码</a>。</li>
+<li>Octopus云实例或本地Octopus服务器。</li>
+</ul>
+
+<p>你可以从八达通服务器或八达通云免费开始使用。</p>
+
+<h2 id="the-code">代码</h2>
+
+<p>当您考虑使用PowerShell之类的东西与API交互时，您通常会选择包装器路线。顾名思义，包装器就是包装API调用的代码。</p>
+
+<p>在这篇博文中，我们将看看生命周期API的包装器。</p>
+
+<p>下面是您将使用的代码:</p>
+
+<pre><code class="language-powershell"># The function is created and is called Get-Lifecycle
+
+function Get-Lifecycle {
+
+# The cmdletbinding() attribute to ensure the function is an advanced function, which gives us the ability to use PowerShell features like the $PSCmdlet class, error action preferences, etc.
+    [cmdletbinding()]
+
+# The one parameter called is the Octopus Deploy server URL. It's a mandatory parameter.
+    param(
+        [parameter(Position = 0, Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [alias('URL')]
+        [string]$OctopusBaseURL
+    )
+# You're prompted to securely pass in the API key
+$octopusAPIKey = Read-Host 'Input API Key' -AsSecureString
+
+# The API key is passed in with the X-Octopus-ApiKey authentication method
+$headers = @{ "X-Octopus-ApiKey" = $octopusAPIKey }
+
+# The header is converted to plain test so Octopus can read the API key
+$header = @{ "X-Octopus-ApiKey" = $octopusAPIKey | ConvertFrom-SecureString -AsPlainText }
+
+# Invoke-WebRequest occurs, AKA, makes the API call to Octopus Deploy and returns the Lifecycles
+$listLifecycles = $(Invoke-WebRequest -Method GET -Uri $OctopusBaseURL/lifecycles -Headers $header).content
+$convert = $listLifecycles | ConvertFrom-Json
+$convert
+
+}
+</code></pre>
+
+<h2 id="the-api">API</h2>
+
+<p>Octopus Deploy API可以用一个swagger定义来看待，它允许您描述您的API，以便机器(或编程语言)可以读取它们。因为Octopus Deploy API使用了Swagger，所以它很容易从Octopus Deploy服务器上读取:</p>
+
+<ol>
+<li>打开web浏览器。</li>
+<li>键入您的Octopus Deploy服务器URL。</li>
+<li>在服务器URL的末尾，添加以下内容:</li>
+</ol>
+
+<pre><code class="language-bash">/api/swaggerjson
+</code></pre>
+
+<p>您将看到一个类似于下面截图的JSON输出。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/images/1.png" class="zoom" data-title=""><img src="../Images/2ca1db50c75f5d6925de20854bb41f1e.png" class="img-fluid center" alt="Swagger output" data-original-src="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/images/1.png"/>T2】</a></p>
+
+<p>大摇大摆输出的好处是，我们不必搜索或猜测API上的任何内容。例如，在上面的截图中，我们看到在<code>paths</code>下有一个对账户的API调用:</p>
+
+<pre><code class="language-bash">/api/accounts/all
+</code></pre>
+
+<p>从一开始，您就知道API的前景是什么样的，并且对如何与API进行交互有了一个很好的想法。</p>
+
+<p>一旦知道了如何与API交互，就该考虑身份验证了。</p>
+
+<h2 id="authentication">证明</h2>
+
+<p>理解与API的交互当然是至关重要的，但是如果你不能对它进行认证，你将整天吃着<code>403 unauthorized</code>三明治。在这一节中，我们将了解一下在Octopus中非常简单的认证过程。</p>
+
+<p>当您使用PowerShell与API进行交互时，您可能会发现需要以下内容:</p>
+
+<ul>
+<li>UTF8编码</li>
+<li>Base64转换身份验证</li>
+<li>标题哈希表中的多个键/值对</li>
+<li>不记名代币</li>
+<li>肯定的。NET命名空间，如<code>System.Net.WebClient</code>或<code>System.Net.NetworkCredentials</code></li>
+</ul>
+
+<p>有了Octopus，认证相当容易。事实上，您所需要的只是一个可以从Octopus服务器生成的API密匙。它不需要以任何方式进行转换或操作。</p>
+
+<h3 id="retrieve-an-api-key">检索API密钥</h3>
+
+<ol>
+<li>登入八达通网站。</li>
+<li>在登录名下，进入<strong>个人资料</strong>。</li>
+<li>在<strong> Profile </strong>下，点击<strong> My API Keys </strong>。</li>
+<li>点击<strong>新API键</strong>按钮。将API密钥存储在安全的位置，因为您将在下一节中用到它。</li>
+</ol>
+
+<h2 id="make-the-api-call">进行API调用</h2>
+
+<p>现在我们已经有了所有的东西，也就是API键和代码，是时候通过运行函数来查看API调用了。</p>
+
+<ol>
+<li>打开VS代码，将上一节中的<a href="#the-code">代码</a>保存到您选择的位置，例如桌面。</li>
+<li>高亮显示代码，点击右键，选择<strong>运行选择</strong>，如下图所示。使用<strong>运行选择</strong>选项将功能存储在内存中。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/images/2.png" class="zoom" data-title=""><img src="../Images/d2bc5615ae6243b39079db8c56e594c4.png" class="img-fluid center" alt="Run selection option in VS Code" data-original-src="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/images/2.png"/>T2】</a></p>
+
+<ol start="3">
+<li>在终端中，运行以下cmdlet:</li>
+</ol>
+
+<pre><code class="language-powershell">Get-Lifecycle -OctopusBaseURL server_url/api
+</code></pre>
+
+<ol start="4">
+<li>出现提示时，输入API密钥。</li>
+<li>在您为Octopus服务器键入一个API密钥后，您将看到一个类似于下面截图的输出，其中包含生命周期信息:</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/images/4.png" class="zoom" data-title=""><img src="../Images/48cda99da13ae1c3cc82db62294a6a2e.png" class="img-fluid center" alt="Output with Lifecycle information" data-original-src="https://i.octopus.com/blog/2020-09/interacting-with-the-octopus-deploy-api-using-powershell/images/4.png"/>T2】</a></p>
+
+<p>恭喜你。您已经成功地使用PowerShell与Octopus Deploy API进行了交互。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>有几种与API交互的方式。简而言之，你可以用任何编程语言与几乎任何API进行交互。即使没有包装器或可用的SDK，您也可以通过使用几个<code>curls</code>来制作自己的。如果你不想把时间花在点击UI上，你可能想通过编程的方式与一个平台交互，比如Octopus Deploy。</p>
+
+                    
+                    
+</body>
+</html>

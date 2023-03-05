@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>Security checkup for your Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>为你八达通系统进行安全检查</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/security-checkup#2021-07-07">https://octopus.com/blog/security-checkup#2021-07-07</a></blockquote>
+                        <p>你会照顾自己的章鱼吗？我们也是。我们仍然有自己的Octopus服务器，作为部署我们构建的大多数东西的宠物。就像我们一样，大多数人可能都有自己的宠物章鱼——但你的章鱼有多安全呢？</p>
+
+<p>我们最近发布了章鱼云alpha，在那里我们学到了，也重新学到了很多关于如何让章鱼安全的经验。在这篇文章中，我将向你展示如何给你的章鱼做安全检查。</p>
+
+<p><em>不想再照顾自己的章鱼了？也许你应该今天就报名参加<a href="https://octopus.com/cloud">章鱼云</a>？</em></p>
+
+<p>想要完整的图片吗？这里是我们关于强化章鱼的深度指南。</p>
+
+<h2 id="safely-exposing-your-octopus-server">安全地暴露你的八达通服务器</h2>
+
+<p>为了让Octopus Server做有用的事情，您需要向您的用户、您的基础设施以及可能的外部服务公开它。如果你将你的Octopus服务器暴露给公共互联网或第三方，你绝对应该使用SSL上的HTTPS。有了对<a href="https://octopus.com/docs/administration/security/exposing-octopus/lets-encrypt-integration">的内置支持，让我们加密</a>，就没有借口在HTTP上公开你的Octopus服务器了。</p>
+
+<p>了解如何安全地暴露你的八达通服务器。</p>
+
+<p>另外，你知道Octopus与代理服务器T1一起工作吗？</p>
+
+<h2 id="safely-doing-work-on-your-octopus-server">安全地在你的八达通服务器上工作</h2>
+
+<p>您的部署过程通常会处理包并执行脚本。这些包经常被推送到一个触手或SSH部署目标，您的脚本将在这些机器上执行。然而，许多部署并不需要像对云服务或类似的部署那样的触手或SSH目标。在这种情况下，如果您不得不设置一个Tentacle或SSH目标，只是为了将一个包推送到一个API或运行一个脚本，但您并不关心该脚本在哪里运行，这将是令人恼火的。</p>
+
+<p>在Octopus <code>3.0</code>中，我们引入了worker的概念，它可以处理包和执行脚本，而不需要安装和配置触手或SSH目标。默认情况下，使用<a href="https://octopus.com/docs/administration/workers/built-in-worker">内置工作器</a>的Octopus服务器运行在与Octopus服务器相同的安全上下文中。当你开始跑步时，这非常方便，但这不一定是长期坚持跑步的最佳方式。</p>
+
+<p>我们建议将每台Octopus服务器配置为使用内置工作器作为不同的用户，或者使用<a href="https://octopus.com/docs/administration/workers/external-workers">外部工作器</a>。</p>
+
+<p>了解<a href="https://octopus.com/docs/administration/workers">工人</a>。</p>
+
+<h2 id="hardening-your-host-operating-system">强化您的主机操作系统</h2>
+
+<p>你的八达通服务器的主机操作系统有多安全？如果你不确定，<a href="https://octopus.com/docs/administration/security/hardening-octopus#harden-your-host-operating-system">这里有一些提示</a>！</p>
+
+<h2 id="hardening-your-network">强化您的网络</h2>
+
+<p>你允许自由进出你的八达通服务器吗？Octopus实际上使用了少量定义明确的网络协议。我们还提供了一些提示，可以防止攻击者使用您的Octopus服务器作为进入您网络的媒介。</p>
+
+<p>了解<a href="https://octopus.com/docs/administration/security/hardening-octopus#harden-your-network">强化你的网络</a>。</p>
+
+<h2 id="upgrade">提升</h2>
+
+<p>你运行的是最新版本的八达通服务器吗？一般来说，最新版本的八达通服务器将是最安全的。你应该考虑一个保持你的Octopus服务器更新的策略。我们遵循<a href="https://octopus.com/docs/administration/security#disclosure-policy">负责任的披露政策</a>，因此您有可能知道任何影响您的八达通服务器的安全性和完整性的已知问题。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Octopus是以安全为首要考虑因素的——但是<a href="https://octopus.com/docs/administration/security/hardening-octopus">你仍然需要做一些工作来保证你的Octopus的安全。这篇博文有一些提示和技巧。如果你想给你的章鱼做一个全面的检查，使用我们的</a><a href="https://octopus.com/docs/administration/security/hardening-octopus">深度指南来强化章鱼</a>。</p>
+
+<p>如果你不想照顾自己的章鱼，也许你应该今天就报名<a href="https://octopus.com/cloud">章鱼云</a>？</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,233 @@
+<html>
+<head>
+<title>Fast track code promotion in your CI/CD pipeline - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在您的CI/CD渠道中快速跟踪代码推广- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/fast-tracking-code-promotion-in-your-ci-cd-pipeline#2022-12-19">https://octopus.com/blog/fast-tracking-code-promotion-in-your-ci-cd-pipeline#2022-12-19</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/cicd-pipeline-promotion.png" class="zoom" data-title=""><img src="../Images/c29cc85f7499ab41300bf9e5293c433d.png" class="img-fluid center" alt="Fast track code promotion in your CI/CD pipeline" data-original-src="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/cicd-pipeline-promotion.png"/>T2】</a></p>
+
+<p>软件开发团队在2020年面临的最大挑战之一是需要更快地将代码交付给生产。为了无缝地做到这一点，我们需要一个完全自动化的部署过程，并且它必须可以在多个环境中重复。此外，为了放心地部署到生产环境而不中断服务，我们必须在测试金字塔的每一层都成功通过测试。</p>
+
+<p>定义这个过程可能具有挑战性，而可视化它可能更加困难；谢天谢地，Octopus Deploy让我们两者都变得容易了！在这篇文章中，我定义了一个<em>预先批准的</em>生产就绪的<a href="https://octopus.com/devops/continuous-delivery/what-is-a-deployment-pipeline/">部署管道</a>，并讨论了所涉及的每个步骤的细节。</p>
+
+<h2 id="the-automated-testing-pyramid">自动化测试金字塔</h2>
+
+<p>在深入我们的场景之前，让我们从定义我们的测试金字塔开始。一个完整的测试金字塔有四个模块。较低的块具有较高的测试数量，而较高的块具有较高的测试质量。完整的测试金字塔为我们的部署成功率提供了高度的信心:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/testing-pyramid.png" class="zoom" data-title=""><img src="../Images/729687a99b3f0c65bc072aa486447835.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/testing-pyramid.png"/>T2】</a></p>
+
+<p>来源:<a href="https://blog.octo.com/wp-content/uploads/2018/10/integration-tests-1024x634.png" rel="nofollow">https://blog . octo . com/WP-content/uploads/2018/10/integration-tests-1024 x634 . png</a></p>
+
+<p>如图所示，四层测试是:</p>
+
+<ul>
+<li><strong>单元测试</strong>:这些测试需要在我们管道的持续集成阶段取得成功。</li>
+<li><strong>组件测试</strong>:这些测试需要在我们管道的持续集成阶段取得成功。</li>
+<li><strong>集成测试</strong>:这些测试需要在我们管道的连续交付阶段取得成功。</li>
+<li>端到端测试:在我们管道的连续交付阶段，这些测试必须成功。</li>
+</ul>
+
+<h2 id="scenario">方案</h2>
+
+<p>我们有一个正在生产中运行的<code>/hello/world</code>微服务，它当前返回一个JSON字段<code>message</code>，值为<code>hello world!</code>，我们希望在它成功返回时添加另一个名为<code>status</code>，值为<code>200</code>的响应字段:</p>
+
+<pre><code class="language-JSON">{
+    "message":"Hello World!",
+    "status":200
+}
+</code></pre>
+
+<h2 id="environments">环境</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/environments.png" class="zoom" data-title=""><img src="../Images/c08ec6b8e658e510d2228764036963d4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/environments.png"/>T2】</a></p>
+
+<p>组织策略规定，任何提升到生产环境的代码都必须部署在以下环境中:</p>
+
+<ul>
+<li>发展</li>
+<li>试验</li>
+<li>质量保证</li>
+<li>预生产</li>
+<li>生产</li>
+</ul>
+
+<p>这些环境中的每一个都是静态集成环境，这意味着我们的应用程序的所有组件都存在于这些环境中。我们希望确保不会出现配置偏差。在后面的博文中，我将讨论如何让静态集成环境和短暂的动态环境共存于我们的CI/CD管道中。现在，我们将保持简单。</p>
+
+<h2 id="continuous-integration-stages">持续集成阶段</h2>
+
+<p>我们任何代码升级的目标都是构建一次，部署到任何地方。构建可部署对象显然是我们开始考虑部署它之前的第一步。在构建时，我们必须经历几个阶段:</p>
+
+<ol>
+<li>预构建:代码林挺/格式化</li>
+<li>预构建:单元测试</li>
+<li>预构建:组件测试</li>
+<li>预构建:静态代码分析</li>
+<li>预构建:第三方库安全性分析</li>
+<li>构建:二进制构建和打包</li>
+<li>后期构建:将二进制文件推送到工件存储库</li>
+</ol>
+
+<p>这些是在我们预先批准的部署流程中必须发生的最小可定义单元或阶段。每个阶段都必须根据由我们的工具管理员、信息安全和软件架构师配置的预定义规则成功通过。在连续集成阶段成功通过之后，我们就为连续交付阶段做好了准备。</p>
+
+<h2 id="continuous-delivery">连续交货</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/what-is-continuous-delivery.jpg" class="zoom" data-title=""><img src="../Images/51f47c81eee132ee0b11bad563db188c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/what-is-continuous-delivery.jpg"/>T2】</a></p>
+
+<p>首先，我们来定义一下<a href="https://octopus.com/devops/continuous-delivery/">连续交付</a>和<a href="https://octopus.com/devops/continuous-delivery/what-is-continuous-deployment/">连续部署</a>的区别。来自<a href="https://levelup.gitconnected.com/digestible-devops-the-7-devops-practices-8bd8b34e1418" rel="nofollow">易消化的DevOps:7个devo PS实践</a>:</p>
+
+<blockquote class="blockquote">
+<p>交付:“一旦自动化测试验证了源代码的每一处变更，就为产品发布做好准备的实践。这包括自动构建、测试和部署。”</p>
+</blockquote>
+
+<blockquote class="blockquote">
+<p>部署:“持续部署是努力实现端到端自动化生产部署的实践。”</p>
+</blockquote>
+
+<p>对于连续交付，我们希望将可部署的二进制文件放到最低的集成环境中，以确保二进制文件:</p>
+
+<ol>
+<li>根据需要执行。</li>
+<li>运行我们最低要求的第三和第四阶段自动化测试，他们成功通过。</li>
+<li>代码升级(或自动升级)的阶段。</li>
+</ol>
+
+<p>通常，我们管道的持续交付方面作为持续集成管道的第二阶段来执行。对于开发人员来说，这是最容易混淆和最难解决的问题，因为这是传统的<em>操作</em>人员介入的地方。与管道的持续集成部分不同，我们在这里引入了许多新的故障点，包括:</p>
+
+<ul>
+<li>网络连接。</li>
+<li>名称空间冲突。</li>
+<li>事件驱动/事件触发的步骤未完成。</li>
+<li>混合部署问题和自动化测试问题。</li>
+<li>集成多种工具并对这些集成进行故障排除。</li>
+</ul>
+
+<p>Octopus Deploy的一个优点是它有一个内置的工件存储库，因此我们不必通过将工件存储在第三方位置或工具中来引入另一个潜在的故障点。这意味着我们可以确信，事实上，新的工件事件确实触发了我们管道中的连续交付步骤。我们应该清楚地定义我们的连续交付自动化和我们的集成/端到端测试阶段之间的区别，以便弄清楚在我们的管道中什么地方可能出现了故障。这些步骤可以定义为:</p>
+
+<ul>
+<li>CD二进制部署。</li>
+<li>CD二进制验证。</li>
+<li>集成测试光盘。</li>
+<li>端到端测试时的CD。</li>
+</ul>
+
+<p>有一个CD二进制文件验证阶段是很重要的，它可以确保我们不仅得到了需要的二进制文件，而且它确实按照预期执行了。在这种情况下，如果我们有一个坏的二进制文件(由于损坏或错误的代码逻辑等。)，我们可以通过尽早失败并快速将反馈反馈给开发人员来节省大量时间。</p>
+
+<h2 id="which-tests-when">什么时候测试？</h2>
+
+<p>代码升级的一个冲突方面是试图确保代码以相同的方式部署在每个环境中，同时只运行必要的测试以确保新的部署按预期工作。这方面的一个例子是在我们的QA环境中运行<em>负载测试</em>，而不是在其他环境中。在每个环境中运行负载测试将会非常耗时，并且会延长部署时间(这与我们试图实现的目标相反)。此外，我们可能不会在生产环境中运行负载测试，因为我们不想为实时服务的服务可靠性冒不必要的风险。</p>
+
+<p>这就引出了一个问题，哪些测试需要运行，它们需要在什么时候运行，如何区分运行的测试，以及它们应该在什么环境中运行？</p>
+
+<p>这些都是很好的问题，可以分为两类:</p>
+
+<ul>
+<li>预先批准的CI/CD管道。</li>
+<li>广泛的CI/CD渠道。</li>
+</ul>
+
+<h2 id="what-changes-can-be-run-through-the-pre-approved-pipeline">哪些变更可以通过预先批准的渠道进行？</h2>
+
+<p>并不是每一个代码变更都需要经过数小时的回归测试和负载测试。事实上，如果您遵循精益/敏捷开发方法，大多数代码更改不应该需要。如果变更很简单，并且没有从数据库中提取新数据或进行任何高级计算，那么该变更可能会被部署到生产环境中，而不需要进行全套测试，因为风险低且可信度高。</p>
+
+<p>所有管道事件都应该从源代码控制中触发。为了确保更改将通过预先批准的CI/CD管道运行，我将创建一个新的Git分支，其命名约定如下:</p>
+
+<p><code>feature-pa-eado-4287-add_status_response</code></p>
+
+<ul>
+<li><code>feature</code>:这意味着新的分支正在向代码库添加新的功能。</li>
+<li><code>pa</code>:这是一项预先批准的变更，将通过快速通道进行。</li>
+<li>这是我的JIRA项目。</li>
+<li><code>&lt;number&gt;</code>:这是我项目的一张JIRA门票。</li>
+<li><code>add_status_response</code>:这是对变更的快速描述。</li>
+</ul>
+
+<p>默认情况下，所有更改将通过完整的CI/CD管道运行。这确保了开发人员对他们的变更投入足够的思考，以确定它是否可以被<em>快速跟踪</em>以部署到生产中。</p>
+
+<p>在以后的博文中，我们将讨论非预先批准的变更将如何贯穿我们完整的CI/CD管道。</p>
+
+<h2 id="the-complete-pre-approved-cicd-pipeline">完整的预批准CI/CD渠道</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/endtoend.png" class="zoom" data-title=""><img src="../Images/a881ffa4e6906840e7f640fd86a91b74.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/fast-tracking-code-promotion-in-your-ci-cd-pipeline/endtoend.png"/>T2】</a></p>
+
+<ol>
+<li>部署前步骤(GitHub/吉拉):          <ol>
+<li>一名开发人员被分配到JIRA机票EADO-4287。根据需求，确定这是一个小的变化，并创建一个特征分支<code>feature-pa-eado-4287-add_status_response</code>。</li>
+<li>编写满足验收标准的单元测试。</li>
+<li>编写满足单元测试的代码。</li>
+<li>验证测试在本地成功通过，<code>git push</code>到源代码控制。</li>
+</ol>
+</li>
+<li>持续集成(Jenkins):          <ol>
+<li>预构建:代码林挺/格式化。</li>
+<li>预构建:单元测试。</li>
+<li>预构建:组件测试。</li>
+<li>预构建:静态代码分析。</li>
+<li>预构建:第三方库安全分析。</li>
+<li>预构建:请求已打开，暂停等待批准。</li>
+<li>预构建:请求批准、合并、标记主分支(<code>rc-&lt;version&gt;</code>、<code>pa</code>)。</li>
+<li>构建:二进制构建并打包。</li>
+<li>后期构建:将二进制文件推送到工件存储库(Octopus Deploy)。</li>
+</ol>
+</li>
+<li>开发环境(Octopus部署):          <ol>
+<li>CD二进制部署:将包复制并解压缩到web服务器。</li>
+<li>CD二进制验证:验证web服务器返回200响应。</li>
+<li>集成测试中的CD:验证来自负载平衡URI的200个响应。</li>
+<li>端到端测试时的CD:验证发出API调用的前端是否返回成功响应。</li>
+<li>CD post git标签:<code>dev_success</code>。</li>
+</ol>
+</li>
+<li>测试环境:          <ol>
+<li>Git标签<code>dev_success</code>触发CD二进制部署:将包复制并解压缩到web服务器。</li>
+<li>CD二进制验证:验证web服务器返回200响应。</li>
+<li>集成测试中的CD:验证来自负载平衡URI的200个响应。</li>
+<li>端到端测试时的CD:验证发出API调用的前端是否返回成功响应。</li>
+<li>CD post git标签:<code>test_success</code>。</li>
+</ol>
+</li>
+<li>质量保证环境:          <ol>
+<li>Git标签<code>test_success</code>触发CD二进制部署。将包复制并解压缩到web服务器。</li>
+<li>CD二进制验证:验证web服务器返回200响应。</li>
+<li>集成测试中的CD:验证来自负载平衡URI的200个响应。</li>
+<li>端到端测试时的CD:验证发出API调用的前端是否返回成功响应。</li>
+<li>CD post git标签:<code>qa_success</code>。</li>
+</ol>
+</li>
+<li>生产前环境:          <ol>
+<li>Git标签<code>qa_success</code>触发CD二进制部署:将包复制并解压缩到web服务器。</li>
+<li>CD二进制验证:验证web服务器返回200响应。</li>
+<li>集成测试中的CD:验证来自负载平衡URI的200个响应。</li>
+<li>端到端测试时的CD:验证发出API调用的前端是否返回成功响应。</li>
+<li>CD post git标签:<code>preprod_success</code>。</li>
+</ol>
+</li>
+<li>生产环境:          <ol>
+<li>Git标签<code>preprod_success</code>触发CD二进制部署:将包复制并解压缩到web服务器。</li>
+<li>CD二进制验证:验证web服务器返回200响应。</li>
+<li>集成测试中的CD:验证来自负载平衡URI的200个响应。</li>
+<li>端到端测试时的CD:验证发出API调用的前端是否返回成功响应。</li>
+<li>CD post git标签:<code>v&lt;version&gt;</code>。</li>
+<li>CD post git删除标签:          <ol>
+<li><code>rc-&lt;version&gt;</code></li>
+<li><code>dev_success</code></li>
+<li><code>test_success</code></li>
+<li><code>qa_success</code></li>
+<li><code>preprod_success</code></li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+
+<h2 id="conclusion">结论</h2>
+
+<p>将代码快速部署到生产环境中是开发团队面临的最大挑战。代码推广和部署都是关于自信的。为了获得这种信心，我们的CI/CD渠道必须包含测试金字塔的四层。确定何时在哪个部署环境中执行测试金字塔的每一层成为下一个挑战，但是为小的、低风险的更改定义预先批准的部署管道有助于平衡速度和质量，并且使用Git分支和标签来触发您预先批准的管道有助于将部署责任交给最了解代码的人，即开发人员。</p>
+
+<p>浏览<a href="https://octopus.com/devops/"> DevOps工程师手册</a>以了解更多关于DevOps、CI/CD以及软件测试在持续交付中的作用。</p>
+
+                    
+                    
+</body>
+</html>

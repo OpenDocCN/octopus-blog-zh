@@ -1,0 +1,99 @@
+<html>
+<head>
+<title>A look at GitHub Codespaces private preview - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>GitHub代码空间私人预览版——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/github-codespaces-private-preview#2021-08-12">https://octopus.com/blog/github-codespaces-private-preview#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/github-codespaces.png" class="zoom" data-title=""><img src="../Images/1726ba43fdfc0c399d57c04d8c66115f.png" class="img-fluid center" alt="A look at GitHub Codespaces private preview" data-original-src="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/github-codespaces.png"/>T2】</a></p>
+
+<p>有许多源代码控制系统，但让我们面对它，GitHub可以说是最受欢迎的。</p>
+
+<p>GitHub最近通过引入GitHub Actions加强了他们在CI/CD领域的游戏，在微软Build 2020上，他们引入了<a href="https://github.com/features/codespaces" rel="nofollow"> GitHub Codespaces </a>。</p>
+
+<p>GitHub Codespaces就像Visual Studio Codespaces，它是UI中的VS代码，除了GitHub Codespaces，它内置于GitHub中，为您的所有开发需求提供一站式服务。</p>
+
+<p>在这篇博文中，我将介绍一下私人测试版，以及如果你已经被测试版项目接受，该如何使用它。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进，您需要:</p>
+
+<ul>
+<li>GitHub Codespaces的私人测试邀请。如果你还没有，你可以<a href="https://github.com/features/codespaces" rel="nofollow">请求提前访问</a>。</li>
+<li>GitHub账户。</li>
+<li>至少一个存储库。</li>
+</ul>
+
+<h2 id="why-github-codespaces">为什么选择GitHub Codespaces？</h2>
+
+<p>拥有如此多的开发工具和编写代码的方式有一个大问题；根本没有一个集中的地方来存储您想要的特定配置。以VS代码为例，假设您在几台不同的机器上工作，或者您正在与一个队友进行结对编程，要处理相同的代码并使其看起来完全相同，您需要几样东西:</p>
+
+<ul>
+<li>扩展。</li>
+<li>登录服务，比如从VS代码登录Azure。</li>
+<li>主题。</li>
+<li><code>settings.json</code>中的设置。</li>
+<li>运行时。</li>
+<li>棉绒。</li>
+</ul>
+
+<p>你知道这是怎么回事了。管理起来可能会很麻烦。</p>
+
+<p>有了代码空间这样的东西，你就不用担心这个了。无论您从何处登录，所有设置和配置都在一个位置。</p>
+
+<p>代码空间为您的特定开发需求提供了一个集中的位置。</p>
+
+<h2 id="setting-up-codespaces">设置代码空间</h2>
+
+<p>如果私人测试版是活跃的，你会在顶部任务栏上看到一个名为<strong> Codespaces </strong>的新图标。它应该是自动添加的，但您可能需要注销GitHub，然后重新登录。</p>
+
+<ol>
+<li>登录GitHub，点击<strong>代码空间</strong>图标。</li>
+<li>点击绿色的<strong>新代码空间</strong>按钮。</li>
+<li>您将看到两个选项:</li>
+</ol>
+
+
+
+<p>选择您想要在代码空间中打开的存储库。代码将显示在代码空间中，因此任何东西都可以工作。</p>
+
+<ol start="4">
+<li>点击绿色的<strong>创建代码空间</strong>按钮。</li>
+</ol>
+
+<p>代码空间将会打开，您将能够像在桌面上使用VS代码一样看到来自存储库的代码:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/images/2.png" class="zoom" data-title=""><img src="../Images/608ef2e41d668026284f6f1a1a7fc5f9.png" class="img-fluid center" alt="Am open repository in Codespaces" data-original-src="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/images/2.png"/></a>T2】</p>
+
+<h2 id="first-look-at-extensions">首先看看扩展</h2>
+
+<p>从扩展的角度来看，什么都没有改变。您通常在VS代码中使用的任何扩展都可以在代码空间中使用。</p>
+
+<ol>
+<li>打开“扩展”选项卡:</li>
+<li>搜索扩展名，例如Golang:</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/images/4.png" class="zoom" data-title=""><img src="../Images/25197dbc38aefbafdf931168fece99d3.png" class="img-fluid center" alt="Go extensions in Codespaces" data-original-src="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/images/4.png"/>T2】</a></p>
+
+<h2 id="settings-in-github-codespaces">GitHub代码空间中的设置</h2>
+
+<p>令人惊讶的是，代码空间中的设置与VS代码中的设置几乎相同，这使得转换变得熟悉而平稳:</p>
+
+<ol>
+<li>点击左下角的<strong>设置</strong>图标。</li>
+<li>从那里，您可以配置环境、用户环境和远程代码空间环境:</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/images/6.png" class="zoom" data-title=""><img src="../Images/d58fd75d87f437c110b7f91b63b76c2e.png" class="img-fluid center" alt="Codespace settings" data-original-src="https://i.octopus.com/blog/2020-09/github-codespaces-private-preview/images/6.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>尽管GitHub Codespaces仍处于私人预览阶段，但很明显它是一个未来的工具。开发者没有必要离开GitHub。他们现在可以在一个地方存储和编写代码。</p>
+
+                    
+                    
+</body>
+</html>

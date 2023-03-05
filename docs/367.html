@@ -1,0 +1,172 @@
+<html>
+<head>
+<title>Deploying to Amazon EKS with Docker and Jenkins - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Docker和Jenkins - Octopus Deploy部署到亚马逊EKS</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/jenkins-eks-ecr-deployment#2022-05-19">https://octopus.com/blog/jenkins-eks-ecr-deployment#2022-05-19</a></blockquote>
+                        <p>在本文中，我将向您展示如何使用Jenkinsfile工作流构建Docker图像，并将图像发布到Amazon Elastic Container Registry(ECR)。Jenkins将触发对Amazon Elastic Kubernetes服务(EKS)的部署。</p>
+
+<p>Jenkins是一个构建服务器，可以自动构建您的代码库。Jenkins通过Jenkinsfile实现这一点，Jenkins file是一个配置文件，它指定了构建、推送和部署应用程序的步骤。</p>
+
+<p>亚马逊EKS是一种托管云服务，提供Kubernetes集群来处理工作负载应用程序。Kubernetes集群还接受一个由YAML语法指定的配置文件。</p>
+
+<p>此工作流的强大之处在于，可以为流程的所有阶段指定配置文件，并在不同的环境中稍加修改即可重用。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进，您需要:</p>
+
+
+
+<p>对于这个例子，您需要扩展存储库来包含一个部署YAML文件。Jenkins将使用此部署文件部署到EKS。将此文件添加到存储库的根级别。</p>
+
+<p>这个帖子使用了<a href="https://github.com/OctopusSamples/octopus-underwater-app" rel="nofollow"> Octopus水下应用库</a>。您可以分叉存储库，并使用主分支来跟进。</p>
+
+<p>jenkins-deploy分支包含完成本文中的步骤所需的模板文件。你必须用你自己的价值观来代替一些价值观，但是我已经在这篇文章中列出了我的价值观作为参考。</p>
+
+<p>因为您正在使用Kubernetes，所以需要用一个配置文件来配置代理。<a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/eks/update-kubeconfig.html" rel="nofollow">亚马逊的文档</a>向你展示如何配置你的代理。</p>
+
+<p>AWS还需要<a href="https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html" rel="nofollow"> aws-iam-authenticator二进制文件</a>。</p>
+
+<h2 id="amazon-web-services-setup">亚马逊网络服务设置</h2>
+
+<p>要为Jenkins设置AWS，您需要创建一个访问密钥和一个ECR存储库来存储图像。</p>
+
+<p>要创建访问密钥，请转到<strong>亚马逊控制台</strong>，然后<strong> IAM </strong>，然后<strong>用户</strong>、<code>[your user]</code>，然后<strong>安全凭证</strong>，然后<strong>创建访问密钥</strong>。</p>
+
+<p>您的浏览器下载一个包含访问密钥ID和秘密访问密钥的文件。Jenkins使用这些值向Amazon认证。</p>
+
+<p>要创建存储库，请转到<strong>亚马逊控制台</strong>，然后转到<strong> ECR </strong>，然后转到<strong>创建存储库</strong>。</p>
+
+<p>您需要为发布的每个图像建立一个图像存储库。给存储库起一个您想让图像起的名字。</p>
+
+<p>你会在<strong>亚马逊ECR </strong>下看到你的仓库，然后是<strong>仓库</strong>。记下它所在的区域，在URI场。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/jenkins-eks-ecr-deployment/ecr-repository.png" class="zoom" data-title=""><img src="../Images/7ec250ca6f2dd25d85fe0e003f3903df.png" class="img-fluid center" alt="ECR Repository" data-original-src="https://i.octopus.com/blog/2022-02/jenkins-eks-ecr-deployment/ecr-repository.png"/>T2】</a></p>
+
+<h3 id="aws-cluster-setup">AWS集群设置</h3>
+
+<p>使用我们上一篇文章<a href="https://octopus.com/blog/eks-cluster-aws">中的指南在AWS中设置集群，在AWS中创建ESK集群</a>。</p>
+
+<p>在存储库的根级别创建一个名为<code>deployment.yml</code>的文件。</p>
+
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: underwater-app-jenkins 
+  labels:
+    app: octopus-underwater-app
+spec:
+  selector:
+    matchLabels:
+        app: octopus-underwater-app
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: octopus-underwater-app
+    spec:
+      containers:
+        - name: octopus-underwater-app
+          image: 720766170633.dkr.ecr.us-east-2.amazonaws.com/octopus-underwater-app:latest
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          imagePullPolicy: Always
+
+</code></pre>
+
+<p>在存储库的根级别创建一个名为<code>Jenkinsfile</code>的文件。</p>
+
+<pre><code>
+
+pipeline {
+    agent any
+    options {
+        skipStagesAfterUnstable()
+    }
+    stages {
+         stage('Clone repository') { 
+            steps { 
+                script{
+                checkout scm
+                }
+            }
+        }
+
+        stage('Build') { 
+            steps { 
+                script{
+                 app = docker.build("octopus-underwater-app")
+                }
+            }
+        }
+        stage('Test'){
+            steps {
+                 echo 'Empty'
+            }
+        }
+        stage('Push') {
+            steps {
+                script{
+                        docker.withRegistry('https://720766170633.dkr.ecr.us-east-2.amazonaws.com', 'ecr:us-east-2:aws-credentials') {
+                    app.push("${env.BUILD_NUMBER}")
+                    app.push("latest")
+                    }
+                }
+            }
+        }
+        stage('Deploy'){
+            steps {
+                 sh 'kubectl apply -f deployment.yml'
+            }
+        }
+
+    }
+}
+
+</code></pre>
+
+<p>Jenkins将克隆、构建、测试、推送和部署映像到EKS集群。Jenkins通过您之前创建的部署文件来完成这项工作。</p>
+
+
+
+<p>Jenkins是一个持续集成(CI)工具，专注于构建映像并将其推送到远程存储库。使用它作为连续部署(CD)工具是可能的，但是，它不能通过不同的部署阶段跟踪一个版本。</p>
+
+<p>像Octopus Deploy这样的连续部署工具可以在部署复杂时帮助您管理发布。Octopus实现了专用持续部署工具的优势。如果你还没有使用Octopus Deploy，你可以<a href="https://octopus.com/start">注册免费试用</a>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/jenkins-eks-ecr-deployment/jenkins-success.png" class="zoom" data-title=""><img src="../Images/eb7bb43ab42e333e860167e75bc9bc71.png" class="img-fluid center" alt="Jenkins Success" data-original-src="https://i.octopus.com/blog/2022-02/jenkins-eks-ecr-deployment/jenkins-success.png"/>T2】</a></p>
+
+<h2 id="viewing-the-web-application">查看web应用程序</h2>
+
+<p>您需要本地端口转发来检查服务。使用此命令检查web应用程序。端口28015是根据Kubernetes文档中的示例选择的:</p>
+
+<pre><code>kubectl port-forward deployment/underwater-app-jenkins  28015:80
+</code></pre>
+
+<p>在浏览器中进入IP地址<code>http://127.0.0.1:28015/</code>查看您的网络应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/jenkins-eks-ecr-deployment/octopus-underwater-app.png" class="zoom" data-title=""><img src="../Images/f42f954164fe1760d20a48ff9c82ddad.png" class="img-fluid center" alt="Octopus underwater app" data-original-src="https://i.octopus.com/blog/2022-02/jenkins-eks-ecr-deployment/octopus-underwater-app.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本文中，您和Jenkins一起在EKS部署了一个web应用程序。这个例子演示了Jenkins如何配置部署代码库所需的步骤。亚马逊EKS公司提供了Kubernetes基础设施来处理web应用程序负载。这个过程中的所有步骤都是通过指定配置文件来执行的。这些配置文件提供了跨不同环境的可重用性。</p>
+
+<p>查看我们关于使用Jenkins、Kubernetes和Octopus Deploy进行部署的其他帖子:</p>
+
+
+
+<p>试试我们免费的Jenkins管道生成器工具用Groovy语法创建一个管道文件。这是您启动管道项目所需的一切。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

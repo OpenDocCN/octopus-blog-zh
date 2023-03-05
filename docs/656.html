@@ -1,0 +1,127 @@
+<html>
+<head>
+<title>Deploying a Secured Web App to Tomcat with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus - Octopus Deploy将安全的Web应用程序部署到Tomcat</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/secured-tomcat-from-scratch#2022-07-15">https://octopus.com/blog/secured-tomcat-from-scratch#2022-07-15</a></blockquote>
+                        <p>有了Octopus 4.1，您现在可以从Maven资源库部署应用程序，并配置由Octopus管理的证书。在这篇博文中，我们将看看如何使用这些新步骤在Tomcat中部署和保护web应用程序。</p>
+
+<h2 id="download-tomcat-9">下载Tomcat 9</h2>
+
+<p>在这个演示中，我们将在Windows 2016上使用Tomcat 9。你可以从<a href="https://tomcat.apache.org/download-90.cgi" rel="nofollow">这里</a>下载Tomcat 9。获取Windows installer，因为这是将Tomcat配置为Windows服务的最简单的方法。</p>
+
+<p>默认情况下，Tomcat 9会安装到<code>C:\Program Files\Apache Software Foundation\Tomcat 9.0</code>。这个目录在后面的步骤中称为<code>CATALINA_HOME</code>。</p>
+
+<h2 id="download-octopus-deploy-4.1">下载八达通部署4.1</h2>
+
+<p>从<a href="https://octopus.com/downloads">下载页面</a>获取Octopus Deploy 4.1的副本。4.1版包括许多新的步骤和功能，用于集成Maven repos和部署证书。你可以从<a href="https://octopus.com/docs/installation">文档</a>中找到更多关于安装Octopus的信息。</p>
+
+<p>Octopus 4.1目前处于测试阶段，所以如果现在还不能从下载页面获得，那也很快了。看好这个空间！</p>
+
+
+<h2 id="configure-maven-central-as-an-external-feed">将Maven Central配置为外部提要</h2>
+
+<p>Maven central是Maven构建的默认存储库，也是大多数公共Maven工件最终部署的地方。在https://repo.maven.apache.org/maven2/可以找到它。我们将在Octopus中添加这个存储库作为名为<code>Maven Central</code>的外部提要，以允许我们在部署过程中使用它的工件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/maven-central-external-feed.png" class="zoom" data-title=""><img src="../Images/28d835c646834f189bd26b4daba9df32.png" class="img-fluid center" alt="Maven Central External Feed" data-original-src="https://i.octopus.com/blog/2017-11/maven-central-external-feed.png"/>T2】</a></p>
+
+<p>当配置外部Maven存储库时，我们需要链接到存储库本身，而不是用来搜索存储库的服务。例如，像https://search.maven.org/的<a href="https://search.maven.org/" class="alert-link" rel="nofollow">、https://mvnrepository.com/的</a>或者T2的这样的网址是无法进入的，因为这些是用于搜索知识库的网站，而不是知识库本身。</p>
+
+
+<h2 id="adding-a-certificate">添加证书</h2>
+
+<p>运行以下命令来生成自签名ECDSA证书。</p>
+
+<pre><code>openssl ecparam -genkey -out ecdsa.key -name prime256v1
+openssl req -x509 -new -key ecdsa.key -out ecdsa.crt
+openssl pkcs12 -export -out ecdsa.pfx -inkey ecdsa.key -in ecdsa.crt
+</code></pre>
+
+<p>然后把PFX的文件上传到Octopus。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/self-signed-certificate.png" class="zoom" data-title=""><img src="../Images/df2aa4c7e390fe45bf7fba91d673769e.png" class="img-fluid center" alt="Self Signed Certificate" data-original-src="https://i.octopus.com/blog/2017-11/self-signed-certificate.png"/>T2】</a></p>
+
+<p>阅读博客文章<a href="https://octopus.com/blog/mixing-keys-in-tomcat">Tomcat中的组合键</a>以获得关于这些键如何在Tomcat中工作的更多信息。</p>
+
+<h2 id="creating-the-deployment-project">创建部署项目</h2>
+
+<p>在Octopus中创建新项目，并添加<code>Deploy to Tomcat via Manager</code>步骤。</p>
+
+<p>在这一步中，我们将部署<code>com.github.gwtmaterialdesign:gwt-material-demo</code> WAR文件。这个web应用程序是<a href="https://github.com/GwtMaterialDesign/gwt-material" rel="nofollow"> GWT材料</a>项目的一个演示，该项目方便地将一个样例应用程序作为WAR文件发布到中央Maven存储库中。我们将利用这一点来演示如何将Maven存储库中托管的web应用程序直接部署到Tomcat。</p>
+
+<p>将<code>Context path</code>设置为<code>/demoapp</code>。这是我们将用来在Tomcat上打开应用程序的路径。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/deploy-maven-war-file.png" class="zoom" data-title=""><img src="../Images/94559bcc50195fc7e2013721f7b35031.png" class="img-fluid center" alt="Deploy Maven WAR File" data-original-src="https://i.octopus.com/blog/2017-11/deploy-maven-war-file.png"/>T2】</a></p>
+
+<h2 id="deploy-the-certificate">部署证书</h2>
+
+<p>创建一个变量来引用之前创建的ECDSA证书。我们需要在证书部署步骤中使用这个变量。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/certificate-variable.png" class="zoom" data-title=""><img src="../Images/0156b9e1056b9ff3839215d33e418eb5.png" class="img-fluid center" alt="Certificate Variable" data-original-src="https://i.octopus.com/blog/2017-11/certificate-variable.png"/>T2】</a></p>
+
+<p>接下来添加<code>Deploy a certificate to Tomcat</code>步骤。选择证书变量，将<code>CATALINA_HOME</code>字段设置为<code>C:\Program Files\Apache Software Foundation\Tomcat 9.0</code>，选择<code>NIO2</code> SSL实现，并将端口设置为<code>8443</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/deploy-certificate.png" class="zoom" data-title=""><img src="../Images/3454a9e4fbbe327c84c814b52927f673.png" class="img-fluid center" alt="Deploy Certificate" data-original-src="https://i.octopus.com/blog/2017-11/deploy-certificate.png"/>T2】</a></p>
+
+<p>在生产场景中，您不会将证书与应用程序一起重新部署。一旦部署了证书，通常只需在证书更新时每年重新部署一次。我们将证书部署包含在同一个项目中，只是为了演示如何配置这些步骤。</p>
+
+
+<h2 id="restart-the-service">重新启动服务</h2>
+
+<p>最后一步是重新启动Tomcat服务，让它获得新的证书配置。</p>
+
+<p>添加一个<code>Run a Script</code>步骤，并运行一个PowerShell脚本来重启<code>Tomcat9</code>服务。</p>
+
+<pre><code>Restart-Service Tomcat9
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/restart-tomcat.png" class="zoom" data-title=""><img src="../Images/36a7ba66deaab77a7a84783524d46912.png" class="img-fluid center" alt="Restart Tomcat" data-original-src="https://i.octopus.com/blog/2017-11/restart-tomcat.png"/>T2】</a></p>
+
+<p><code>Tomcat9</code>是Tomcat安装程序为我们创建的服务。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/tomcat-service.png" class="zoom" data-title=""><img src="../Images/51f375a8e10ba28bf57b41ca6be16c6e.png" class="img-fluid center" alt="Tomcat Service" data-original-src="https://i.octopus.com/blog/2017-11/tomcat-service.png"/>T2】</a></p>
+
+<p>部署应用程序后，Tomcat不需要重新启动。运行这个脚本是为了让Tomcat获得证书。</p>
+
+
+<h2 id="run-the-deployment">运行部署</h2>
+
+<p>部署运行时，Octopus会自动确定Maven工件是WAR文件，并选择最新版本进行部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/deploy-app-from-maven.png" class="zoom" data-title=""><img src="../Images/b6c7df091e0991aa6b644973dc838a97.png" class="img-fluid center" alt="Deploy App From Maven" data-original-src="https://i.octopus.com/blog/2017-11/deploy-app-from-maven.png"/>T2】</a></p>
+
+<p>部署完成后，您会发现下面的XML已经添加到Tomcat <code>conf/server.xml</code>文件中。这就是Tomcat支持HTTPS的配置方式。</p>
+
+<pre><code class="language-xml">&lt;Connector SSLEnabled="true" port="8443" protocol="org.apache.coyote.http11.Http11Nio2Protocol"&gt;
+  &lt;SSLHostConfig&gt;
+    &lt;Certificate certificateKeyAlias="octopus" certificateKeystoreFile="${catalina.base}\conf\Internet_Widgits_Pty_Ltd1.keystore" certificateKeystorePassword="changeit" type="EC"/&gt;
+  &lt;/SSLHostConfig&gt;
+&lt;/Connector&gt;
+</code></pre>
+
+<h2 id="testing-the-result">测试结果</h2>
+
+<p>打开<a href="http://localhost:8443/demoapp/index.html" rel="nofollow">https://localhost:8443/demo app/index . html</a>。您将看到正在显示的演示应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/gwt-demo-app.png" class="zoom" data-title=""><img src="../Images/1093cdfba2a38ab8d08fb4e798571a08.png" class="img-fluid center" alt="GWT Demo App" data-original-src="https://i.octopus.com/blog/2017-11/gwt-demo-app.png"/>T2】</a></p>
+
+<p>然后我们可以通过打开Chrome开发者工具并查看<code>Security</code>标签来验证证书。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/chrome-security.png" class="zoom" data-title=""><img src="../Images/6d4434299729bd7f925c5c5b619278ab.png" class="img-fluid center" alt="Chrome Security" data-original-src="https://i.octopus.com/blog/2017-11/chrome-security.png"/>T2】</a></p>
+
+<p>单击<code>View certificate</code>确认Tomcat现在已经配置了自签名证书。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/chrome-certificate.png" class="zoom" data-title=""><img src="../Images/9d8af41f2c5c05cb272f7fd45b22eab9.png" class="img-fluid center" alt="Chrome Certificate" data-original-src="https://i.octopus.com/blog/2017-11/chrome-certificate.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>有了Octopus 4.1，您现在可以通过内置的步骤管理您的应用程序和证书部署生命周期，同时无缝地使用Maven存储库中的工件。</p>
+
+<p>如果您对Java应用程序的自动化部署感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看一下<a href="https://octopus.com/docs/deployments/java/deploying-java-applications">我们的文档</a>。</p>
+
+                    
+                    
+</body>
+</html>

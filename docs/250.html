@@ -1,0 +1,253 @@
+<html>
+<head>
+<title>Deploying an AWS ECS task using containers from ECR - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用ECR - Octopus Deploy中的容器部署AWS ECS任务</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/ecs#2021-08-12">https://octopus.com/blog/ecs#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/amazon-elastic-containers-octopus-deploy.png" class="zoom" data-title=""><img src="../Images/5e08fc0264d3b0277f31936e49371224.png" class="img-fluid center" alt="Octopus Juggling AWS ECS and Docker" data-original-src="https://i.octopus.com/blog/2018-09/ecs/amazon-elastic-containers-octopus-deploy.png"/>T2】</a></p>
+
+<p>Amazon的弹性容器服务(ECS)提供了一种简化的方式来编排Docker容器的运行，这是Kubernetes的一种流行替代方案。通过从版本<code>2018.8.0</code>开始的Octopus Deploy中可用的多包脚本步骤，您现在可以使用Octopus的版本控制和变量管理的所有好处来指导ECS的部署。这个版本还支持Amazon的弹性容器注册中心(ECR)作为一级提要类型。为了演示这可能如何为您工作，下面的帖子通过一个例子从Dockerfile到Deployment。</p>
+
+<p>但首先要了解一些背景。</p>
+
+<h2 id="elastic-container-services-ecs">弹性集装箱服务</h2>
+
+<p>在Kubernetes成为容器编排的领导者之前，AWS提出了自己的抽象，帮助管理跨多个容器实例的伸缩和负载平衡。ECS定义了容器部署的配置，这种方式感觉上更接近于他们如何接近<a href="https://aws.amazon.com/lambda" rel="nofollow"> AWS Lambdas </a>类似于Lambdas，主配置在每次更新时都被版本化，并且<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_services.html" rel="nofollow">服务</a>提供了一种抽象，它(类似于Lambda的<a href="https://docs.aws.amazon.com/lambda/latest/dg/versioning-aliases.html" rel="nofollow">别名</a>)可以指向特定版本。这些服务都位于一个由节点组成的<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_clusters.html" rel="nofollow">集群</a>中，在此之前，这些节点是您必须管理的一堆EC2实例。随着<a href="https://aws.amazon.com/fargate/" rel="nofollow"> Fargate </a>的发布，AWS现在将高兴地完全抽象和管理单个机器。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/tasks-services-cluster.png" class="zoom" data-title=""><img src="../Images/3c13d3d385842010474f4d2e8ed8a081.png" class="img-fluid center" alt="Tasks, Services, and Clusters" data-original-src="https://i.octopus.com/blog/2018-09/ecs/tasks-services-cluster.png"/>T2】</a></p>
+
+<p>服务在集群中运行，它们的活动任务基于特定版本的任务定义。</p>
+
+<h2 id="elastic-container-registry-ecr">弹性容器注册</h2>
+
+<p>自从2016年第一个Docker步骤可用以来，在Octopus Deploy中使用Docker容器注册表的能力已经成为可能。尽管AWS在弹性容器注册中心(ECR)下提供了Docker容器注册中心，但是有一个小小的障碍使得使用它非常困难。Octopus集成的标准V2 Docker注册API采用用户名和密码进行身份验证。尽管ECR没有提供静态的凭证集，但是它们通过一个<code>get-login</code> API请求提供了登录细节。然而，问题是这些凭证只在12小时内有效。这意味着要在Octopus Deploy中使用ECR提要，您需要确保至少每12小时检索一次凭证并更新提要细节。对于任何构建自动化部署管道的尝试来说，这显然有点扫兴。</p>
+
+<p>在<code>2018.8.0</code>版本中，我们提供了一种将AWS ECR提要添加为一级提要类型的方法。通过提供适当的AWS凭证，Octopus可以处理这个两步认证过程，这样您就可以使用标准的IAM角色。</p>
+
+<h2 id="deployments-with-octopus">使用Octopus的部署</h2>
+
+<h3 id="building-the-image-for-ecr">为ECR建立形象</h3>
+
+<p>我们的示例图像是一个基本的HTML网站，它构建在<code>httpd</code>容器图像之上，并根据我们计划提供的一些环境变量更改其内容:</p>
+
+<pre><code class="language-dockerfile">FROM httpd:2.4
+
+ENV OCTO_COLOR="#f00"
+ENV OCTO_ENV="DEFAULT"
+CMD echo "&lt;html&gt;\
+    &lt;head&gt;\
+        &lt;title&gt;Octopus Container&lt;/title&gt;\
+        &lt;style&gt;body {background-color: $OCTO_COLOR;} &lt;/style&gt;\
+    &lt;/head&gt;\
+    &lt;body&gt;&lt;h1&gt;Hello $OCTO_ENV&lt;/h1&gt;&lt;/body&gt;\
+&lt;/html&gt;" &gt; /usr/local/apache2/htdocs/index.html &amp;&amp; httpd-foreground\
+</code></pre>
+
+<p>像任何好的连续部署系统一样，我们希望构建一次并部署多次，所以在构建阶段，构建映像将在Octopus Deploy之外进行。我建议阅读一些AWS的广泛的<a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html" rel="nofollow">文档</a>来了解将图像推送到ECR的细节。</p>
+
+<h3 id="adding-ecr-feed-to-octopus-deploy">将ECR馈送添加到Octopus部署</h3>
+
+<p>准备好部署我们的映像后，我们可以继续将ECR添加到Octopus作为一级提要类型。</p>
+
+<p>从<code>Library</code>部分，添加一个新进给并选择类型<code>AWS Elastic Container Registry</code>。然后，您需要提供您的AWS凭证和注册中心所在的区域。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/ecr-feed.png" class="zoom" data-title=""><img src="../Images/2fab13224d7000e3144ab1aca35472ac.png" class="img-fluid center" alt="ECR Feed" data-original-src="https://i.octopus.com/blog/2018-09/ecs/ecr-feed.png"/>T2】</a></p>
+
+<p>当我们保存并测试新的提要时，Octopus应该会找到我们之前配置的注册表。Octopus正在做的是使用提供的凭证联系AWS，并获得Docker用来与远程存储库交互的标准用户名/密码凭证。然后，它使用检索到的用户名和密码与AWS公开的v2 Docker注册表进行交互，就像标准的Docker提要类型一样。</p>
+
+<p>因为Octopus服务器本身需要访问注册表来列出图像和标签(当创建一个发布时作为版本)，所以假定的IAM角色目前不支持这个提要类型。虽然这个<em>将来可能会得到支持，但它也需要Octopus服务器本身运行在AWS基础设施中才能工作。目前，AWS ECR提要类型需要标准的AWS凭证才能运行。</em></p>
+
+
+<h3 id="deploying-images-to-aws-ecs">将映像部署到AWS ECS</h3>
+
+<p>尽管Octopus目前没有特定于ECS的部署步骤，但我们仍然可以利用多包脚本步骤来更新我们的ECS任务和服务。这将允许我们使用Octopus来控制整个部署管道中发布的映像版本，以及管理需要提供给运行容器的不同变量。向您的项目添加一个<code>Run an AWS CLI Script</code>步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/project-steps.png" class="zoom" data-title=""><img src="../Images/c2529b9dbc8054617b377f579552b27c.png" class="img-fluid center" alt="Project Step" data-original-src="https://i.octopus.com/blog/2018-09/ecs/project-steps.png"/>T2】</a></p>
+
+<p>输入ECR服务所在的AWS区域，并选择拥有创建ECR任务和更新ECR服务所需权限的AWS帐户。该帐户可能会因阶段和生产而异，因此最好通过一个适用于不同环境的项目变量来提供该帐户。</p>
+
+<p>跳过<code>Referenced Packages</code>部分，添加我们添加到ECR提要中的Docker图像。对于这个映像，我们不需要进行任何包获取，因为这将由AWS自己处理，所以选择<code>The package will not be acquired</code>选项。我们还为它取了一个简单的名称，我们将使用它来访问脚本中的这些变量，但是，这个字段可以留空，然后它将默认为packageId。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/reference-package.png" class="zoom" data-title=""><img src="../Images/ff9167939757dcfd796e4300f37b47a5.png" class="img-fluid center" alt="Reference Package" data-original-src="https://i.octopus.com/blog/2018-09/ecs/reference-package.png"/>T2】</a></p>
+
+<p>当在脚本中引用一个<a href="https://octopus.com/docs/deployment-examples/custom-scripts/standalone-scripts#accessing-package-references-from-a-custom-script">包时，我们可以访问一堆变量，这些变量由我们上面提供的名字索引。</a></p>
+
+<ul>
+<li><code>Octopus.Action.Package[web].PackageId</code>:包ID。对于docker图像，这大致与存储库名称(“hello-color”)相关。</li>
+<li><code>Octopus.Action.Package[web].PackageVersion</code>:发布中包含的软件包版本。在docker图像的情况下，这与图像标签相关。</li>
+<li>提要ID("提要-新加坡-ECR ").</li>
+</ul>
+
+<p>还提供了一个docker特定变量<code>Octopus.Action.Package[web].Image</code>,它解析为完全限定的图像名。在这个包的例子中，它可能看起来有点像<code>918801671493.dkr.ecr.ap-southeast-1.amazonaws.com/hello-color:1.0.1</code>。我们需要在下面的脚本中使用这个<code>Image</code>变量。</p>
+
+<p>我们可以将脚本分成3个基本部分:</p>
+
+<h4 id="define-the-containers">1.定义容器</h4>
+
+<pre><code class="language-powershell">$PortMappings = New-Object "System.Collections.Generic.List[Amazon.ECS.Model.PortMapping]"
+$PortMappings.Add($(New-Object -TypeName "Amazon.ECS.Model.PortMapping" -Property @{ HostPort=80; ContainerPort=80; Protocol=[Amazon.ECS.TransportProtocol]::Tcp}))
+
+$EnvironmentVariables = New-Object "System.Collections.Generic.List[Amazon.ECS.Model.KeyValuePair]"
+$EnvironmentVariables.Add($(New-Object -TypeName "Amazon.ECS.Model.KeyValuePair" -Property @{ Name="OCTO_COLOR"; Value=$OctopusParameters["Color"]}))
+$EnvironmentVariables.Add($(New-Object -TypeName "Amazon.ECS.Model.KeyValuePair" -Property @{ Name="OCTO_MSG"; Value=$OctopusParameters["Message"]}))
+
+Write-Host "Adding Container Definition for" $OctopusParameters["Octopus.Action.Package[web].Image"]
+$ContainerDefinitions = New-Object "System.Collections.Generic.List[Amazon.ECS.Model.ContainerDefinition]"
+$ContainerDefinitions.Add($(New-Object -TypeName "Amazon.ECS.Model.ContainerDefinition" -Property @{ `
+    Name="web"; `
+    Image=$OctopusParameters["Octopus.Action.Package[web].Image"]; `
+    PortMappings=$PortMappings; `
+    Environment=$EnvironmentVariables
+    Memory=256;}))
+</code></pre>
+
+<p>我们必须在该任务的容器定义中显式设置环境变量。虽然在集群上直接运行任务时可以覆盖环境变量，但是当通过服务运行时，目前没有这样的选项，动态配置由用户根据<a href="https://aws.amazon.com/about-aws/whats-new/2017/11/amazon-ecs-allows-containers-to-directly-access-environmental-metadata/" rel="nofollow">环境元数据</a>来决定。有一个公开的ECS <a href="https://github.com/aws/amazon-ecs-agent/issues/3" rel="nofollow"> GitHub问题</a>要求更好的支持，然而，这个问题已经存在了将近四年，所以可能不会很快得到解决。因此，我建议为每个环境保留一个单独的任务，并根据部署使用项目变量来改变更新的任务。</p>
+
+<p>注意，在提供图像细节时，我们使用了上面描述的<code>Octopus.Action.Package[web].Image</code>变量。该值将从发布期间选择的映像版本中获得。</p>
+
+<h4 id="create-task-with-container-definition">2.使用容器定义创建任务</h4>
+
+<pre><code class="language-powershell">$Region = $OctopusParameters["Octopus.Action.Amazon.RegionName"]
+$TaskName = $OctopusParameters["TaskName"]
+$ExecutionRole = $(Get-IAMRole -RoleName "ecsTaskExecutionROle").Arn
+
+Write-Host "Creating New Task Definition $TaskName"
+$TaskDefinition = Register-ECSTaskDefinition `
+    -ContainerDefinition $ContainerDefinitions `
+    -Cpu 256 `
+    -Family $TaskName `
+    -TaskRoleArn $ExecutionRole `
+    -ExecutionRoleArn $ExecutionRole `
+    -Memory 512 `
+    -NetworkMode awsvpc `
+    -Region $Region `
+    -RequiresCompatibility "FARGATE"
+</code></pre>
+
+<p>虽然您可以加载一个以前构建的任务配置作为模板，并且只更新映像，但是这种方法确保Octopus部署过程成为预期运行的事实的来源。此外，这意味着该脚本可以在还没有设置<em>之前的脚本的地方运行，例如，当您想要为新的测试环境配置新的端点时。</em></p>
+
+<p>通过从环境变量中加载任务名称，我们可以根据环境(和租户，如果相关的话)改变任务，这允许我们为不同的部署上下文拥有多个任务定义。</p>
+
+<h4 id="upgrade-the-service-to-use-the-new-task">3.升级服务以使用新任务</h4>
+
+<pre><code class="language-powershell">$ClusterName = $OctopusParameters["ClusterName"]
+$ServiceName = $OctopusParameters["ServiceName"]
+
+Write-Host "Updating Service $ServiceName"
+$ServiceUpdate = Update-ECSService `
+    -Cluster $ClusterName `
+    -ForceNewDeployment $true `
+    -Service $ServiceName `
+    -TaskDefinition $TaskDefinition.TaskDefinitionArn `
+    -DesiredCount 2 `
+    -DeploymentConfiguration_MaximumPercent 200 `
+    -DeploymentConfiguration_MinimumHealthyPercent 100
+</code></pre>
+
+<p>为了让我们可以为每个环境运行多个服务，服务的名称是通过一个项目变量提供的，该项目变量使用随环境变化的命名约定(详见本文末尾的项目变量截屏)。</p>
+
+<p>本文中描述的另一种方法可能是不使用服务，直接在集群中运行任务。这实际上只对特定的任务有用，而对可伸缩的应用程序没有用，因为使用服务可以更容易地设置更高级的配置，比如包括一个负载平衡器，以便在多个任务之间分配流量，或者设置自动伸缩规则。</p>
+
+<h4 id="putting-it-all-together">把所有的放在一起</h4>
+
+<p>如果我们将所有这些脚本放在一起，并添加一些日志功能，它应该看起来像下面这样:</p>
+
+<pre><code class="language-powershell"># Define Container
+$PortMappings = New-Object "System.Collections.Generic.List[Amazon.ECS.Model.PortMapping]"
+$PortMappings.Add($(New-Object -TypeName "Amazon.ECS.Model.PortMapping" -Property @{ HostPort=80; ContainerPort=80; Protocol=[Amazon.ECS.TransportProtocol]::Tcp}))
+
+$EnvironmentVariables = New-Object "System.Collections.Generic.List[Amazon.ECS.Model.KeyValuePair]"
+$EnvironmentVariables.Add($(New-Object -TypeName "Amazon.ECS.Model.KeyValuePair" -Property @{ Name="OCTO_COLOR"; Value=$OctopusParameters["Color"]}))
+$EnvironmentVariables.Add($(New-Object -TypeName "Amazon.ECS.Model.KeyValuePair" -Property @{ Name="OCTO_MSG"; Value=$OctopusParameters["Message"]}))
+
+Write-Host "Adding Container Definition for" $OctopusParameters["Octopus.Action.Package[web].Image"]
+$ContainerDefinitions = New-Object "System.Collections.Generic.List[Amazon.ECS.Model.ContainerDefinition]"
+$ContainerDefinitions.Add($(New-Object -TypeName "Amazon.ECS.Model.ContainerDefinition" -Property @{ `
+    Name="web"; `
+    Image=$OctopusParameters["Octopus.Action.Package[web].Image"]; `
+    PortMappings=$PortMappings; `
+    Environment=$EnvironmentVariables
+    Memory=256;}))
+
+# Create Task
+$Region = $OctopusParameters["Octopus.Action.Amazon.RegionName"]
+$TaskName = $OctopusParameters["TaskName"]
+$ExecutionRole = $(Get-IAMRole -RoleName  "ecsTaskExecutionROle").Arn
+Write-Host "Creating New Task Definition $TaskName"
+$TaskDefinition = Register-ECSTaskDefinition `
+    -ContainerDefinition $ContainerDefinitions `
+    -Cpu 256 `
+    -Family $TaskName `
+    -TaskRoleArn $ExecutionRole `
+    -ExecutionRoleArn $ExecutionRole `
+    -Memory 512 `
+    -NetworkMode awsvpc `
+    -Region $Region `
+    -RequiresCompatibility "FARGATE"
+
+if(!$?) {
+    Write-Error "Failed to register new task definition"
+    Exit 0
+}
+Write-Host "Created Task Definition $($TaskDefinition.TaskDefinitionArn)"
+Write-Verbose $($TaskDefinition | ConvertTo-Json)
+
+# Update Service
+$ClusterName = $OctopusParameters["ClusterName"]
+$ServiceName = $OctopusParameters["ServiceName"]
+Write-Host "Updating Service $ServiceName"
+$ServiceUpdate = Update-ECSService `
+    -Cluster $ClusterName `
+    -ForceNewDeployment $true `
+    -Service $ServiceName `
+    -TaskDefinition $TaskDefinition.TaskDefinitionArn `
+    -DesiredCount 2 `
+    -DeploymentConfiguration_MaximumPercent 200 `
+    -DeploymentConfiguration_MinimumHealthyPercent 100
+if(!$?) {
+    Write-Error "Failed to register new task definition"
+    Exit 0
+}
+Write-Host "Updated Service $($ServiceUpdate.ServiceArn)"
+Write-Verbose $($ServiceUpdate | ConvertTo-Json)
+
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/script-step.png" class="zoom" data-title=""><img src="../Images/872ce12ccc2b2035c2260efff02077e8.png" class="img-fluid center" alt="Script Step" data-original-src="https://i.octopus.com/blog/2018-09/ecs/script-step.png"/>T2】</a></p>
+
+<p>然后，我们添加以下变量，这些变量为ECS基础设施本身和我们希望推入容器的细节提供配置。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/project-variables.png" class="zoom" data-title=""><img src="../Images/d294b64500c2cda5bf1acdfd18f8e544.png" class="img-fluid center" alt="Project Variables" data-original-src="https://i.octopus.com/blog/2018-09/ecs/project-variables.png"/>T2】</a></p>
+
+<h3 id="deployment">部署</h3>
+
+<p>创建发布时，系统会提示您提供想要部署的映像版本。Octopus直接从容器注册中心获得这些信息，因此您可以准确地看到哪些图像已经部署，哪些图像尚未发布。版本号实际上是通过解析图像标签获得的，因此尽管您可以提供任何标签作为“版本”，但是只有可以被解析为<a href="https://semver.org/" rel="nofollow"> semver 2 </a>的标签才是可见的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/create-release.png" class="zoom" data-title=""><img src="../Images/8fcdfffbf054e7e717f3d305d2086198.png" class="img-fluid center" alt="Create Release" data-original-src="https://i.octopus.com/blog/2018-09/ecs/create-release.png"/>T2】</a></p>
+
+<p>开始部署时，您会注意到，虽然我们使用的是一个包(映像)，但没有发生任何获取。这是因为Octopus只是提供描述包的值<em>供我们的脚本使用。当部署执行时，ECS服务将运行新任务，并根据<code>DesiredCount</code>、<code>DeploymentConfiguration_MaximumPercent</code>和<code>DeploymentConfiguration_MinimumHealthyPercent</code>配置，确保在任何给定时间点都有正确数量的任务处于活动状态。这导致滚动更新风格的部署。</em></p>
+
+<p>让我们看一下我们的开发和生产部署:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/deployed-dev.png" class="zoom" data-title=""><img src="../Images/e6f0a77edc17c4294a3bdd043446637d.png" class="img-fluid center" alt="Dev" data-original-src="https://i.octopus.com/blog/2018-09/ecs/deployed-dev.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/ecs/deployed-prod.png" class="zoom" data-title=""><img src="../Images/d71176ddc9b58cdd3b9d0d9492875ebf.png" class="img-fluid center" alt="Prod" data-original-src="https://i.octopus.com/blog/2018-09/ecs/deployed-prod.png"/>T2】</a></p>
+
+<p>Huzzzah！颜色和信息，当我考虑这个应用程序的流量时，我很高兴我们有这样的负载平衡！</p>
+
+<h3 id="activities-left-for-the-reader">留给读者的活动</h3>
+
+<p>这个部署脚本可能比您在现实世界中想要的要简单得多。您可能需要配置卷装载、CPU限制、自定义缩放规则或AWS APIs公开的任意数量的各种配置选项。该脚本主要关注“Fargate”产品，该产品抽象了集群中服务器的管理，但是，如果您使用ECS的“EC2”配置，同样的原理只需稍加修改即可。</p>
+
+<h2 id="octopus-deploys-future-plans-for-ecs">Octopus部署ECS的未来计划</h2>
+
+<p>虽然Kubernetes最近在容器领域引起了业界的注意，但ECS仍然是一个受欢迎的选择，我们预计可能会有更多一流的ECS步骤出现。根据“Octopus是真理之源”的理念，我希望ECS的任何特定步骤最终都能够反映目前通过AWS门户可获得的许多配置选项，但是，与Octopus变量和包选择的集成更加紧密。</p>
+
+<p>Octopus的每个版本都提供了与各种云提供商更丰富、更有用的集成，AWS也不例外。如果你现在正在使用ECS，希望这篇文章能给你一些关于如何使用Octopus Deploy进行部署的想法，利用Octopus擅长的所有东西。让我们知道您使用Octopus到ECS的成功(或失败)部署！</p>
+
+                    
+                    
+</body>
+</html>

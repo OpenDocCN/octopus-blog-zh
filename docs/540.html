@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>Octopus September Release 3.17 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通9月版3.17 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-3-17#2022-07-07">https://octopus.com/blog/octopus-release-3-17#2022-07-07</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-09/blogimage-release-3-17.png" class="zoom" data-title=""><img src="../Images/d055e4c5aadbb72a39dfa090a1532918.png" class="img-fluid center" alt="Octopus 3.17 release announcement" data-original-src="https://i.octopus.com/blog/2017-09/blogimage-release-3-17.png"/>T2】</a></p>
+
+<p>这个月的发布是重要的，我们很高兴能发布具有一流Java支持的Octopus 3.17！这是令人兴奋的，因为它使使用Java平台构建应用程序的团队能够以安全、可靠和可重复的方式部署他们的应用程序。我们也为Octopus API提供了强大的支持。Octopus是一个API优先的系统，所以你可以通过我们的门户网站或命令行工具做任何事情，你可以通过我们的REST API。现在，我们已经添加了Swagger支持，所以它更容易被发现和使用。最后，我们改进了用户管理和身份验证性能。请继续阅读所有激动人心的细节！</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="release-tour">发布之旅</h2>
+
+<iframe src="https://www.youtube.com/embed/2vpxRy2yXAI" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="first-class-java-deployments">一流的Java部署</h2>
+
+<p>3.17引入了许多针对Java应用服务器部署和管理应用程序的新步骤，并为管理内置Octopus库中的<code>jar</code>、<code>war</code>、<code>ear</code>和<code>rar</code>文件提供支持。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-09/java-steps.png" class="zoom" data-title=""><img src="../Images/4f0a7d584c395e007912eac6123d010f.png" class="img-fluid center" alt="Java Steps" data-original-src="https://i.octopus.com/blog/2017-09/java-steps.png"/>T2】</a></p>
+
+<p>这些新步骤允许将Java应用程序部署到WildFly 10+和Red Hat JBoss EAP 6+应用服务器，以及Tomcat 7+上。此外，<code>Deploy Java Archive</code>步骤允许将Java应用程序复制到目标机器上的自定义位置，从而允许将Java应用程序部署在任何能够使用文件复制部署的Java应用服务器上。</p>
+
+<p>有关这些新步骤的更多信息，请参见<a href="https://g.octopushq.com/JavaAppDeploy" rel="nofollow">文档</a>。</p>
+
+<h2 id="swagger-support-for-the-octopus-api">对Octopus API的大力支持</h2>
+
+<p>Swagger(也称为OpenApi)是描述REST API的标准。许多公司采用它来描述他们的公共API。现在在3.17 Octopus Deploy已经开始使用Swagger记录它的API。</p>
+
+<p>swagger文档有两个版本，JSON格式的版本在<code>[server]/api/swagger.json</code>可用，YAML格式的版本在<code>[server]/api/swagger.yaml</code>可用。</p>
+
+<p>3.17现在还包括默认的Swagger UI，用于以一种人类可读的方式显示Swagger文档。该用户界面在<code>[server]/swaggerui/</code>可用</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-09/swagger.png" class="zoom" data-title=""><img src="../Images/ed72cf227443dd8eb46447f798c96fad.png" class="img-fluid center" alt="Swagger UI" data-original-src="https://i.octopus.com/blog/2017-09/swagger.png"/>T2】</a></p>
+
+<h2 id="user-administration-and-authentication-performance-improvements">用户管理和身份验证性能改进</h2>
+
+<p>我们围绕用户管理引入了一些变化，以解决一些性能问题，并在Octopus中更好地模拟用户。关键性能修复与在使用Active Directory提供程序时何时检查安全组有关。在以前的版本中，组是在用户登录时检索的。在大型/复杂的目录场景中，这可能需要一段时间，并且用户在登录时会经历长时间的延迟。为了解决这个问题，我们现在每小时在后台检查一次组(它最初在启动后不久运行，因此如果需要，可以使用重启来强制它运行)。此更改还修复了以前不会为服务帐户用户加载组的问题，因为他们没有登录。</p>
+
+<p>与用户建模相关的另一个重大变化是登录的引入，它允许多个登录与一个给定的用户相关联。例如，您现在可以创建一个用户，并关联一个Active Directory帐户和一个GoogleApps帐户(假设您已经启用了这两个帐户)。它还消除了强制用户名为活动目录提供者的UPN的需要(如果用户是在登录时自动创建的，它将默认为UPN，但如果是手动创建用户，则不必如此)。要为用户添加Active Directory登录，也不再需要猜测upn，您需要通过一个搜索对话框，类似于编辑团队和查找安全组时。</p>
+
+<p>最后一点，现在可以禁用自动用户创建。它仍然默认为启用，但您现在可以选择禁用它。启用/禁用通过<code>configure</code>命令行完成，并且可以根据身份验证提供者进行设置。</p>
+
+<p>更多信息参见更新的<a href="https://g.octopushq.com/AuthenticationProviders" rel="nofollow">文档</a>。</p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>这个版本没有重大变化。</p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>升级Octopus Deploy 的所有常规<a href="https://octopus.com/docs/administration/upgrading">步骤都适用。更多信息，请参见</a><a href="https://octopus.com/downloads/compare?to=3.17.0">发行说明</a>。</p>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。我们希望你喜欢我们的新功能和最新版本。欢迎给我们留下评论，让我们知道你的想法！愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,338 @@
+<html>
+<head>
+<title>Config as Code and persistence ignorance - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>配置为代码和持久性无知- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/config-as-code-persistence-ignorance#2022-03-31">https://octopus.com/blog/config-as-code-persistence-ignorance#2022-03-31</a></blockquote>
+                        <p>当将配置为代码(Config as Code)特性引入我们的代码库时，我们遇到了一些<a href="https://deviq.com/principles/persistence-ignorance" rel="nofollow">忽略持久性</a>的机会——让我们的代码忽略任何持久性/存储逻辑。</p>
+
+<p>这篇文章探讨了我们的核心平台团队是如何对持久性无知做出决策的。我们希望其他人能从我们的经验中学习。</p>
+
+<h2 id="octopus-and-sql">Octopus和SQL</h2>
+
+<p>2014年，在Octopus 3.0时代，我们决定<a href="https://octopus.com/blog/3.0-switching-to-sql">切换到SQL </a>作为我们的存储/持久层。这意味着当您在Octopus中保存数据时，它会存储/持久化到SQL数据库表中，正如您所期望的那样。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/config-as-code-persistence-ignorance/sql-storage.png" class="zoom" data-title=""><img src="../Images/a21cd71b1a3e6c80c2636bf011231332.png" class="img-fluid center" alt="a deployment process stored in SQL" data-original-src="https://i.octopus.com/blog/2022-03/config-as-code-persistence-ignorance/sql-storage.png"/>T2】</a></p>
+
+<p>在Octopus代码库中，我们选择保持简单。我们直接与那些有<a href="https://github.com/OctopusDeploy/Nevermore/wiki" rel="nofollow">永不超生</a>事务的表进行对话。永不超生是一个微型ORM，它将SQL Server视为一个文档存储库。</p>
+
+<p>在这个例子中，我们的类:</p>
+
+<ul>
+<li>对一个<code>store</code>产生了依赖</li>
+<li>在必要的地方开始查询我们需要什么</li>
+<li>用我们的<code>using</code>块完成并处理我们的<code>transaction</code></li>
+</ul>
+
+<p>任务完成。</p>
+
+<pre><code class="language-cs">class Thinger : IDoThings
+{
+    readonly IOctopusRelationalStore store;
+
+    public Thinger(IOctopusRelationalStore store)
+    {
+        this.store = store;
+    }
+
+    public DeploymentProcess GetDeploymentProcessForProject(Project project)
+    {
+        using (var transaction = store.BeginTransaction())
+        {
+            var deploymentProcess = transaction
+                .LoadRequired&lt;DeploymentProcess&gt;(project.DeploymentProcessId);
+            return deploymentProcess;
+        }
+    }
+
+    ...
+}
+</code></pre>
+
+<h2 id="config-as-code">配置为代码</h2>
+
+<p>当我们开始<a href="https://octopus.com/blog/shaping-config-as-code">将Config塑造成代码</a>时，我们突然有了多个需要考虑的持久层。</p>
+
+<p>对于受版本控制的项目，部署过程的数据现在作为Octopus配置语言(OCL)文件存储在Git存储库中，而不是存储在SQL中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/config-as-code-persistence-ignorance/git-storage.png" class="zoom" data-title=""><img src="../Images/15130e6b281f1d8e35b2f4b463aa21c2.png" class="img-fluid center" alt="a deployment process stored in Git" data-original-src="https://i.octopus.com/blog/2022-03/config-as-code-persistence-ignorance/git-storage.png"/>T2】</a></p>
+
+<p>从API消费者的角度来看，变化并不大。您请求一个部署过程，并告诉我们您想要查看哪个分支。我们从Git分支读取，将OCL反序列化为我们数据模型，并将结果作为JSON返回给您。</p>
+
+<p>例如，设想一个常规项目的部署过程可以被请求如下:</p>
+
+<pre><code>/api/Spaces-1/projects/Projects-1/deploymentprocesses
+</code></pre>
+
+<p>受版本控制的项目将包含分支信息。在这种情况下，我们看到一个<code>beta</code>分支被请求:</p>
+
+<pre><code>/api/Spaces-1/projects/Projects-1/beta/deploymentprocesses
+</code></pre>
+
+<p>作为一个API <em>消费者</em>，你不知道(或者不关心)这些数据来自哪里。你只是想要一个部署过程。您依赖API来获得答案应该是简单和直观的。</p>
+
+<p>作为一名API <em>开发者</em>，你支持用户体验的旅程也应该简单直观。</p>
+
+<blockquote class="blockquote">
+<p>我只想要一个x，我不在乎它是怎么储存的，也不在乎它从哪里来。</p>
+</blockquote>
+
+<p>如果我们的开发人员在考虑数据模型时不得不在头脑中管理太多的切换逻辑，<strong>就会有这样的风险，混乱会以bug、不一致的行为或特性/修复的缓慢变动的形式扩展到客户</strong>。</p>
+
+<p>再考虑一下这种带有版本控制的方法:</p>
+
+<pre><code class="language-cs">public DeploymentProcess GetDeploymentProcessForProject(Project project)
+{
+    // Wait, we better check if this thing is version-controlled!
+    if (project.PersistenceSettings is VersionControlSettings)
+    {
+        throw new NotImplementedException(); //TODO: Lookup deployment process from Git.
+    }
+    else
+    {
+        using (var transaction = store.BeginTransaction())
+        {
+            var deploymentProcess = transaction
+                .LoadRequired&lt;DeploymentProcess&gt;(project.DeploymentProcessId);
+            return deploymentProcess;
+        }
+    }
+}
+</code></pre>
+
+<p>如果您正在进行原型开发以证明Git的可能性，这并不是一个不合理的起点(并且这个<em>是我们在探索可能性时开始的</em>)。</p>
+
+<p>但是从长远来看，随着更多的特性<em>可能</em>转移到Git，以及更多的工程师需要查询/改变数据，这是一个架构和可伸缩性的机会。</p>
+
+<h2 id="introducing-document-stores">文档存储简介</h2>
+
+<p>为了解决这个问题，我们引入了一个文档存储抽象层(参见<a href="https://deviq.com/design-patterns/repository-pattern" target="_blank">存储库模式</a>)。</p>
+
+<pre><code class="language-cs">public interface IDocumentStore&lt;TDocument&gt; where TDocument : class, IDocument
+{
+    Task Add(TDocument document, ...);
+    Task Update(TDocument document, ...);
+    Task&lt;TDocument&gt; Get(string id, ...);
+    Task&lt;TDocument?&gt; GetOrNull(string id, ...);
+    Task&lt;IReadOnlyList&lt;TDocument&gt;&gt; GetMany(IReadOnlyCollection&lt;string&gt; ids, ...);
+    Task&lt;IReadOnlyList&lt;TDocument&gt;&gt; All(...);
+    IQueryable&lt;TDocument&gt; Query();
+    ...
+</code></pre>
+
+<p>我们的愿景是开发人员可以依赖于一个<code>IDocumentStore&lt;T&gt;</code>，通用接口将允许他们以类似于我们现有的(永不超生)接口的方式查询数据模型。</p>
+
+<p>我们的新抽象需要两个具体的实现:</p>
+
+<ul>
+<li><code>DatabaseDocumentStore&lt;T&gt;</code></li>
+<li><code>GitDocumentStore&lt;T&gt;</code></li>
+</ul>
+
+<p>当开发人员要求一个<code>IDocumentStore&lt;T&gt;</code>时，我们的基本文档库使用一个<a href="https://deviq.com/design-patterns/strategy-pattern" rel="nofollow">策略模式</a>来确定你是在处理一个版本控制项目还是一个常规(SQL)项目。它的工作是为您提供正确类型的文档存储。作为一个开发者，你不用考虑这个问题。</p>
+
+<p>我们之前的代码示例变得更容易推理:</p>
+
+<pre><code class="language-cs">class Thinger : IDoThings
+{
+    readonly IDocumentStore&lt;DeploymentProcess&gt; deploymentProcessesStore;
+
+    public Thinger(IDocumentStore&lt;DeploymentProcess&gt; deploymentProcessesStore)
+    {
+        this.deploymentProcessesStore = deploymentProcessesStore;
+    }
+
+    public DeploymentProcess GetDeploymentProcessForProject(Project project)
+    {
+        return deploymentProcessesStore.Get(project.DeploymentProcessId);
+    }
+    ...
+}
+</code></pre>
+
+<h2 id="what-about-transactionality">事务性呢？</h2>
+
+<p>事务性是一个有趣的挑战和观察。</p>
+
+<p>当我们与SQL数据库对话时，我们打开一个事务，对该事务执行操作，然后关闭并处理它。</p>
+
+<p>您可能会问上面代码中的事务发生了什么？</p>
+
+<p>从2014年开始，我们在整个代码库(包括我们的API和任务系统)中选择了短期事务。</p>
+
+<p>在许多方面，这是理想的。我们可以保证短期事务，并孤立地推理事务性代码。例如，无论您在哪里看到这样的代码，您都可以很容易地推断出事务的生存期:</p>
+
+<pre><code class="language-C#">using (var transaction = store.BeginTransaction())
+{
+    var foo = transaction.LoadRequired&lt;Foo&gt;("Foo-123");
+    foo.Bar = "testing";
+    transaction.Update(foo);
+    transaction.Commit();
+}
+</code></pre>
+
+<p>在其他方面，我们看到了两个长期的不利因素。</p>
+
+<p>首先，当我们考虑给定请求/命令的生命周期时，我们无法保证<em>的单一事务性</em>。因为我们在代码库的不同层次对事务进行微观管理，所以在一个给定的请求/命令中可能会涉及到几个事务<em>。</em></p>
+
+<p>有可能几个事务会成功完成并提交，但最后有一个会失败。在这种情况下，异常将被正确地返回给用户，但是来自<em>相同失败请求</em>的早期事务将不会回滚，给你留下数据不一致的问题(在这项工作中发现并修复了其中的几个问题)。</p>
+
+<p>为了避免这种情况，我们发现在许多情况下，我们会在调用链的早期创建一个事务，然后将该事务作为方法参数传递(有时通过深度超过10个方法的大规模调用链，包括许多静态调用链)。在这些情况下，一些中间方法可能会调用<code>.Commit()</code>,你只能希望在同一个事务中没有其他方法会调用<code>.Commit()</code>(因为你只能调用commit一次)。</p>
+
+<p>其次，当我们开始讨论文档存储抽象时，我们开始问:</p>
+
+<blockquote class="blockquote">   </blockquote>
+
+<p>开发人员必须考虑他们要求的东西(部署过程)，以及如何围绕这个东西进行事务处理。</p>
+
+<p>当我们在这种情况下谈论单一责任时，交易是额外的和不必要的上下文。这与我们要求的部署过程无关。</p>
+
+<p>明确地说，像我们一直做的那样，拥有事务控制的<em>选项</em>是非常强大的。但是对于大多数情况，我们不应该去想它。</p>
+
+<p>我们发现，如果你只依赖于一个像SQL这样的持久层，你可以在很多年内不直接使用事务。但是一旦你有了多个持久层(不是永不超生/EF/SQL，而是T12)，你就有问题了。</p>
+
+<p>此外，事务是一个高级主题。我们日益壮大的团队中的开发人员很容易以可疑的方式持有事务，或者完全忘记提交。像这样的事情很可能在测试中被发现，但是这说明了<em>不必要的变动</em>开始悄悄出现。</p>
+
+<p>我们在架构上的工作是帮助我们的开发人员落入成功的陷阱。当我们观察到这种复杂性时(特别是当我们开始扩展时)，这是一个很好的机会来考虑一个新的抽象，并尝试在让我们走到这一步的惊人基础上进行改进。</p>
+
+<h2 id="introducing-unit-of-work">介绍工作单元</h2>
+
+<p>为了帮助我们管理跨请求/命令的事务，我们引入了一个<a href="https://martinfowler.com/eaaCatalog/unitOfWork.html" rel="nofollow">工作单元</a>，这样开发者就少了一件需要考虑的事情。消费者只需要一个给定类型的文档存储。围绕他们操作的工作单元将为他们管理，而不是他们所关心的。</p>
+
+<p>可以肯定地说，消费者只是想要一个<code>X</code>，所以让他们要求<em>正是他们需要的</em>。</p>
+
+<p>例如，当你想要的只是一把画笔时，你不应该要求整个邦宁商店。就要画笔！画笔是否来自邦宁商店与你无关。</p>
+
+<p>随着事务性被抽象成一个工作单元，这就导致了分支的问题。</p>
+
+<blockquote class="blockquote">   </blockquote>
+
+<h2 id="introducing-project-scope">引入项目范围</h2>
+
+<p>还记得我们前面提到的关于文档存储的策略模式吗(它帮助我们确定当您请求一个<code>IDocumentStore&lt;T&gt;</code>时，您应该接收什么类型的<em>文档存储)？</em></p>
+
+<p>我们知道会有一些细节(比如项目和/或Git分支)对层级较低的消费者有用。我们希望将这些信息封装到一个“项目范围”中。</p>
+
+<p>我们希望不要将这些信息作为方法参数到处传递。风险是在我们的后端有相当于道具爆炸的东西(传递一个东西超过10层，以便最底层的消费者可以使用它)。</p>
+
+<p>想象一下，必须将Git分支名称和/或提交信息作为可选参数传递给我们可能需要用于版本控制文档的所有<code>IDocumentStore</code>方法。我们的文档存储抽象会突然变成...不是很抽象。</p>
+
+<p>依靠我们的<a href="https://deviq.com/principles/dependency-inversion-principle" rel="nofollow">依赖倒置</a> (DI)原则，我们可以获取对一个<code>IProjectScope</code>的依赖，并告诉它尽可能在调用链的最高层(如ASP.NET中间件或动作过滤器)对每个请求封装一次分支或项目信息<em>。</em></p>
+
+<p>那么我们在同一个调用链中最底层的代码也可以把<code>IProjectScope</code>作为一个依赖项并安全地查询那个信息，而不需要我们把所有东西都作为方法参数传递。</p>
+
+<p>当我们以这种方式使用DI时，我们很快发现了所有的拦路虎，比如不能利用构造函数依赖的<code>public static</code>方法。我们以非静态的方式重写了这些方法，去掉了(现在)不必要的<code>transaction</code>方法参数，并包含了更多的单一责任。</p>
+
+<p>最后，我们发现脑子里一下子没什么可记的了；更少的理由；改变的理由更少。</p>
+
+<h2 id="what-about-caching">缓存呢？</h2>
+
+<p>在以前的许多案例中，我们必须依赖缓存抽象并直接使用它，以便为不同的客户提供性能改进。</p>
+
+<p>这些年来，这项工作做得很好。但是随着我们的成长，我们的代码变得越来越复杂。</p>
+
+<p>考虑这个例子，消费者正在为一个给定的项目寻找<code>Foo</code>文档:</p>
+
+<pre><code class="language-C#">using (var transaction = store.BeginTransaction())
+{
+    var foos = cache.Get&lt;Foo&gt;(transaction, x =&gt; x.ProjectId == projectId).ToList();
+    ...
+</code></pre>
+
+<p>只有几行字，却提供了重要的价值。它提供了一个<code>Foo</code>的缓存版本，避免我们不必要地访问数据库。</p>
+
+<p>但是消费者必须停下来思考一下这个问题。</p>
+
+<p>消费者必须:</p>
+
+<ol>
+<li>旋起一个<code>transaction</code></li>
+<li>意识到他们可以利用一个<code>cache</code>依赖</li>
+<li>弄清楚他们给定的类型(<code>Foo</code>)是否支持缓存<em>(不是我们所有的类型都支持缓存)</em></li>
+<li>确定如何直接调用缓存方法，传递<code>Get&lt;T&gt;</code>方法a <code>transaction</code>和Lambda</li>
+</ol>
+
+<p>开发人员在编写代码时经常没有考虑到我们的缓存。正因为如此，我们对一些性能问题做出了反应，并在出现问题时使用缓存来修复问题。</p>
+
+<p>但是，消费者为什么要考虑缓存呢？这不是他们的责任。</p>
+
+<p>然而，这是某人的责任。我们仍然想要它所提供的价值。它只需要移到别的地方。</p>
+
+<p>有了<code>IDocumentStore&lt;T&gt;</code>抽象，我们可以编写装饰器并透明地引入缓存层。</p>
+
+<p>例如，类似这样的事情:</p>
+
+<pre><code class="language-C#">public class CachingDocumentStoreDecorator&lt;TDocument&gt; : IDocumentStore&lt;TDocument&gt; where TDocument : class
+{
+    readonly IDocumentStore&lt;TDocument&gt; inner;
+    readonly ICache cache;
+
+    public CachingDocumentStoreDecorator(IDocumentStore&lt;TDocument&gt; inner, ICache cache)
+    {
+        this.inner = inner;
+        this.cache = cache;
+    }
+
+    public async Task&lt;TDocument&gt; GetAsync(string id, CancellationToken cancellationToken)
+    {
+        return TryGetFromCache(id).SingleOrDefault()
+            ?? await inner.GetAsync(id, cancellationToken);
+    }
+    ...
+</code></pre>
+
+<p>当您请求一个带有给定<code>id</code>的文档时，<code>TryGetFromCache</code>方法会判断该类型是否支持缓存，并在缓存可用时返回结果。</p>
+
+<p>消费者对这一层一无所知。我们修饰了我们的抽象，并围绕这一层放置了强大的测试覆盖，给了我们信心，它做了我们期望的事情。任何<code>IDocumentStore&lt;T&gt;</code>的消费者都会得到这些开箱即用的装饰品。</p>
+
+<h2 id="encouraged-by-convention">受到惯例的鼓励</h2>
+
+<p>我们的开发者现在被鼓励依赖<code>IDocumentStore&lt;T&gt;</code>，我们有<a href="https://github.com/andrewabest/Conventional" rel="nofollow">惯例测试</a>来帮助他们停止直接依赖商店/交易。</p>
+
+<p>我们核心平台的消费者请求他们需要的东西，在他们认为合适的时候改变它，知道(或者不知道)每个请求都有一个<code>IUnitOfWork</code>,它将在需要时负责建立一个<code>transaction</code>,并在请求完成时提交该事务(对于Git或SQL)。</p>
+
+<p>所有独立的问题都得到透明的处理，因此您可以专注于向客户提供出色功能的工作。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>我们希望这篇文章提供了一些关于架构变化的见解，当我们支持像代码配置这样的特性时，可以帮助我们建立长期的信心和稳定性。</p>
+
+<p>例如:</p>
+
+<pre><code class="language-cs">public class CreateChannelController : BaseApiController
+{
+    readonly IResourceMapper resourceMapper;
+    readonly IDocumentStore&lt;Channel&gt; channelStore;
+    readonly IDocumentStore&lt;Project&gt; projectStore;
+
+    public CreateChannelController(
+        IResourceMapper resourceMapper,
+        IDocumentStore&lt;Channel&gt; channelStore,
+        IDocumentStore&lt;Project&gt; projectStore)
+    {
+        this.resourceMapper = resourceMapper;
+        this.channelStore = channelStore;
+        this.projectStore = projectStore;
+    }
+
+    // I don't think about DB vs Git
+    // I don't think about transactions
+    // I don't think about caching
+    // I don't think about entity tracking
+    // I don't think about deletion rules
+    // I don't think about veto rules
+    // ...
+    // I just use my document stores
+    ...
+</code></pre>
+
+<p>我们相信，这将为使用我们核心平台的开发人员带来更简单、更快速、更直观的未来，从而为您(客户)带来简单、快速、直观的特性。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

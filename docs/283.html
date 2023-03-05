@@ -1,0 +1,133 @@
+<html>
+<head>
+<title>Building and publishing a Docker image to ECR using GitHub Actions - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用GitHub Actions - Octopus Deploy构建Docker映像并将其发布到ECR</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/githubactions-docker-ecr#2022-12-05">https://octopus.com/blog/githubactions-docker-ecr#2022-12-05</a></blockquote>
+                        <p>GitHub Actions使用工作流，因此您可以在任何GitHub存储库中包含DevOps流程。GitHub Actions允许构建存储库在部署过程中与各种服务进行交互。通常，会构建一个代码库，并将其推入容器注册中心，以便以后进行部署。</p>
+
+<p>在这篇文章中，我将向您展示如何使用GitHub Actions构建Octopus Deploy underwater app并将其推送到亚马逊弹性容器注册中心(ECR)。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进，您需要:</p>
+
+<ul>
+<li>亚马逊网络服务(AWS)帐户</li>
+<li>GitHub账户</li>
+</ul>
+
+<p>这个帖子使用了<a href="https://github.com/OctopusSamples/octopus-underwater-app" rel="nofollow"> Octopus水下应用库</a>。您可以派生存储库并跟随它。或者，github-ecr分支包含完成本文步骤所需的模板文件。你必须用你自己的价值观来代替一些价值观，但是我已经在这篇文章中列出了我的价值观作为参考。</p>
+
+<h2 id="amazon-web-services-setup">亚马逊网络服务设置</h2>
+
+<p>要为GitHub操作设置AWS，您需要创建一个访问键和一个ECR存储库来存储图像。</p>
+
+<p>要创建访问密钥，请转到<strong>亚马逊控制台</strong>，然后<strong> IAM </strong>，然后<strong>用户</strong>、<code>[your user]</code>，然后<strong>安全凭证</strong>，然后<strong>创建访问密钥</strong>。</p>
+
+<p>您的浏览器下载一个包含访问密钥ID和秘密访问密钥的文件。这些值在GitHub中用于向Amazon认证。</p>
+
+<p>要创建存储库，请转到<strong>亚马逊控制台</strong>，然后转到<strong> ECR </strong>，然后转到<strong>创建存储库</strong>。</p>
+
+<p>您需要为发布的每个图像建立一个图像存储库。给存储库起一个您想让图像起的名字。</p>
+
+<p>你会在<strong>亚马逊ECR </strong>下看到你的仓库，然后是<strong>仓库</strong>。记下它所在的区域，在URI场。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/githubactions-docker-ecr/ecr-repository.png" class="zoom" data-title=""><img src="../Images/8066d231e662fa83cdde15ba91ab5189.png" class="img-fluid center" alt="ECR Repository" data-original-src="https://i.octopus.com/blog/2022-03/githubactions-docker-ecr/ecr-repository.png"/>T2】</a></p>
+
+<h2 id="github-setup">GitHub设置</h2>
+
+<p>在本文中，您将构建Octopus Deploy underwater app存储库，并将其推送到Amazon ECR。你可以在以后的博客文章中使用这些图片。</p>
+
+<p>在<code>https://github.com/terence-octo/octopus-underwater-app-docker</code>分叉存储库。</p>
+
+<p>进入<strong>设置</strong>，然后<strong>秘密</strong>，然后<strong>新储存库秘密</strong>。</p>
+
+<ul>
+<li><strong> REPO_NAME </strong> -您创建的AWS ECR存储库的名称</li>
+<li><strong> AWS_ACCESS_KEY_ID </strong> -之前的访问密钥ID</li>
+<li><strong> AWS_SECRET_ACCESS_KEY </strong> -之前的秘密访问密钥</li>
+</ul>
+
+<p>您需要在存储库中创建一个工作流文件。GitHub Actions工作流包含对代码库执行操作的说明。这些是社区维护的步骤。几个预构建的步骤模板允许您在代码存储库上执行许多不同的任务。在本例中，您使用一个步骤模板来构建代码并将其推送到AWS ECR存储库。</p>
+
+<p>在。根文件夹的github/workflows目录。将以下代码粘贴到main.yml文件中:</p>
+
+<pre><code>on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+name: AWS ECR push
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, tag, and push the image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.REPO_NAME }}
+        IMAGE_TAG: latest
+      run: |
+        # Build a docker container and push it to ECR 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        echo "Pushing image to ECR..."
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+</code></pre>
+
+<p>GitHub通过在主分支上使用push或pull请求来启动一个动作。这些步骤包括检查代码、认证并登录AWS，然后构建、标记并把图像推送到Amazon ECR。类似的step模板可以推广到其他云存储库，如谷歌或微软。</p>
+
+<p>提交您的更改，转到<strong>操作</strong>选项卡，并单击您的提交消息的标题。您可以看到工作流程完成时的各个阶段。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/githubactions-docker-ecr/githubactions-success.png" class="zoom" data-title=""><img src="../Images/46f0d00b540029e59c4337b4a2dd7646.png" class="img-fluid center" alt="GitHub Actions Success" data-original-src="https://i.octopus.com/blog/2022-03/githubactions-docker-ecr/githubactions-success.png"/>T2】</a></p>
+
+<p>去你的Amazon ECR仓库查看图片。Octopus Deploy现在可以将这个映像部署到部署目标。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/githubactions-docker-ecr/ecr-success.png" class="zoom" data-title=""><img src="../Images/447a2a8289c93eba0455cfce996619a2.png" class="img-fluid center" alt="ECR Success" data-original-src="https://i.octopus.com/blog/2022-03/githubactions-docker-ecr/ecr-success.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本文中，您设置了一个GitHub Actions工作流来构建一个图像并将其推送到Amazon ECR。像Octopus这样的部署工具可以在稍后的部署阶段使用这个映像将web应用程序部署到服务中。GitHub Actions允许代码库成为部署过程的一部分，而无需额外的工作。GitHub Actions有几个模板，开发人员可以使用它们来执行其他部署任务。</p>
+
+<p>在下一篇文章中，我们将<a href="https://octopus.com/blog/deploying-amazon-eks-github-actions">获取ECR中的图像并部署web应用程序</a>。</p>
+
+<p>接下来，我们将<a href="https://octopus.com/blog/multi-environment-deployments-github-actions">使用GitHub Actions和Octopus Deploy将一个web应用程序部署到亚马逊EKS </a>。</p>
+
+<p><a href="https://oc.to/GithubActionsWorkflowGenerator" rel="nofollow">试用我们免费的GitHub Actions工作流工具</a>来帮助您快速为您的GitHub Actions部署生成可定制的工作流。</p>
+
+<p>您还可以了解更多关于使用GitHub构建<a href="https://octopus.com/github">和使用Octopus部署</a>的信息，并在GitHub Marketplace 中使用我们的<a href="https://github.com/marketplace?query=octopus&amp;type=actions&amp;verification=verified_creator" rel="nofollow">验证行动。</a></p>
+
+<h2 id="watch-our-github-actions-webinar">观看我们的GitHub行动网络研讨会</h2>
+
+<iframe src="https://www.youtube.com/embed/gLkAs_Cy5t4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

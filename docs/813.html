@@ -1,0 +1,57 @@
+<html>
+<head>
+<title>Why Octopus uses self-signed certificates - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>为什么八达通使用自签名证书-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/why-self-signed-certificates#2021-02-09">https://octopus.com/blog/why-self-signed-certificates#2021-02-09</a></blockquote>
+                        <p>Octopus Deploy服务器和Tentacles之间的通信使用X.509证书进行保护。安装Octopus后，会生成一个新的自签名证书。安装Tentacles时，它们还会生成一个新的自签名证书。在这篇文章中，我想讨论一下为什么我们使用自签名证书——毕竟，这不是很糟糕吗？</p>
+
+<h2>背景</h2>
+
+<p>当触手在Octopus中注册时，拇指纹(标识证书的公钥)被交换——也就是说，您手动将Octopus拇指纹粘贴到触手设置向导中，并在Octopus UI中手动验证触手的拇指纹。这张截图来自Octopus 1.0，但在2.6中也有相同的概念:</p>
+
+<p><img src="../Images/f909fae887dbf0c2639848391e11ca28.png" alt="Exchanging thumbprints" data-original-src="https://octopus-images.s3.amazonaws.com/blog/trust.png"/></p>
+
+<p>当Octopus连接到触手时，它会验证触手是否提供了带有它所期望的指纹的证书。同样，当触手处理一个连接时，它会验证这个连接是否来自它信任的Octopus服务器。如果对方不是他们认为的那个人，双方都会中止连接。</p>
+
+<h2>为什么自签名？</h2>
+
+<p>有时会出现一个关于我们为什么使用自签名证书的问题——这难道不是一种糟糕的做法吗？要回答这个问题，让我们反过来问:为什么要使用证书颁发机构？</p>
+
+<p>假设你想做一些网上银行。你去你的银行网站，并被重定向到他们的HTTPS网站。</p>
+
+<p><img src="../Images/a60dc8815d89c98658a3188666c3ecf6.png" alt="Bank of America certificate" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2015-02-25_at_6.10.39_am_vbfcro.png"/></p>
+
+<p>你实际上不知道这是不是美国银行。但是你的浏览器信任赛门铁克(拥有VeriSign)，赛门铁克告诉你“当有人为BankOfAmerica.com订购证书时，我们给他们打了电话并做了一些其他检查，我们非常确定这确实是美国银行。你信任我们，因为我们是诺顿，对吗？”</p>
+
+<p>这里有一个更安全的替代方案，可以替代依赖赛门铁克这样的证书颁发机构(CA ):当你在银行分支机构设立账户，与银行经理握手时，他们会给你一个指纹，作为他们网站证书的指纹。你把它写在一些纸上，当你回家时，你把它插在你的电脑上。这样你就不需要任何认证机构:你的计算机将只信任BankOfAmerica.com，而不需要任何第三方。</p>
+
+<p>为了方便起见，我们有认证机构，因为期望人们为他们计划访问的每个站点写下公钥太费力了。我们没有安全认证机构:它们实际上降低了安全性。CA受到威胁:还记得<a href="http://en.wikipedia.org/wiki/DigiNotar"> DigiNotar </a>吗？</p>
+
+<h2>如果章鱼用了CA的</h2>
+
+<p>如果CA和Octopus一起使用，我们有两种方法可以使用它们:</p>
+
+<ol>
+<li>我们只信任由CA发布的任何内容。我们没有检查章鱼/触手是否可信，而是假设如果它们提供了由你的公司颁发的证书，那么就可以进行通信了。</li>
+<li>无论如何，我们都要验证指纹，并用它们来建立信任。</li>
+</ol>
+
+<p>方法#1是危险的，因为如果CA受到威胁，那么网络上的每台机器实际上都受到威胁，因为任何拥有有效证书的人都可以伪装成其他人。无论CA是您组织内部的，还是受信任的第三方，这一点都适用。使用我们当前的方法，由于我们单独验证证书，机器A不可能在没有机器B的私钥的情况下伪装成机器B。</p>
+
+<p>方法#2更好，只是我们实际上忽略了CA。如果我们自己验证指纹，CA在这种情况下提供了什么价值？</p>
+
+<p>有人可能会说，Octopus应该支持使用CA来颁发证书，只是因为“感觉良好”的因素，因为我们已经习惯于认为自签名证书在某种程度上本质上是不好的。你可以使用<code>Tentacle.exe import-certificate</code>让Tentacles使用CA颁发的证书(但是目前在Octopus服务器上没有办法做到这一点)，但是我认为争论是由公司政策驱动的(“禁止自签名证书！”)而不是通过合理的推理。</p>
+
+<p>从安全的角度来看，我们能想到的关于CA在Octopus中有意义的唯一理由是撤销列表。但是你总是可以告诉Octopus/触手不再信任一个给定的证书，而不需要CRL，所以我认为这个论点也站不住脚。</p>
+
+<p>我们在Octopus中非常重视安全性，我们也尽力使其易于使用。我们认为从安全的角度来看，交换指纹和使用自签名证书是最好的解决方案，添加任何额外的CA支持层似乎会使软件变得比必要的更复杂，并且要么没有增加任何价值，要么根据其实现方式来创建攻击媒介。我希望这篇文章能对我们的推理有所启发。</p>
+
+<p><em>感谢<a href="https://twitter.com/thecolonial"> OJ </a>来自<a href="https://twitter.com/beyondbase2"> Beyond Binary </a>对本帖</em>草稿的审阅</p>
+
+                    
+                    
+</body>
+</html>

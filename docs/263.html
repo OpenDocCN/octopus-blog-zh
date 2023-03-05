@@ -1,0 +1,341 @@
+<html>
+<head>
+<title>Farmer: Simpler ARM deployments with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>农民:用章鱼部署更简单的武器部署-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/farmer-and-octopus-deploy#2022-08-09">https://octopus.com/blog/farmer-and-octopus-deploy#2022-08-09</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/octopus-farmer.png" class="zoom" data-title=""><img src="../Images/48ba8d250e516a7e242f0d7035b3ddae.png" class="img-fluid center" alt="Farmer ARM deployments and Octopus" data-original-src="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/octopus-farmer.png"/>T2】</a></p>
+
+<p>与Azure合作了一年左右，很明显可以看出为什么ARM模板会受欢迎。它们提供了一个声明性的模型，只需点击一个按钮就可以生成整个环境。</p>
+
+<p>然而，如果像我一样，你曾经试图创作一个ARM模板文件，你可能会遇到我最大的抱怨之一；它们依赖于字符串，容易出现人为错误。当我在一个模板中有一个打字错误时，没有编译器来帮助我(而且已经有很多了！).</p>
+
+<p>自2012年以来，我一直将C#作为我的主要开发语言，然而，从那以后，它的功能对等物F#变得越来越受欢迎。正如我最近发现的，它有一些有用的特性可以帮助我摆脱ARM模板的困境。F#特别擅长的一个领域是它内置的类型安全。</p>
+
+<p>在这篇文章中，我将通过使用<a href="https://compositionalit.github.io/farmer/" rel="nofollow"> Farmer </a>生成一个简单的Azure WebApp ARM模板来演示F#中的类型安全，然后我将介绍如何通过Octopus使用它的部署功能将不同的WebApp直接部署到Azure。</p>
+
+<h2>在这篇文章中</h2>
+
+
+
+<h2 id="what-is-farmer">什么是农民？</h2>
+
+<p>农夫的作者<a href="https://compositionalit.github.io/farmer/about/" rel="nofollow">说</a>:</p>
+
+<blockquote class="blockquote">
+<p>Farmer是一个开源软件，可以免费使用。NET领域特定语言(DSL ),用于快速生成不复杂的Azure资源管理器(ARM)模板。</p>
+</blockquote>
+
+<p>要使用Farmer，您需要创建一个<a href="https://compositionalit.github.io/farmer/quickstarts/template/" rel="nofollow"> Farmer模板</a>。这些是。NET核心应用程序通过一个<a href="https://www.nuget.org/packages/Farmer/" rel="nofollow"> NuGet包</a>引用Farmer，它们定义你希望创建的Azure资源。</p>
+
+<h2 id="why-is-farmer-needed">为什么需要农民？</h2>
+
+<p>与其重复已经存在的内容，我建议您阅读Farmer文档的第节的<a href="https://compositionalit.github.io/farmer/about/" rel="nofollow">部分，以获得更多关于为ARM模板创建DSL的动机的详细信息。</a></p>
+
+<p>对我来说，亮点是:</p>
+
+<ul>
+<li>它提供了一组可以用来创建Azure资源的类型，并且它消除了创建无效模板的机会，因为它们是强类型的。</li>
+<li>它可以以非常简洁的方式生成简单的ARM模板，并可选地部署它们。</li>
+</ul>
+
+<h2 id="create-the-farmer-template">创建农民模板</h2>
+
+<p>要创建Farmer模板，我们首先需要创建一个. NET核心应用程序。您可以在您选择的IDE中这样做，或者如果您喜欢命令行，您可以使用<code>dotnet new</code>命令，传递您需要的应用程序类型的模板。</p>
+
+<p>农民模板通常使用控制台应用程序，您可以使用<code>dotnet new console</code>命令创建一个:</p>
+
+<pre><code class="language-bash">dotnet new console -lang "F#" -f "netcoreapp3.1" -n "SimpleAzureWebApp"
+</code></pre>
+
+<p>这会创建一个新的F#。名为<strong> SimpleAzureWebApp </strong>的NET Core 3.1应用程序，使用我们提供的<code>-n</code>参数。</p>
+
+<p>接下来，我们需要通过运行<code>add package</code>命令将Farmer添加到项目中:</p>
+
+<pre><code class="language-bash">dotnet add package Farmer
+</code></pre>
+
+<p>现在我们有了依赖项，我们可以继续编辑在我们创建新的控制台应用程序时自动生成的<code>Program.fs</code>文件。</p>
+
+<p><strong>TL；博士</strong></p>
+
+<p>如果你想看完整的程序，直接跳到<a href="#complete-farmer-template">结尾</a>或者查看<a href="https://github.com/OctopusSamples/farmertemplates/blob/main/src/SimpleAzureWebApp/Program.fs" rel="nofollow">源代码</a>。如果你想了解更多细节，请继续阅读！</p>
+
+<h3 id="template-parameters">模板参数</h3>
+
+<p>为了使Farmer模板更加灵活，我们将在应用程序中添加一些参数。这将允许我们提供不同的价值，Farmer将基于这些价值在Azure中创建我们的资源。</p>
+
+<p>我们需要的前三个与Azure认证相关。这些值可以通过创建一个<a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals" rel="nofollow"> Azure服务主体</a>来获得。</p>
+
+<ul>
+<li><strong> AppID </strong>:用于服务主体的应用标识符。</li>
+<li><strong> Secret </strong>:服务主体使用的密码。</li>
+<li><strong> TenantID </strong>:用于服务主体的ClientID。</li>
+</ul>
+
+<p><strong>安全凭证:</strong> <br/>将你用来登录Azure的凭证存储在一个安全的位置，比如密码管理器，或者你的Octopus Deploy实例，最好使用一个<a href="https://octopus.com/docs/infrastructure/deployment-targets/azure#azure-service-principal" class="alert-link"> Azure账户</a>或者<a href="https://octopus.com/docs/projects/variables/sensitive-variables" class="alert-link">敏感变量</a>。您还应该避免将它们提交到源代码控制中。</p>
+
+
+<p>为了运行该应用程序，我们还将提供:</p>
+
+<ul>
+<li><strong>资源组名称</strong>:Azure web app要添加到哪个资源组。</li>
+<li><strong> WebApp名称</strong>:赋予Azure WebApp的名称。</li>
+<li><strong>web App SKU</strong>:web App使用什么类型的<a href="https://azure.microsoft.com/en-us/pricing/details/app-service/" rel="nofollow"> App服务计划</a>。</li>
+<li><strong> WebApp位置</strong>:你想要托管Azure WebApp的数据中心位置。</li>
+</ul>
+
+<p>要添加我们需要的参数，代码如下所示:</p>
+
+<pre><code class="language-fs">let azAppId = argv.[0]
+let azSecret = argv.[1]
+let azTenantId = argv.[2]
+let azResourceGroupName = argv.[3]
+let azWebAppName = argv.[4]
+let azWebAppSku = argv.[5]
+let azWebAppLocation = argv.[6]
+</code></pre>
+
+<p>这将根据参数在命令行中的位置，分配程序运行时提供给程序的参数集合中的参数。</p>
+
+<p><strong>参数验证:</strong> <br/>在这个例子中我没有显示参数验证，但是您可能想要考虑将它添加到您的Farmer模板中，以确保它们具有可接受的值。</p>
+
+
+<h3 id="define-azure-resources">定义Azure资源</h3>
+
+<p>有了参数值后，我们可以用F#定义我们的Azure WebApp:</p>
+
+<pre><code class="language-fs">let webAppSku = WebApp.Sku.FromString(azWebAppSku)
+let webApp = webApp {
+    name azWebAppName
+    sku webAppSku
+}
+</code></pre>
+
+<p>这里我们将WebApp SKU赋给一个名为<code>webAppSku</code>的变量。这是由一个助手函数完成的，它返回一个强类型的<code>Sku</code>。然后我们使用Farmer <a href="https://compositionalit.github.io/farmer/api-overview/resources/web-app/" rel="nofollow"> Web App builder </a>创建我们的<code>webApp</code>变量。</p>
+
+<p>接下来，我们使用Farmer ARM deployment builder创建我们的ARM部署，在本例中，它由要部署到的位置和前面定义的Azure WebApp组成:</p>
+
+<pre><code class="language-fs">let deployLocation = Location.FromString(azWebAppLocation)
+let deployment = arm {
+    location deployLocation
+    add_resource webApp
+}
+</code></pre>
+
+<h4 id="built-in-type-safety">内置型安全</h4>
+
+<p>在前面的两个代码示例中，F#类型系统发挥了自己的作用。不可能创建根据其类型无效的值。</p>
+
+<p>让我们看一个例子。假设我想用一个值为<code>VeryFree</code>的<code>Sku</code>来创建我们的Azure WebApp。如果我试图在我们的应用程序中创建它，编译器会给我一个警告，它不会构建:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/farmer-sku-invalid.png" class="zoom" data-title=""><img src="../Images/581b17390865d52beb5f4401b20dbaa3.png" class="img-fluid center" alt="Farmer Compiler warning" data-original-src="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/farmer-sku-invalid.png"/>T2】</a></p>
+
+<p>这是因为编译器知道字符串值<code>VeryFree</code>是错误的类型，而应该是<code>Sku</code>类型。</p>
+
+<p>这就是法默真正擅长手工制作手臂模板的地方。它使用F#为您提供了类型安全，以确保您从一开始就拥有有效的模板。</p>
+
+<p><strong>农夫和手臂:</strong> <br/>农夫和手臂模板<a href="https://compositionalit.github.io/farmer/arm-vs-farmer/" class="alert-link" rel="nofollow">这里有更详细的对比</a>。</p>
+
+
+<h3 id="generate-arm-template">生成手臂模板</h3>
+
+<p>当你对Azure资源建模后，Farmer支持不同的方式来生成ARM模板。一种方法是将它直接写到文件中:</p>
+
+<pre><code class="language-fs">deployment |&gt; Writer.quickWrite "output"
+</code></pre>
+
+<p>然后，您可以使用您喜欢的方法将这个文件部署到Azure。</p>
+
+<h3 id="deployment-to-azure">部署到Azure</h3>
+
+<p>除了生成ARM模板，您还可以选择让Farmer在应用程序运行时执行到Azure的部署。</p>
+
+<p><strong>需要Azure CLI</strong></p>
+<p>如果您使用集成部署到Azure功能，您将需要在运行应用程序的计算机上安装Azure CLI。</p>
+
+
+<p>在我们的示例<strong> SimpleAzureWebApp </strong>应用程序中，我们将利用这个特性。</p>
+
+<p>在执行部署之前，我们需要通过Azure进行身份验证。Farmer附带了一个<code>Deploy.authenticate</code>命令，您可以通过传递之前提供给应用程序的凭证来调用它，如下所示:</p>
+
+<pre><code class="language-fs">Deploy.authenticate azAppId azSecret azTenantId
+|&gt; ignore
+</code></pre>
+
+<p>当authenticate调用完成时，它返回与服务主体相关联的Azure订阅列表。在本例中，这些结果通过管道传递给<code>ignore</code>函数。</p>
+
+<p>如果使用Azure进行身份验证时出现任何错误，将会引发一个错误。如果登录成功，我们需要使用<code>Deploy.execute</code>命令让Farmer执行我们的部署:</p>
+
+<pre><code class="language-fs">deployment
+|&gt; Deploy.execute azResourceGroupName Deploy.NoParameters
+|&gt; ignore
+</code></pre>
+
+<p>您可以查询ARM部署的结果，但是与authenticate调用一样，我们忽略它们。类似地，部署中的任何错误都将作为异常出现。</p>
+
+<h3 id="complete-farmer-template">完整的农民模板</h3>
+
+<p>这就是我们应用程序的全部内容。下面是完成的<code>Program.fs</code>文件:</p>
+
+<pre><code class="language-fsharp">open Farmer
+open Farmer.Builders
+open SimpleAzureWebApp.SkuExtension
+
+[&lt;EntryPoint&gt;]
+let main argv =
+
+    let azAppId = argv.[0]
+    let azSecret = argv.[1]
+    let azTenantId = argv.[2]
+    let azResourceGroupName = argv.[3]
+    let azWebAppName = argv.[4]
+    let azWebAppSku = argv.[5]
+    let azWebAppLocation = argv.[6]
+
+    let webAppSku = WebApp.Sku.FromString(azWebAppSku)
+    let webApp = webApp {
+        name azWebAppName
+        sku webAppSku
+    }
+
+    let deployLocation = Location.FromString(azWebAppLocation)
+    let deployment = arm {
+        location deployLocation
+        add_resource webApp
+    }
+
+    printf "Authenticating with Azure\n"
+    Deploy.authenticate azAppId azSecret azTenantId
+    |&gt; ignore
+
+    printf "Deploying Azure WebApp %s (%s) into %s using Farmer\n" azWebAppName azResourceGroupName azWebAppLocation
+
+    deployment
+    |&gt; Deploy.execute azResourceGroupName Deploy.NoParameters
+    |&gt; ignore
+
+    printf "Deployment of Azure WebApp %s (%s) complete!\n" azWebAppName azResourceGroupName
+
+    0 // return an integer exit code
+</code></pre>
+
+<h2 id="package-the-farmer-template">打包农民模板</h2>
+
+<p>现在我们已经写好了应用程序，下一步是打包它以供Octopus使用。为了简单起见，我使用命令行工具来构建和打包应用程序，但是我建议将其作为完整CI/CD管道的一部分来自动化。</p>
+
+<p>如果你是建筑新手。NET核心应用程序，我们有许多<a href="https://octopus.com/docs/guides?application=ASP.NET%20Core" class="alert-link">指南</a>，其中包括使用各种工具设置CI/CD管道的分步说明。</p>
+
+
+<p>为了构建<strong> SimpleAzureWebApp </strong>应用程序，我们在应用程序目录中运行一个<code>dotnet publish</code>命令:</p>
+
+<pre><code class="language-bash">dotnet publish -o output
+</code></pre>
+
+<p>这将构建并发布控制台应用程序，并将二进制文件放在<code>output</code>文件夹中，这是通过使用<code>-o</code>参数指定的。</p>
+
+<p>接下来，我们需要打包应用程序，这次我们使用Octopus CLI <a href="https://octopus.com/docs/octopus-rest-api/octopus-cli/pack"> pack </a>命令:</p>
+
+<pre><code class="language-bash">octo pack --id SimpleAzureWebApp --format Zip --version 1.0.0.0 --basePath output 
+</code></pre>
+
+<p>这将生成一个名为<code>SimpleAzureWebApp.1.0.0.0.zip</code>的文件，该文件可以上传到Octopus <a href="https://octopus.com/docs/packaging-applications/package-repositories/built-in-repository">内置存储库</a>或外部<a href="https://octopus.com/docs/packaging-applications/package-repositories">包存储库</a>。</p>
+
+<p>您可以使用Octopus CLI命令推送到Octopus内置存储库，<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli/push">推送</a>:</p>
+
+<pre><code class="language-bash">octo push --package SimpleAzureWebApp.1.0.0.0.zip --server https://my.octopus.url --apiKey API-XXXXXXXXXXXXXXXX
+</code></pre>
+
+<p>上传完包后，我们可以设置Octopus来运行我们的应用程序以部署到Azure。</p>
+
+<h2 id="deploy-the-farmer-template">部署农民模板</h2>
+
+<p>Octopus很酷的一点是你可以选择如何部署。随着去年<a href="https://octopus.com/docs/operations-runbooks">运营手册</a>的推出，这种灵活性进一步扩展到了运营任务，例如管理您的基础设施。</p>
+
+<h3 id="create-the-runbook">创建操作手册</h3>
+
+<p>为了执行我们的Farmer模板，我们将创建一个runbook，将它部署到Azure。为此:</p>
+
+<ol>
+<li>在Octopus中创建新项目。</li>
+<li>从<span class="path">操作➜操作手册</span>部分进入操作手册流程。</li>
+<li>点击<strong>添加RUNBOOK </strong>。</li>
+<li>从概述中，点击<strong>定义您的RUNBOOK流程</strong>。</li>
+<li>点击<strong>添加步骤</strong>。</li>
+</ol>
+
+<p>在步骤选择中，选择<a href="https://octopus.com/docs/deployment-examples/custom-scripts/run-a-script-step">运行脚本</a>步骤，并为其命名。通过使用脚本步骤，我们可以使用<a href="https://octopus.com/docs/deployment-examples/custom-scripts/run-a-script-step#referencing-packages">引用包</a>特性将我们的包作为脚本执行的一部分。</p>
+
+<p>为了包含我们的包，在<strong>引用的包</strong>部分，点击<strong> ADD </strong>并添加我们之前上传的SimpleAzureWebApp包:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/script-step-reference-package.png" class="zoom" data-title=""><img src="../Images/0436e2089de7105ad1c8ac0da956c4f4.png" class="img-fluid center" alt="Add SimpleAzureWebApp Package Reference" data-original-src="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/script-step-reference-package.png"/>T2】</a></p>
+
+<p>保留所有默认设置，点击<strong>确定</strong>。</p>
+
+<h4 id="add-the-runbook-script">添加runbook脚本</h4>
+
+<p>接下来，我们需要添加内联脚本来执行我们的Farmer模板。我们首先添加所需的Azure凭据:</p>
+
+<pre><code class="language-ps">$appId = $OctopusParameters["Project.Azure.Account.Client"]
+$secret = $OctopusParameters["Project.Azure.Account.Password"]
+$tenantId = $OctopusParameters["Project.Azure.Account.TenantId"]
+</code></pre>
+
+<p>该脚本从名为<code>Project.Azure.Account</code>的项目变量中引用了许多扩展的<a href="https://octopus.com/docs/projects/variables/azure-account-variables#azure-account-variable-properties"> Azure帐户变量属性</a>，如<code>Client</code>和<code>TenantId</code>。这很方便，因为我们不需要为每个属性指定单独的变量。</p>
+
+<p>有了凭证后，我们想要指定Azure WebApp参数，包括将传递给SimpleAzureWebApp的资源组和WebApp名称。NET核心应用程序:</p>
+
+<pre><code class="language-ps">$resourceGroupName = $OctopusParameters["Project.Azure.ResourceGroupName"]
+$webAppName = $OctopusParameters["Project.Azure.WebAppName"]
+$webAppSku = $OctopusParameters["Project.Azure.WebAppSku"]
+$webAppLocation = $OctopusParameters["Project.Azure.WebAppLocation"]
+</code></pre>
+
+<p>最后，我们使用名为<code>Octopus.Action.Package[SimpleAzureWebApp].ExtractedPath</code>的<a href="https://octopus.com/docs/deployment-examples/custom-scripts/run-a-script-step#accessing-package-references-from-a-custom-script">包变量</a>获得提取的农民模板包的路径，然后将工作目录设置为该路径，并调用<code>dotnet run</code>命令传入我们的所有参数:</p>
+
+<pre><code class="language-ps">$farmerPackagePath = $OctopusParameters["Octopus.Action.Package[SimpleAzureWebApp].ExtractedPath"]
+Set-Location $farmerPackagePath
+
+dotnet SimpleAzureWebApp.dll $appId $secret $tenantId $resourceGroupName $webAppName $webAppSku $webAppLocation
+</code></pre>
+
+<p><strong>。NET Core运行时先决条件</strong></p>
+<p>为了执行这个脚本步骤，它需要。NET Core runtime安装在部署目标或worker上，该步骤配置为在其中执行。</p>
+
+
+<h4 id="add-the-variables">添加变量</h4>
+
+<p>我们还需要添加上面脚本中引用的变量:</p>
+
+<p>【T2 <img src="../Images/555b7058b2898a834c875af79ca586f5.png" class="img-fluid center" alt="Project variables" data-original-src="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/project-azure-variables.png"/></p>
+
+<p><code>Project.Azure.Account</code>变量是一个<a href="https://octopus.com/docs/projects/variables/azure-account-variables"> Azure账户变量</a>，其余都是文本变量。</p>
+
+<h3 id="run-the-runbook">运行运行手册</h3>
+
+<p>如果你已经做到了这一步，最后一部分是把所有的东西放在一起，在Octopus中运行我们的runbook，并把Farmer模板部署到Azure。</p>
+
+<p>您可以看到一个运行到开发阶段的示例runbook，它创建了名为<code>farmer-webapp-dev</code>的Azure WebApp:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/farmer-azure-deployment.png" class="zoom" data-title=""><img src="../Images/4c1b26e79b76f711e7ada800070b2498.png" class="img-fluid center" alt="Farmer Azure Runbook run" data-original-src="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/farmer-azure-deployment.png"/>T2】</a></p>
+
+<p>runbook运行完成后，您可以检查您的WebApp是否已使用<a href="https://portal.azure.com" rel="nofollow"> Azure portal </a>创建。下面是在Azure中创建的相应WebApp，它是runbook运行到开发阶段的结果:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/azure-portal-farmer.png" class="zoom" data-title=""><img src="../Images/4fa3752423f6eac50a4b0fac1c356b18.png" class="img-fluid center" alt="Azure portal Farmer webapp" data-original-src="https://i.octopus.com/blog/2020-07/farmer-and-octopus-deploy/azure-portal-farmer.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这种使用Farmer生成资源并将其部署到Azure的技术的优点在于，您可以对模板进行版本控制。定义基础设施的代码可以与运行在基础设施上的代码共存。另外，手动编辑JSON文件不再是一件麻烦的事情，谁不想要呢！</p>
+
+<p>下次再见，愉快的部署！</p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,262 @@
+<html>
+<head>
+<title>Providing environment specific configuration for JavaScript projects - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>为JavaScript项目提供环境特定的配置——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/javascript-configuration#2021-07-07">https://octopus.com/blog/javascript-configuration#2021-07-07</a></blockquote>
+                        <p>将单页面应用程序(SPA)作为独立的JavaScript应用程序进行开发和部署是很常见的，但是，在将这些项目集成到典型的持续部署管道中时，会出现一个常见的问题。</p>
+
+<p><a href="https://twitter.com/cnlawrence1183/status/1026901050131980289" rel="nofollow"/><a href="#" data-featherlight="https://i.octopus.com/blog/2018-12/javascript-configuration/twitter.png" class="zoom" data-title=""><img src="../Images/8f4931a383222703e41ef4ff20d8fd86.png" class="img-fluid center" alt="Twitter" data-original-src="https://i.octopus.com/blog/2018-12/javascript-configuration/twitter.png"/>T3】</a></p>
+
+<p>作为优秀的DevOps实践者，我们知道我们应该构建一次，部署多次，但是我们如何让这适用于我们的前端应用程序呢？</p>
+
+<h2 id="javascript-configuration-from-json">来自JSON的JavaScript配置</h2>
+
+<p>一些支持者相信<a href="https://12factor.net/config" rel="nofollow">十二因素应用</a>中列出的戒律，并认为应用程序的所有配置都应该从单个环境变量中提取出来。依我的拙见，这种方法非常有限，原因有几个。</p>
+
+<ul>
+<li>首先，这对于基于浏览器的运行时来说并不容易，在这种情况下，您有一个静态网站需要服务，并且需要在浏览器中获得该配置。</li>
+<li>其次，这增加了您的托管环境的复杂性，因此您需要确保运行您的应用程序的每个进程都有自己的环境变量集合，这些环境变量在重启后持续存在，并且不会泄漏到其他实例(例如，您的测试虚拟机托管同一应用程序的多个实例)。</li>
+<li>最后，当您只有一个需要在不同环境中不同的URL时，这可能很简单，但是在许多应用程序中，配置可能包括许多不同的变量，其中一些是深度嵌套的值。试图通过环境变量来管理和整合层次化信息有很多缺点。</li>
+</ul>
+
+<p>最终，不将配置存储在代码中，而是存储在环境变量中的12因素应用程序解决方案，有点虚假的困境。我们知道在代码中存储配置既不是提供配置的最灵活也不是最安全的方式，但它是推荐的替代方案。任何好的部署工具都应该能够提供以自包含方式运行应用程序所需的特定于环境的变量。</p>
+
+<h3 id="configuration-as-json">配置为JSON</h3>
+
+<p>创建一个简单的<code>config.json</code>文件，包含应用程序所需的配置。这个配置中的值可以是开发时需要的值。不需要在源代码中创建<code>config.staging.json</code>或<code>config.prod.json</code>文件，环境配置将由Octopus(或您选择的部署工具)在部署时提供。避免这些<em>环境</em>配置文件，使我们的CD过程更加灵活，并避免将我们的基础设施阶段泄露到源代码中。在运行时，我们的代码需要做的就是像其他资源一样从服务器检索这个<code>config.json</code>文件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-12/javascript-configuration/environment-variables.png" class="zoom" data-title=""><img src="../Images/5108f3920402038b54070265b99fbdcb.png" class="img-fluid center" alt="Variables from Octopus into configuration" data-original-src="https://i.octopus.com/blog/2018-12/javascript-configuration/environment-variables.png"/>T2】</a></p>
+
+<p>对于那些担心从应用程序的根目录获得一个<code>/config.json</code>的人来说，请记住，如果这些值被嵌入到您的javascript文件中，那么它们就像<em>一样开放</em>。如果您担心泄露敏感信息，那么前端可能不是存储这些信息的合适位置。一个好的副作用是，只需自己从浏览器加载配置，就可以非常容易地检查静态内容是否已经成功部署。通过将构建号和发布日期作为属性包含在配置文件中，我可以很容易地检查它们是否被部署到了正确的位置，以及它们是否通过了各种cdn和缓存。</p>
+
+<h2 id="examples">例子</h2>
+
+<p>让我们通过几个例子来说明如何实现这一点。在您使用的任何框架中，有许多方法可以实现这种模式，因此您可能希望修改下面的示例来满足您的需要。</p>
+
+<h3 id="nodejs-application">NodeJs应用</h3>
+
+<p>NodeJs是一个非常简单的用例。只要我们将配置文件包含在分布式应用程序中，我们就可以像加载任何其他模块一样直接加载它:</p>
+
+<pre><code class="language-javascript">const config = require("./config");
+console.log(`Hello ${config.message}`);
+</code></pre>
+
+<p>如果你尝试，你不可能得到比这更简单的配置。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-12/javascript-configuration/node-result.png" class="zoom" data-title=""><img src="../Images/b8070f41dc74665d180cad6ffb28b792.png" class="img-fluid center" alt="Node result" data-original-src="https://i.octopus.com/blog/2018-12/javascript-configuration/node-result.png"/>T2】</a></p>
+
+<p>不需要检测环境，加载<code>config.prod.json</code>并与<code>config.json</code>中的默认值结合，或者与环境变量合并。</p>
+
+<h3 id="react-app">React应用</h3>
+
+<p>使用React，我们希望将所有应用程序文件缩小并合并到一个JavaScript文件中，以优化运行时体验。我们不希望将配置文件嵌入到单个应用程序文件中，因为这使得我们更难以在部署时使用我们的环境特定值进行更新。相反，我们决定在加载配置文件时显示一个闪屏。这可以通过几个步骤来完成。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-12/javascript-configuration/react-folders.png" class="zoom" data-title=""><img src="../Images/95651d05fce28d4972388d610daa18a2.png" class="img-fluid center" alt="React folder structure" data-original-src="https://i.octopus.com/blog/2018-12/javascript-configuration/react-folders.png"/>T2】</a></p>
+
+<p>从应用程序中的一个简单的<code>config.json</code>文件开始，我们提供了一个可以在开发和本地测试中使用的值。当我们按原样构建我们的应用程序时，该文件将被复制到我们的分发目录中:</p>
+
+<h4 id="configconfig.js"><code>config/config.js</code></h4>
+
+<pre><code class="language-json">{ "message": "My Dev Machine" }
+</code></pre>
+
+<p>在这个场景中，我们使用Webpack来开发我们的代码，因此，我们包含了一行代码来将我们的<code>config.json</code>文件复制到输出目录:</p>
+
+<h4 id="webpack.config.js"><code>webpack.config.js</code></h4>
+
+<pre><code class="language-javascript">const HtmlWebPackPlugin = require("html-webpack-plugin");
+const CopyWebpackPlugin = require('copy-webpack-plugin');
+
+module.exports = {
+  module: {
+    rules: [
+      { test: /\.js$/, exclude: /node_modules/, use: { } },
+      { test: /\.html$/, use: [ { loader: "html-loader" }] }
+    ]
+  },
+  plugins: [
+    new HtmlWebPackPlugin({ template: "./src/index.html", filename: "./index.html" }),
+    new CopyWebpackPlugin([ { from: 'src/config/config.json', to: 'config.json', toType: 'file' } ], { })
+  ]
+};
+</code></pre>
+
+<p>我们的入口点<code>index.js</code>文件将使用一个<code>ConfigLoader</code>组件在运行时加载配置文件，并在完成时显示<code>Home</code>组件:</p>
+
+<h4 id="index.js"><code>index.js</code></h4>
+
+<pre><code class="language-javascript">import React, { Component } from 'react';
+import ReactDOM from 'react-dom';
+import ConfigLoader from './components/ConfigLoader';
+import Home from './components/Home';
+
+class App extends Component {
+  render() {
+    // When the configuration is loaded, render the Home module
+    return &lt;ConfigLoader ready={() =&gt; &lt;Home /&gt;} /&gt;;
+  }
+}
+
+ReactDOM.render(&lt;App /&gt;, document.getElementById('root'));
+</code></pre>
+
+<p><code>Home</code>组件显示通过配置提供的信息:</p>
+
+<h4 id="componentshome.js"><code>components/Home.js</code></h4>
+
+<pre><code class="language-javascript">import React, { Component } from 'react';
+import config from './config';
+
+export default class Home extends Component {
+    render() {        return &lt;div className="App"&gt;        
+        &lt;header className="App-header"&gt;
+          &lt;h1 className="App-title"&gt;Welcome to {config.message}&lt;/h1&gt;
+        &lt;/header&gt;
+      &lt;/div&gt;;
+    }
+}
+</code></pre>
+
+<p>如您所见，我们正在导入一个<code>config</code>模块。这不是上面创建的原始JSON文件。这是一个特殊的模块，我将在下面向您展示。由于该组件在<code>ConfigLoader</code>组件加载了<code>config.json</code>文件后才会呈现，我们可以假设config对象拥有我们需要的所有属性，在本例中只有<code>message</code>。</p>
+
+<p><code>ConfigLoader</code>组件简单地调用我们的配置模块上的<code>load</code>方法，并在配置加载后通过其props呈现请求的组件:</p>
+
+<h4 id="componentsconfigloader.js"><code>components/ConfigLoader.js</code></h4>
+
+<pre><code class="language-javascript">import { Component } from 'react';
+import {load} from "./config";
+
+export default class ConfigLoader extends Component {
+    constructor(props){
+        super(props);
+        this.state = {isLoaded: false};
+    }
+
+
+  componentDidMount() {
+     // Once the configuration is loaded set `isLoaded` to true so we know to render our component
+     load().then(config =&gt;  this.setState({isLoaded: true, config}));
+  }
+
+  render() {      
+    // If we haven't yet loaded the config, show either a "splash" component provided via a `loading` props or return nothing.
+    if(!this.state.isLoaded) {
+        return this.props.loading ? this.props.loading() : null;
+    }
+
+    // The config is loaded so show the component set on the `ready()` props
+    return this.props.ready(this.state.config);
+  }
+}
+</code></pre>
+
+<p>真正的奇迹发生在我们的<code>config.json</code>组件中。我们最初提供一个空对象来代替我们的配置。我们这样做是为了当我们通过HTTP fetch命令加载配置时，我们有效地将属性从加载的对象复制到导出的对象上。这是因为导出的对象在第一次加载该模块时被有效地缓存:</p>
+
+<h4 id="componentsconfig.js"><code>components/config.js</code></h4>
+
+<pre><code class="language-javascript">const config = {};
+export default config;
+
+function load() {
+    return fetch('config.json')
+    .then(result =&gt; result.json())
+    .then((newconfig) =&gt; {
+        for(let prop in config) {
+            delete config[prop]
+        }
+        for(let prop in newconfig) {
+            config[prop] = newconfig[prop]
+        }
+        return config;
+    });
+}
+export {load}
+</code></pre>
+
+<p>在开发过程中，我们可以修改配置文件，Webpack将触发刷新，就像我们正在更新任何其他文件一样。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-12/javascript-configuration/react-result.png" class="zoom" data-title=""><img src="../Images/91e37c64ef744aae59448bfeb8993554.png" class="img-fluid center" alt="React result" data-original-src="https://i.octopus.com/blog/2018-12/javascript-configuration/react-result.png"/>T2】</a></p>
+
+<p>在我们的应用程序中，我们希望使用配置的任何地方(如上面的<code>Home</code>组件)，我们可以加载并简单地使用<code>config</code>模块并直接访问属性，因为所有向下的模块只有在<code>ConfigLoader</code>组件检索到配置后才会呈现。只要我们将<code>config.json</code>文件作为CD管道的一部分进行转换，我们将获得应用程序提供和使用的适当值。</p>
+
+<p>这是一个相当简单的演示，根据您的用例，您可能希望将配置分派到redux存储中，或者您可能还希望处理更复杂的场景，如缓存破坏等。</p>
+
+<h3 id="angular-app">Angular应用</h3>
+
+<p>我将无耻地插入Pam Loahoud关于为Angular创建可编辑的<a href="https://blogs.msdn.microsoft.com/premier_developer/2018/03/01/angular-how-to-editable-config-files/" rel="nofollow">配置文件</a>的另一篇博客文章，而不是过多地重复上面关于不同框架的相同观点，因为这基本上遵循了与上面例子相同的基本前提。</p>
+
+<p>在Pam的例子中，它归结为创建一个服务来检索静态托管的<code>config.json</code>文件:</p>
+
+<pre><code class="language-typescript">import { Injectable } from '@angular/core’;
+import { Http, Response } from '@angular/http';
+import { environment } from '../environments/environment';
+import { IAppConfig } from './models/app-config.model';
+
+@Injectable()
+export class AppConfig {
+
+    static settings: IAppConfig;
+
+    constructor(private http: Http) {}
+
+    load() {
+        const jsonFile = `assets/config/config.${environment.name}.json`;
+        return new Promise&lt;void&gt;((resolve, reject) =&gt; {
+            this.http.get(jsonFile).toPromise().then((response : Response) =&gt; {
+               AppConfig.settings = &lt;IAppConfig&gt;response.json();
+               resolve();
+            }).catch((response: any) =&gt; {
+               reject(`Could not load file '${jsonFile}': ${JSON.stringify(response)}`);
+            });
+        });
+    }
+}
+
+</code></pre>
+
+<p>然后更新<code>app.module.ts</code>文件以在启动时调用该服务:</p>
+
+<pre><code class="language-typescript">import { APP_INITIALIZER } from '@angular/core';
+import { AppConfig } from './app.config';
+
+export function initializeApp(appConfig: AppConfig) {
+  return () =&gt; appConfig.load();
+}
+@NgModule({
+    imports: [ , , , ],
+    declarations: [ . . . ],
+    providers: [
+       AppConfig,
+       { provide: APP_INITIALIZER,
+         useFactory: initializeApp,
+         deps: [AppConfig], multi: true }
+    ],
+    bootstrap: [
+      AppComponent
+    ]
+})
+export class AppModule { }
+</code></pre>
+
+<p>就像React示例一样，当它在启动期间运行时，您可以在整个应用程序中使用配置:</p>
+
+<pre><code class="language-javascript">export class DataService {
+    protected apiServer = AppConfig.settings.apiServer;
+    . . .
+    if (AppConfig.settings.aad.requireAuth) { . . . }
+}
+</code></pre>
+
+<p>我喜欢使用typescript在开发时提供配置的类型检查。再说一次，在您构建的包中有了单个配置文件，关键是让您的部署工具执行适当的配置替换和转换。</p>
+
+<h2 id="javascript-configuration">JavaScript配置</h2>
+
+<p>套用我之前的一篇博文<a href="https://octopus.com/blog/deploying-nodejs">中的观点，我们需要开始认真对待CD管道中的JavaScript】，其中一部分涉及到遵循<strong>构建一次，部署多次</strong>的原则。配置不应该与代码共存，但是假设代码本身知道需要什么样的配置似乎是很自然的。让您的CD工具(如Octopus Deploy)在部署时为您的应用程序提供配置，使部署到50个不同的环境与部署一个环境一样简单和安全。</a></p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,132 @@
+<html>
+<head>
+<title>Exploring Istio by example - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>通过示例探索Istio——Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/istio/the-sample-application#2021-08-12">https://octopus.com/blog/istio/the-sample-application#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/istio/the-sample-application/exploring-istio.png" class="zoom" data-title=""><img src="../Images/1dfe5fb6e6c3aa4dbd51a859336f00b6.png" class="img-fluid center" alt="An Octopus exploring the Istio service mesh for Kubernetes" data-original-src="https://i.octopus.com/blog/2019-09/istio/the-sample-application/exploring-istio.png"/>T2】</a></p>
+
+<p>这是探索Istio的系列文章的第一部分，Istio是Kubernetes可用的流行服务网格。在本文中，我将介绍一个样例应用程序，我们将使用它来探索Istio的主要特性。</p>
+
+
+
+<hr/>
+
+<p>Istio 是当今Kubernetes最受欢迎和最强大的服务网格之一。为了理解它提供的特性，有一个非常简单的示例应用程序来发出网络请求是很有用的，我们可以通过Istio来操作和配置它。</p>
+
+<p>Istio项目提供的典型例子是<a href="https://istio.io/docs/examples/bookinfo/" rel="nofollow"> Bookinfo </a>。Bookinfo是一个小型多语言微服务应用程序，其输出可以通过修改网络策略来调整。</p>
+
+<p>但是，我发现Bookinfo的层次太高，无法真正理解Istio的特性，因此，我将展示一个非常简单的Kubernetes部署，其中Node.js应用程序代理来自集群内部和外部的各种web服务器的请求。通过使事情变得非常简单，当网络请求发出时，很容易看到Istio正在做什么。</p>
+
+<h2 id="the-proxy-application">代理应用程序</h2>
+
+<p>我们示例中面向公众的应用程序是一个非常简单的Node.js web服务器。这个应用程序向它所代理的服务发出第二个网络请求，包装响应并返回它以及发出请求所用的时间。</p>
+
+<p>我们将使用这个代理前端来观察网络请求如何在网络中路由，显示任何失败的网络请求，并测量请求花费的时间。</p>
+
+<p>该应用程序的代码可以在GitHub 上找到:</p>
+
+<pre><code class="language-javascript">// content of index.js
+const http = require('http');
+const url = require('url');
+const requestService = require('request');
+const port = 3030;
+const proxyUrl = process.env.PROXYURL || "https://raw.githubusercontent.com/mcasperson/NodejsProxy/master/helloworld.txt";
+
+const requestHandler = (request, response) =&gt; {
+  const path = url.parse(request.url).pathname;
+  const start = new Date().getTime();
+  requestService(proxyUrl + (path == "/" ? "" : path), (err, res, body) =&gt; {
+    const duration = new Date().getTime() - start;
+    if (err) {
+      response.end(err.toString() + " - Took " + duration + " milliseconds");
+    } else {
+      response.end("Proxying value: " + body + " - Took " + duration + " milliseconds");
+    }
+  });
+}
+
+const server = http.createServer(requestHandler);
+
+server.listen(port, (err) =&gt; {
+  if (err) {
+    return console.log('something bad happened', err);
+  }
+
+  console.log(`server is listening on ${port}`);
+});
+</code></pre>
+
+<h2 id="the-external-services">外部服务</h2>
+
+<p>在同一个存储库中，我们有两个文本文件<a href="https://raw.githubusercontent.com/mcasperson/NodejsProxy/master/externalservice1.txt" rel="nofollow">在这里</a>和<a href="https://raw.githubusercontent.com/mcasperson/NodejsProxy/master/externalservice2.txt" rel="nofollow">在这里</a>。由于GitHub允许您查看托管存储库中文件的原始内容，这些将作为模拟外部服务供我们的代理使用。这意味着我们不必麻烦地部署一个公共服务来返回静态内容。</p>
+
+<h2 id="the-internal-web-servers">内部网络服务器</h2>
+
+<p>对于内部web服务器，我们将运行第二个Node.js应用程序，它返回静态文本，在我们的例子中是<code>Webserver V1</code>和<code>Webserver V2</code>，以及运行图像的容器的主机名。我们将为每个版本启动3个实例，这意味着我们将有6个实例运行服务器的2个版本。</p>
+
+<p>网络服务器的不同版本将标有<code>version: v1</code>或<code>version: v2</code>。当我们开始研究Istio的VirtualService和DestinationRule资源时，这种配置将为我们提供以有趣的方式路由和管理网络流量的机会。</p>
+
+<p>该应用的源代码可以在<a href="https://github.com/mcasperson/NodeJSWebServer" rel="nofollow"> GitHub </a>上找到:</p>
+
+<pre><code class="language-javascript">const http = require('http');
+var url = require("url");
+const os = require('os');
+const port = 3030;
+const content = process.env.SERVERCONTNET || "Hello world";
+
+const requestHandler = (request, response) =&gt; {
+  const path = url.parse(request.url).pathname;
+
+  if (path == "/failsometimes") {
+    if (Math.floor((Math.random() * 3)) == 0) {
+      response.statusCode = 500;
+    }
+  }
+
+  response.end(content + " requested from " + url.parse(request.url).pathname + " on " + os.hostname() + " with code " + response.statusCode);
+};
+
+const server = http.createServer(requestHandler);
+
+server.listen(port, (err) =&gt; {
+  if (err) {
+    return console.log('something bad happened', err);
+  }
+
+  console.log(`server is listening on ${port}`);
+});
+</code></pre>
+
+<h2 id="an-architecture-diagram">建筑图</h2>
+
+<p>下面是使用<a href="https://blog.openshift.com/kdl-notation-kubernetes-app-deploy/" rel="nofollow"> Kubernetes部署语言</a> (KDL)的示例应用程序的顶级概述。</p>
+
+<p>位于<a href="https://github.com/mcasperson/NodejsProxy/blob/master/kubernetes/example.yaml" rel="nofollow">https://github . com/mcasperson/NodejsProxy/blob/master/kubernetes/example . YAML</a>的YAML是该示例项目的一个可部署示例。</p>
+
+<p>我们有一个负载均衡器服务资源，它将流量定向到由<code>proxy</code>部署资源创建的Pod资源，后者又从由部署资源<code>webserverv1</code>和<code>webserverv2</code>创建的Pod资源请求内容。代理的内容然后被返回给浏览器。</p>
+
+<p>同时，有两个额外的集群IP服务资源称为<code>webserverv1</code>和<code>webserverv2</code>，它们当前没有被访问。这些是为Istio策略做准备而创建的，与我们在最初的实现中建立的相比，Istio策略将以更细粒度的方式引导流量。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/istio/the-sample-application/istio-sample.svg" class="zoom" data-title=""><img src="../Images/55456e9e7b69112dd6c7fcb7a9980a39.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/istio/the-sample-application/istio-sample.svg"/>T2】</a></p>
+
+<p>示例应用程序Kubernetes架构。</p>
+
+<p>当我们打开应用程序时，我们将看到代理包装了来自<code>webserverv1</code>或<code>webserverv2</code>的响应，因为服务资源指向所有web服务器Pod资源，因此将针对任何给定的请求联系它们中的任何一个。我们还可以看到检索代理值所花费的时间。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-09/istio/the-sample-application/output.png" class="zoom" data-title=""><img src="../Images/6e46c5fff4296ec38bbf893c7c2bb764.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-09/istio/the-sample-application/output.png"/>T2】</a></p>
+
+<p><em>代理应用程序从web服务器返回值。</em></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这里显示的示例应用程序很简单，并不试图复制真实的场景。但是，它非常适合作为我们使用Istio添加新网络功能的起点。</p>
+
+<p>在<a href="/blog/istio/istio-virtualservice">的下一篇文章</a>中，我们将介绍Istio VirtualService资源。</p>
+
+                    
+                    
+</body>
+</html>

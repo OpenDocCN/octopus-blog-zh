@@ -1,0 +1,221 @@
+<html>
+<head>
+<title>How to build a PowerBI report for Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>如何为Octopus Deploy构建PowerBI报告</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/powerbi-report-for-octopus-deploy#2021-08-12">https://octopus.com/blog/powerbi-report-for-octopus-deploy#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/octopus-power-bi-report.png" class="zoom" data-title=""><img src="../Images/446e06330a25bc27672974a0f7ea5665.png" class="img-fluid center" alt="How to build a PowerBI report for Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/octopus-power-bi-report.png"/>T2】</a></p>
+
+<p>最近，我使用PowerBI Desktop对从Octopus Deploy数据库中提取的一些数据进行了分析。我创建的报告强调了自动化为我的公司节省了多少时间和金钱，这些报告帮助我发现了减缓部署的潜在开发问题；例如，由于在较低级别的环境中没有发现bug而跳过了多少次发布。</p>
+
+<p>在这篇文章的最后，我分享了我创建的模板，这样你就不必从头开始了(模板既适用于章鱼云，也适用于自托管章鱼)。希望它们能为您指出正确的方向，帮助您强调自动化可以为您节省多少时间和金钱，甚至证明自动化和测试资源的必要性。</p>
+
+<p>在这篇文章中，我预览了我整理的内容。我还将介绍如何创建连接并从Octopus Deploy实例中提取数据。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/headlinerimage.png" class="zoom" data-title=""><img src="../Images/b89a88e3ff7c5808b9d151566a182679.png" class="img-fluid center" alt="PowerBI Report For Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/headlinerimage.png"/>T2】</a></p>
+
+<p>这篇文章分为以下几个部分:</p>
+
+<ol>
+<li><a href="#prerequisites">先决条件</a></li>
+<li><a href="#deployment-history-charts">部署历史图表</a></li>
+<li><a href="#runbooks-history-charts"> Runbooks历史图表</a></li>
+<li><a href="#reports">报告</a></li>
+<li><a href="#roi"> ROI </a></li>
+<li><a href="#conclusion">结论</a></li>
+</ol>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>您需要具备几个先决条件:</p>
+
+
+
+<h2 id="deployment-history-charts">部署历史图表</h2>
+
+<p>部署历史产生了一些非常有趣的模式和结果。来自不同分组(项目、环境等)的原始部署计数。)，部署执行时间以及成功率和失败率。</p>
+
+<p><strong>按日期和项目统计部署数量</strong>:这是我整理的第一张图表，看到过去五年我们每年完成的部署数量，我感到震惊。这份报告每年分解一次，把项目堆起来。在此图表中，您可以按季度、月份和日期深入查看部署计数。点击<em>向下双箭头</em>向下钻取，然后点击<em>向上箭头</em>返回:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report01.png" class="zoom" data-title=""><img src="../Images/602da8644cb357f461e480a1fe768683.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report01.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report01a.png" class="zoom" data-title=""><img src="../Images/352892272f23b320562cf68d93a45d66.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report01a.png"/>T2】</a></p>
+
+<p><strong>按环境和项目划分的部署数量</strong>:下图显示了我们在每个环境中按项目划分的部署数量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report02.png" class="zoom" data-title=""><img src="../Images/254ae00d10611649e91e81049c60f04d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report02.png"/>T2】</a></p>
+
+<p><strong>总部署</strong>:这是部署历史表中所有记录的计数，即所有的部署。</p>
+
+<p><strong>成功部署</strong>:这是所有部署的计数，由<code>TaskState</code> <code>Succeeded</code>过滤。</p>
+
+<p><strong>部署失败</strong>:这是所有部署的计数，由<code>TaskState</code>T3过滤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report03.png" class="zoom" data-title=""><img src="../Images/d877da694e60ca186138c6a7430ed9d5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report03.png"/>T2】</a></p>
+
+<p><strong>总运行时间</strong>:这是一个以小时为单位告诉我们所有部署的总时间的度量。持续时间是以秒为单位存储的，所以我将它除以总小时数。</p>
+
+<p><strong>总运行时间分钟数</strong>:这是一个度量，它告诉我们所有部署的总时间，以分钟为单位。持续时间是以秒为单位存储的，所以我再一次用它除以总分钟数。</p>
+
+<p><strong>总运行时间秒数</strong>:这是所有部署的总持续时间的总和。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report04.png" class="zoom" data-title=""> T31 </a></p>
+
+<p><strong>按状态划分的部署计数</strong>:下图显示了按任务状态划分的所有部署的摘要和计数:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report05.png" class="zoom" data-title=""><img src="../Images/6183bdebb7e98cfbef51da771b30f112.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report05.png"/></a>T2】</p>
+
+<p><strong>按项目划分的平均运行时间秒数</strong>:下面的图表显示了每个项目的每次部署平均需要多长时间。这适用于所有环境:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report06.png" class="zoom" data-title=""><img src="../Images/d064e17cbfc1317cc80add2f6f1da058.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report06.png"/>T2】</a></p>
+
+<p><strong>按环境划分的总部署数</strong>:下图显示了每个环境中的总部署数:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report07.png" class="zoom" data-title=""><img src="../Images/2d0bb38d7394fa2c49855a4cc20783da.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report07.png"/>T2】</a></p>
+
+<p><strong>基于部署数量，按项目和环境列出的问题百分比</strong>:通过下面的图表，我想显示我们按项目对每个环境进行的部署或重新部署的比率。这可能不是一个准确的表示，但是如果部署到较低环境(开发和QA)的百分比较高，这可能意味着发现了问题并修复了部署，然后重新部署。如果我们在每个环境中都有一个均匀的部署百分比，这可能意味着没有发现任何错误/问题，并且部署通过了生产。</p>
+
+<p>如果您在此图表中注意到，QA和Prod中的<em>商店网站</em>几乎具有相同的部署百分比。对我来说，这意味着不是在QA中测试和发现问题，而是在生产中发现错误。我认为这意味着有一个代码质量问题需要解决。</p>
+
+<p>将<em>商店网站</em>与<em>网站</em>进行比较，您可以看到与生产相比，开发和QA中的百分比差异要高得多。我认为这意味着开发人员在开发中发现bug，然后他们错过的bug在QA中被发现。在过去的5年里，我们已经发布了16个主要的稳定版本的网站。</p>
+
+<p>虽然这可能不是100%准确，但是您可以引入一些数据，并从您的票证系统中创建一个关系，以便使用支持数据使其更加准确。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report08.png" class="zoom" data-title=""><img src="../Images/8ef0b019224e89561e0942f7044abd07.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report08.png"/></a>T2】</p>
+
+<p><strong>计划与实际的百分比</strong>:下图比较了开发和生产的发布。目标是查看有多少项目版本打算投入生产，但由于代码问题或错误，它们必须在投入生产之前重新发布:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report09.png" class="zoom" data-title=""><img src="../Images/4fed2d9ee1017f45f60403efb0fcdcff.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report09.png"/>T2】</a></p>
+
+<p><strong>部署取消/超时最多的应用</strong>:下图显示了哪个项目的部署取消或超时最多。如果超时，这可能表示脚本或进程花费的时间太长。这可能是一个大型数据库更改脚本或大型文件传输:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report10.png" class="zoom" data-title=""><img src="../Images/b2d52fafb1947143a6cc4fccc284b5a0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report10.png"/>T2】</a></p>
+
+<p><strong>部署失败次数最多的应用</strong>:下图显示了哪个项目/应用的部署失败次数最多。这可能有许多原因，例如错误配置的变量、更改的服务器、第三方组件更改或升级、服务器关闭、脚本失败等。如果有一个很高的数字，这可能是一个值得研究的问题:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report11.png" class="zoom" data-title=""><img src="../Images/9fbd2cf011d208a207c054764400b832.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report11.png"/>T2】</a></p>
+
+<p><strong>部署最多的应用</strong>:下图显示了哪个项目/应用的部署最成功。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report13.png" class="zoom" data-title=""><img src="../Images/ec29510a876f342b2e973f783c114bec.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report13.png"/>T2】</a></p>
+
+<p><strong>项目和环境的最大持续时间(秒)</strong>:下图显示了每个项目在每个环境下的最大持续时间(秒)。这允许您比较为每个项目部署代码需要多长时间:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report14.png" class="zoom" data-title=""><img src="../Images/2912917b48f4438a8d7576bb63c923f0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report14.png"/>T2】</a></p>
+
+<p><strong>按项目从开发到生产的平均天数</strong>:下图显示了从一个版本被部署到开发到它被提升到生产的平均持续天数:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report15.png" class="zoom" data-title=""><img src="../Images/3b58930676b6f2c5ee38af50e018cb6f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report15.png"/>T2】</a></p>
+
+<p><strong>发布到产品的最短天数</strong>:下图显示了从开发到生产的最短发布时间。在我们的例子中，我们在同一天从开发到生产部署了发布:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report16.png" class="zoom" data-title=""><img src="../Images/91195592ce38c4946f0ae04cb794e359.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report16.png"/>T2】</a></p>
+
+<p><strong>发布到产品的最大天数</strong>:下图显示了从开发到生产的最大发布时间:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report17.png" class="zoom" data-title=""><img src="../Images/7e15253f73bf37ba4716eba15d6d6391.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report17.png"/>T2】</a></p>
+
+<h2 id="runbooks-history-charts">Runbooks历史图表</h2>
+
+<p>Runbooks于2019年底推出，我最近开始使用它们完成一些基本的操作任务。这些图表按日期、执行时间和成功与失败总结了运行手册的执行情况。</p>
+
+<p>这些报告目前仅适用于Octopus Deploy的本地实例，因为Octopus Cloud实例上没有<code>RunbookHistory</code> API调用。</p>
+
+
+<p><strong>按日期统计的运行频率</strong>:下图显示了按日期统计的执行频率。因为我们最近才开始使用runbooks，所以我深入了解了当天的情况，看看这个月我们已经运行了多少次:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report18.png" class="zoom" data-title=""><img src="../Images/5b34be97d7428bebf5958b86e674aadf.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report18.png"/>T2】</a></p>
+
+<p><strong> Runbook执行</strong>:这是runbooks历史表中所有记录的计数，即所有Runbook的所有执行。</p>
+
+<p><strong>成功运行</strong>:这是所有运行的计数，由<code>TaskState</code> <code>Succeeded</code>过滤。</p>
+
+<p><strong>运行失败</strong>:这是所有运行的计数，由<code>TaskState</code>T3过滤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report19.png" class="zoom" data-title=""><img src="../Images/beeb1198c778549b95f893b50dc0eb48.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report19.png"/>T2】</a></p>
+
+<p><strong>总运行时间</strong>:这是一个度量，告诉我们所有运行手册执行的总时间，以小时为单位。持续时间是以秒为单位存储的，所以我将它除以总小时数。</p>
+
+<p><strong>总运行时间分钟</strong>:这是一个度量，告诉我们所有runbook执行的总时间，以分钟为单位。持续时间是以秒为单位存储的，所以我将它除以总分钟数。</p>
+
+<p><strong>总运行时间秒数</strong>:这是所有runbook执行的总持续时间的总和。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report20.png" class="zoom" data-title=""><img src="../Images/6ace89d28a72d0dae6c5b421ca3891cf.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report20.png"/>T2】</a></p>
+
+<p><strong> Runbook成功率</strong>:下图显示了基于任务状态的Runbook执行计数，由<code>IsPublished</code>T5过滤。我们在测试时遇到了一些故障，但我们只想知道这些故障是否在发布并被我们的最终用户使用后才出现:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report21.png" class="zoom" data-title=""><img src="../Images/5983e588577049cbf569d7ccd69a8fb9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report21.png"/>T2】</a></p>
+
+<p><strong>执行操作手册的用户</strong>:下图显示了哪些用户正在执行操作手册，以及每个用户已经执行了多少次:</p>
+
+<p>【T2 <img src="../Images/326a98209940c5f4cfbe1cf1c5a2345c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report22.png"/></p>
+
+<p><strong>Runbook的平均持续时间(秒)</strong>:下图显示了每个run book被执行的次数。这张图表也是按<code>IsPublished</code> <code>true</code>过滤的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report23.png" class="zoom" data-title=""><img src="../Images/1b8529c425ea85bcd39a433c225f658b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/report23.png"/>T2】</a></p>
+
+<h2 id="reports">报告</h2>
+
+<p>创建这些报告可能看起来工作量很大，确实如此。但是我有好吃的给你！我复制了我的PowerBI报告，并为SQL Server和Octopus Cloud实例创建了一个模板。下面是每个模板的链接和我的博客的链接，其中包括设置连接字符串、API URL和API键，以便您可以访问您的数据。</p>
+
+
+
+<p>现在我们有了数据，我们可以查看我们创建的所有图表。我将图表整理成四页，包含大量有用的信息:</p>
+
+<ol>
+<li>部署</li>
+<li>问题</li>
+<li>期间</li>
+<li>运行手册</li>
+</ol>
+
+<hr/>
+
+<p>第一页称为<strong>部署</strong>。下面是过去五年中我的本地Octopus Deploy实例的数据示例截图:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard04.png" class="zoom" data-title=""><img src="../Images/f83f4698172810fcc3142d1ddac373ed.png" class="img-fluid center" alt="Local instance: Deployments page" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard04.png"/>T2】</a></p>
+
+<p><em>本地实例:部署页面</em></p>
+
+<p>第二页是<strong>问题</strong>。这是我的报告的屏幕截图，其中包含与潜在问题相关的所有图表:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard05.png" class="zoom" data-title=""><img src="../Images/e99a1eb4ae08be2dd731c6b8ec3325cc.png" class="img-fluid center" alt="Local instance: Issues page" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard05.png"/>T2】</a></p>
+
+<p><em>本地实例:问题页面</em></p>
+
+<p>第三页称为<strong>持续时间</strong>，包含所有与执行持续时间相关的图表:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard06.png" class="zoom" data-title=""><img src="../Images/a0cdd2ee6656f8aaf28540377b98e4e5.png" class="img-fluid center" alt="Local instance: Durations page" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard06.png"/>T2】</a></p>
+
+<p><em>本地实例:持续时间页面</em></p>
+
+<p>最后一个页面名为<strong> Runbooks </strong>，这目前只是Octopus Deploy的本地实例的一个选项，因为Octopus Cloud实例上没有<code>RunbookHistory</code> API调用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard07.png" class="zoom" data-title=""><img src="../Images/1971a88c0a762d0c54d8256c49adbce4.png" class="img-fluid center" alt="On-premises instance: Runbooks page" data-original-src="https://i.octopus.com/blog/2020-07/powerbi-report-for-octopus-deploy/dashboard07.png"/>T2】</a></p>
+
+<p><em>本地实例:运行手册页面</em></p>
+
+<h2 id="roi">投资收益率</h2>
+
+<p>那么Octopus Deploy为我的公司节省了多少钱呢？来看看我收集的数据。</p>
+
+<p>在过去五年中，Octopus Deploy已经执行了3，572次部署。假设在典型的手动部署中，每个部署需要一个小时来部署到多个服务器。在我的例子中，我们至少有一个网站、一个API和两个数据库。我们的其他环境有更多的web服务器(在web场中)和更多的API。</p>
+
+<p>最少也要3，572个小时，我们可以肯定，对于较大的环境来说，这需要更多的时间。手动执行3572小时，但Octopus Deploy的自动执行仅用了53.5小时。</p>
+
+<p>如果我们有一个人来处理部署，那么在一个典型的168小时工作月中，仅执行部署就要花费他们每月大约三分之一的时间。</p>
+
+<p>如果他们的时薪是每小时80美元，我们每年就要花费57，000美元，持续五年，总计285，760美元。</p>
+
+<p>现在，如果我能说服我的公司从我节省下来的267，360美元中给我一点奖金，那就太棒了。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>现在您可以看到您的数据了，我希望您会发现其中一些报告和图表很有用，也许您甚至会想出新的报告和图表来添加到这些报告和图表中。如果你这样做了，评论和分享你的想法，也许我可以把它们纳入我的下一个版本。</p>
+
+                    
+                    
+</body>
+</html>

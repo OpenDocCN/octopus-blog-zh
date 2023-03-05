@@ -1,0 +1,312 @@
+<html>
+<head>
+<title>Track Jira issues across your CI/CD pipeline - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>跟踪CI/CD渠道中的吉拉问题- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/track-jira-issues-across-your-ci-cd-pipeline#2021-12-16">https://octopus.com/blog/track-jira-issues-across-your-ci-cd-pipeline#2021-12-16</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-octopus.png" class="zoom" data-title=""><img src="../Images/b0f544eb3c2cd6623d4826ede2c3014e.png" class="img-fluid center" alt="Track Jira issues across your CI/CD pipeline" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-octopus.png"/>T2】</a></p>
+
+<p>随着人们认识到DevOps提供的好处，近年来devo PS的采用大幅增加。许多解决方案提供集成在一起的持续集成和持续交付(CI/CD ),我们之前已经讨论过CI和CD 之间的<a href="https://octopus.com/blog/difference-between-ci-and-cd">差异，但是这些解决方案很少充分利用在DevOps中至关重要的持续反馈循环。在这篇文章中，我将向您展示如何集成Jenkins、Octopus Deploy和吉拉来提供一个解决方案，使您可以轻松地跟踪CI/CD渠道中的问题。</a></p>
+
+<h2 id="install-the-jenkins-octopus-deploy-plugin">安装詹金斯章鱼部署插件</h2>
+
+<p>Octopus Deploy为Jenkins提供了一个插件，实现了其他构建平台上可用的相同功能。</p>
+
+<p>安装Octopus Deploy插件与为Jenkins安装任何其他插件是一样的。当你打开Jenkins，从登陆页面点击<strong>管理Jenkins </strong>，然后<strong>管理插件</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jenkins-manage-plugins.png" class="zoom" data-title=""><img src="../Images/7e7ae4fb4673ed1289b6cfa1f4055934.png" class="img-fluid center" alt="The Jenkins UI" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jenkins-manage-plugins.png"/>T2】</a></p>
+
+<p>点击<strong>可用的</strong>选项卡，按<code>Octo</code>过滤。勾选Octopus Deploy旁边的方框，选择<strong>安装而不重启</strong>或<strong>立即下载并重启后安装</strong>。</p>
+
+<p>安装插件后，您将可以访问以下构建任务:</p>
+
+<ul>
+<li>Octopus部署:打包应用程序</li>
+<li>Octopus部署:推送包</li>
+<li>Octopus部署:推送构建信息</li>
+</ul>
+
+<p>除了构建任务之外，您还将有以下构建后任务:</p>
+
+<ul>
+<li>Octopus部署:创建发布</li>
+<li>章鱼部署:部署释放</li>
+</ul>
+
+<p>Jenkins插件与Azure DevOps、TeamCity和Bamboo的不同之处在于，<em>创建版本</em>和<em>部署版本</em>只能作为构建后操作使用。Jenkins只允许一个post build动作类型，这意味着每个构建定义不能有一个以上的<em> create release </em>动作。</p>
+
+
+<h3 id="configure-the-octopus-server-connection">配置Octopus服务器连接</h3>
+
+<p>许多Octopus部署步骤需要连接到Octopus服务器。要配置连接，点击<strong>管理Jenkins </strong>，然后<strong>配置系统</strong>，然后向下滚动到<strong> Octopus Deploy插件</strong>，点击<strong>添加Octopus Deploy服务器</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jenkins-manage-add-octopus-connection.png" class="zoom" data-title=""><img src="../Images/440c6b07887dde54eb9d8aaeb0f5cd5f.png" class="img-fluid center" alt="A screenshot of the Jenkins UI" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jenkins-manage-add-octopus-connection.png"/>T2】</a></p>
+
+<p>添加您的Octopus服务器详情并点击<strong>保存</strong>。</p>
+
+<h3 id="octopus-deploy-cli">Octopus部署CLI</h3>
+
+<p>Octopus Deploy插件包含了执行这些操作所需的所有命令，但是它仍然依赖于构建代理上存在的<a href="https://octopus.com/downloads/octopuscli"> Octopus Deploy CLI </a>。下载Octopus CLI并将其解压缩到一个文件夹中，然后配置Jenkins知道它在那里。</p>
+
+<p>点击<strong>管理Jenkins </strong>，然后点击<strong>全局工具配置</strong>。滚动到<strong> Octopus Deploy CLI </strong>部分，点击<strong>添加Octopus工具</strong>。添加工具的名称和Octopus CLI的路径，例如<code>c:\octopuscli\octo.exe</code>。</p>
+
+<h2 id="example-build">示例构建</h2>
+
+<p>在这篇文章中，我构建了PetClinic应用程序，这是一个使用MySQL作为后端的Java应用程序。</p>
+
+<h3 id="build-setup">构建设置</h3>
+
+<p>首先，从Jenkins菜单中选择一个<strong>新项目</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jenkins-new-item.png" class="zoom" data-title=""> T32 </a></p>
+
+<p>给你的项目命名，选择<strong> Maven项目</strong>。单击<strong> OK </strong>，您将看到构建定义的配置屏幕。</p>
+
+<p>我将我的构建配置为基于下面定义的参数创建一个惟一的版本号。这个版本号将被印在构建的工件上，这些工件随后将被推送到Octopus Deploy。我安装了几个Jenkins插件来实现这个功能:</p>
+<ul>
+<li>构建名称和描述设置器</li>
+<li>日期参数插件</li>
+</ul>
+
+
+<p>在<strong>通用选项卡</strong>下，勾选<strong>框，该项目被参数化</strong>。</p>
+
+<p>我们构建所需的参数是(所有<code>String</code>参数):</p>
+
+<ul>
+<li>数据库名称:<code>#{Project.MySql.Database.Name}</code></li>
+<li>数据库服务器名称:<code>#{MySql.Database.Server.Name}</code></li>
+<li>数据库用户名:<code>#{Project.MySql.Database.User.Name}</code></li>
+<li>数据库用户密码:<code>#{Project.MySql.Database.User.Password}</code></li>
+</ul>
+
+<p>我添加了一些可选参数来构造版本号，格式如下:<code>1.0.2098.101603</code>。</p>
+
+<p>可选参数:</p>
+
+<ul>
+<li>专业(字符串):1</li>
+<li>次要(字符串):0</li>
+<li>年份(日期):          <ul>
+<li>日期格式:yy</li>
+<li>默认值:local date . now()；</li>
+</ul>
+</li>
+<li>年月日:          <ul>
+<li>日期格式:D</li>
+<li>默认值:local date . now()；</li>
+</ul>
+</li>
+<li>时间(日期):          <ul>
+<li>日期格式:HHmmss</li>
+<li>local date . now()；</li>
+</ul>
+</li>
+</ul>
+
+<p>定义好参数后，让我们将构建与源代码控制挂钩。我在这个构建中使用PetClinic公共bit bucket repo:<code>https://twerthi@bitbucket.org/octopussamples/petclinic.git</code>。点击<strong>源代码管理</strong>，选择Git，输入repo的URL。</p>
+
+<p>如果您使用了上面的可选参数，单击<strong>构建环境</strong>选项卡，选中复选框<strong>设置构建名称</strong>，输入<code>${MAJOR}.${MINOR}.${YEAR}${DAYOFYEAR}.${TIME}</code>作为构建名称，将构建名称设置为我们之前配置的版本号。</p>
+
+<h3 id="build-steps">构建步骤</h3>
+
+<p>由于我们选择了Maven构建，Jenkins为我们创建了构建步骤。我们需要做的就是导航到build选项卡，并为<strong>目标和选项</strong>输入以下内容:</p>
+
+<pre><code>clean package -Dproject.versionNumber=${BUILD_DISPLAY_NAME} -DdatabaseServerName=${DatabaseServerName} -DdatabaseName=${DatabaseName} -DskipTests -DdatabaseUserName=${DatabaseUserName} -DdatabaseUserPassword=${DatabaseUserPassword}
+</code></pre>
+
+<p>命令的分解:</p>
+
+<ul>
+<li>清理:清理项目并移除由之前的构建生成的所有文件。</li>
+<li>打包:将编译好的源代码打包成可分发的格式(jar，war，…)。</li>
+<li>-D:传递到构建中的参数。</li>
+</ul>
+
+<p>这一步构建一个名为<code>petclinic.web.Version.war</code>的. war文件。在这种情况下，包ID是<code>petclinic.web</code>。</p>
+
+<h3 id="post-steps">发布步骤</h3>
+
+<p>我们剩下的步骤在构建定义的post步骤部分。这是我们为MySQL数据库后端打包Flyway项目的地方，将包和构建信息推送到Octopus Deploy，然后创建我们的版本。</p>
+
+<p>在<strong>后期步骤</strong>页签中，点击<strong>添加后期构建步骤</strong>，选择<strong>Octopus:package application</strong>，输入任务详情:</p>
+
+<ul>
+<li>包装标识:<code>petclinic.mysql.flyway</code></li>
+<li>版本号:<code>${BUILD_DISPLAY_NAME}</code>这是我们通过参数配置的版本号，通过上面的设置构建名选项设置。</li>
+<li>包格式:<code>zip|nuget</code></li>
+<li>包基础文件夹:<code>${WORKSPACE}\flyway</code>。忽略警告，它工作正常。</li>
+<li>包包含路径:这里没有这个项目。</li>
+<li>包输出文件夹:<code>${WORKSPACE}</code></li>
+</ul>
+
+<p>接下来，我们定义推送步骤。点击<strong> Post步骤</strong>选项卡，点击<strong> Add post-build step </strong>下拉菜单，选择<strong>Octopus Deploy:push packages</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jenkins-build-post-add-push.png" class="zoom" data-title=""> T31 </a></p>
+
+<p>选择我们之前配置的Octopus Deploy服务器连接，然后选择您想要推送的空间(如果没有指定空间，将使用默认空间)。最后，添加要推送的包的路径。这一步接受通配符格式。路径的起始文件夹是<code>${WORKSPACE}</code>,所以没有理由指定它(事实上，如果您这样做，它将失败)。</p>
+
+<p>在上面我们为Flyway定义的<strong>Octopus Deploy:package application</strong>步骤中，我们告诉该步骤将包放在<code>${WORKSPACE}</code>文件夹中。Maven build放置build。war文件放在<code>/target/</code>文件夹中，所以我们的包路径文件夹值是:</p>
+
+<pre><code>/*.nupkg
+/target/*.war
+</code></pre>
+
+<p>负责推动包裹。接下来，我们将推送一些构建信息。点击<strong>添加后期构建步骤</strong>并选择<strong>Octopus Deploy:Push build information</strong>。这一步是吉拉发布说明的地方。</p>
+
+<p>填写以下详细信息:</p>
+
+<ul>
+<li>Octopus服务器:前面定义的服务器连接。</li>
+<li>空间:你推动包裹的空间。</li>
+<li>包id:          <ul>
+<li><code>petclinic.web</code></li>
+<li><code>petclinic.mysql.flyway</code></li>
+</ul>
+</li>
+<li>版本号:<code>${BUILD_DISPLAY_NAME}</code></li>
+</ul>
+
+<h3 id="build-definition-complete">构建定义完成</h3>
+
+<p>在这个构建定义中，我们将Jenkins与Octopus Deploy集成在一起，并将Jenkins构建配置为从Bitbucket中检索发行说明，因此它们出现在Octopus Deploy中。让我们前往吉拉，进行集成配置。</p>
+
+<h2 id="jira-integration-with-octopus-deploy">部署吉拉与八达通集成</h2>
+
+<p>Octopus Deploy已经开发了与吉拉软件的集成，以便在部署发生时，提交消息所引用的任何问题都可以回调到吉拉，并提供关于问题修复程序已部署在管道中的哪个位置的更新。</p>
+
+<h3 id="add-the-octopus-deploy-app-in-jira">在吉拉添加八达通部署应用程序</h3>
+
+<p>Octopus Deploy在吉拉市场创建了一个应用程序，便于集成。在吉拉软件登陆页面，点击<strong>吉拉设置</strong>、<strong>应用</strong>，点击<strong>查找新应用</strong>，按<code>Octo</code>过滤，选择<strong>八达通部署吉拉</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-octopus-deploy-app.png" class="zoom" data-title=""><img src="../Images/7dd8087d414a58690fead379c9b7b533.png" class="img-fluid center" alt="The octopus Deploy plugin for Jira" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-octopus-deploy-app.png"/>T2】</a></p>
+
+<p>点击<strong>获取app </strong>，点击<strong>立即获取</strong>。</p>
+
+<p>看到应用程序已成功安装的消息后，点击<strong>开始</strong>。</p>
+
+<h3 id="configure-jira-and-octopus-deploy-integration">配置吉拉和Octopus部署集成</h3>
+
+<p>在本节中，我们需要在Octopus Deploy和吉拉之间切换。</p>
+
+<p>在继续之前，让我们打开Octopus Deploy并进入右侧屏幕来完成这一集成。在Octopus Deploy中，点击<strong>配置</strong>，然后点击<strong>设置</strong>，再点击<strong>吉拉问题跟踪器</strong>。</p>
+
+<p>复制Octopus安装ID并将该值粘贴到吉拉的Octopus安装ID中(但不要单击保存):</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-octopus-deploy-installation-id.png" class="zoom" data-title=""><img src="../Images/109200b7825c83d4ade672b1a63282d8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-octopus-deploy-installation-id.png"/>T2】</a></p>
+
+<p>复制吉拉基本URL并将该值粘贴到Octopus Deploy中的<strong>吉拉基本Url </strong>字段和<strong>吉拉问题跟踪器</strong>屏幕上。</p>
+
+<p>现在，回到吉拉，复制<strong>吉拉连接应用程序密码</strong>，并将其粘贴到Octopus Deploy中的<strong>吉拉连接应用程序密码</strong>字段。</p>
+
+<p><strong>注意</strong>在Octopus Deploy中的<strong>测试</strong>按钮不会起作用<em>直到</em>你先点击<strong>保存</strong>在吉拉:</p>
+
+<p>现在，让我们回到Octopus Deploy，点击<strong>测试</strong>按钮测试连接工作。如果连接正常，您将看到以下屏幕:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-jira-app-success.png" class="zoom" data-title=""><img src="../Images/242e4c566ec57807722c2f35d7ed73ed.png" class="img-fluid center" alt="Connection successful screen in Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-jira-app-success.png"/>T2】</a></p>
+
+<p>至此，我们已经完成了吉拉的工作，但是在Octopus Deploy中我们还有一些事情要做。首先，让我们通过单击<strong>已启用</strong>复选框来启用Octopus Deploy中的集成。</p>
+
+<p>要配置发行说明，请向下滚动并输入吉拉用户名和密码。</p>
+
+<p><code>Jira Username</code>是你的电子邮件地址，<code>Jira Password</code>是你的API密匙。</p>
+
+
+<p>确保单击“测试”以确保凭据有效。</p>
+
+<h3 id="environment-mapping">环境测绘</h3>
+
+<p>作为与吉拉集成的一部分，您需要将Octopus部署环境映射到吉拉环境类型。这是必要的，这样吉拉可以了解八达通的环境和跟踪问题的进展。请注意，吉拉环境类型是不能编辑的固定列表。为此，单击<strong>基础架构</strong>选项卡，然后单击<strong>环境</strong>，并单击该环境的省略号和<strong>编辑</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-environment-edit.png" class="zoom" data-title=""><img src="../Images/43f1b1dedfee58b8b47ac57b0eb0503d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-environment-edit.png"/>T2】</a></p>
+
+<p>使用<strong>吉拉环境类型</strong>部分中的下拉菜单将Octopus部署环境与吉拉环境类型相关联。</p>
+
+<p>对要映射的任何其他环境重复此过程。</p>
+
+<h2 id="octopus-deploy-project-automatic-release-note-creation">Octopus部署项目自动发布说明创建</h2>
+
+<p>要配置自动发行说明创建，从您的Octopus项目中，单击<strong>设置</strong>，并为发行说明模板输入以下内容:</p>
+
+<pre><code>#{each package in Octopus.Release.Package}
+- #{package.PackageId} #{package.Version}
+#{each workItem in package.WorkItems}
+    - [#{workItem.Id}](#{workItem.LinkUrl}) - #{workItem.Description}
+#{/each}
+#{/each}
+</code></pre>
+
+<p>(可选)您可以为部署更改模板输入以下内容:</p>
+
+<pre><code>#{each release in Octopus.Deployment.Changes}
+**Release #{release.Version}**
+#{release.ReleaseNotes}
+#{/each}
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-project-template.png" class="zoom" data-title=""><img src="../Images/f9516a3347c85c47cb35f3454ba40bfc.png" class="img-fluid center" alt="An example Octopus Deploy release notes template" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-project-template.png"/>T2】</a></p>
+
+<h2 id="the-feedback-loop">反馈回路</h2>
+
+<p>随着我们的集成完成，是时候看到所有这些一起工作了。</p>
+
+<h3 id="create-an-issue-in-jira-software">在吉拉软件中创建一个问题</h3>
+
+<p>让我们在吉拉创建一个问题，点击左侧的<strong> + </strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-add-issue.png" class="zoom" data-title=""><img src="../Images/9153a23ddfe2cc149e9968bc8a6d32cf.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-add-issue.png"/>T2】</a></p>
+
+<p>填写问题表格，点击<strong>创建</strong>。</p>
+
+<p>记下为该问题创建的ID，因为您稍后会需要它。对于这个帖子，是<code>PET-3</code>。</p>
+
+<h3 id="commit-to-the-repo">承诺回购</h3>
+
+<p>提交在Octopus Deploy中显示为发行说明，因此您可以看到正在部署什么。此外，如果您在提交消息中引用吉拉问题，提交将与吉拉的问题相关联。当部署发生时，八达通将更新吉拉的状态。</p>
+
+<p>向您的回购协议添加一些提交；在这篇文章中，我添加了以下内容:</p>
+
+<ul>
+<li>更新pom.xml以使用SSL版本的<a href="https://repo.spring.io/milestone" rel="nofollow">https://repo.spring.io/milestone</a>回购</li>
+<li>PET-3 -更新了数据源bean属性，以防止数据库连接超时</li>
+<li>将bin文件夹添加到Flyway项目中，以包含JRE的内置版本</li>
+</ul>
+
+<h3 id="build-the-project">构建项目</h3>
+
+<p>提交完成后，我们就可以构建项目了。构建定义中的推送构建信息步骤将包含我们的提交消息。让我们在詹金斯排队建设。</p>
+
+<p>在Jenkins中，点击<strong>用参数</strong>构建，点击<strong>构建</strong>。</p>
+
+<h3 id="review-the-build-information-in-octopus-deploy">查看Octopus Deploy中的构建信息</h3>
+
+<p>构建完成后，应该可以在Octopus Deploy中获得这些信息。导航到<strong>库</strong>标签，点击<strong>构建信息</strong>，点击<strong>最高版本</strong>链接查看提交和工作项。</p>
+
+<p>这里我们看到构建来自Jenkins构建服务器，并且包括我们对相关工作项(PET-3)进行的三次提交。点击PET-3链接将我们带到吉拉问题。</p>
+
+<h3 id="deploy-the-release">部署版本</h3>
+
+<p>到目前为止，这种整合看起来相当不错！部署一个版本会用状态更新吉拉。让我们开始开发部署。本文假设您已经知道如何创建项目，所以我们将跳过项目创建和部署过程的步骤。</p>
+
+<p>在您的Octopus Deploy项目中，单击<strong> CREATE RELEASE </strong>，在下一个屏幕中单击<strong> Save </strong>之后，您将看到发布的详细信息。在这个屏幕上，我们可以看到我们的发行说明和相关的构建信息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-project-release.png" class="zoom" data-title=""><img src="../Images/a2248fd47cd73ce82622f516d7844901.png" class="img-fluid center" alt="Release information in Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/octopus-deploy-project-release.png"/>T2】</a></p>
+
+<p>当该版本开始部署时，它将向吉拉发送信息。在吉拉，我们可以看到这个问题目前正在发展中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-release-deploying.png" class="zoom" data-title=""><img src="../Images/08860e65a4e4e43f2ae159e6f5ce1b11.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/track-jira-issues-across-your-ci-cd-pipeline/jira-release-deploying.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>詹金斯，吉拉和章鱼部署都是强大的DevOps工具。当您将这三者集成在一起时，您将获得一个强大的DevOps解决方案，它向开发人员、操作人员和业务团队等提供持续的反馈。</p>
+
+<p>观看我们最近的网络研讨会，了解如何将Atlassian云管道与Octopus Deploy集成。我们涵盖了这篇文章中的许多概念，所以请查看:</p>
+
+<iframe src="https://www.youtube.com/embed/yPjooXDJUA0" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+                    
+                    
+</body>
+</html>

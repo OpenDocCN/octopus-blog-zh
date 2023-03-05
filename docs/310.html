@@ -1,0 +1,205 @@
+<html>
+<head>
+<title>Howto: Deploy a SQL Server database using Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>如何:使用Octopus Deploy部署SQL Server数据库</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/howto/deploy-a-sql-database#2019-02-20">https://octopus.com/blog/howto/deploy-a-sql-database#2019-02-20</a></blockquote>
+                        <p>在尝试自动化部署时，数据库可能是最棘手的组件之一。在这篇文章中，我将向您介绍一种处理自动化SQL Server数据库部署的方法。这不是唯一的方法，但这是一种多年来对我很有效的方法。</p>
+
+<p><strong>更新:你可能也想看看一个叫做<a href="http://support.ready-roll.com/customer/portal/articles/889376-deploying-sql-server-dbs-with-octopus"> ReadyRoll </a>的第三方工具，它可以为Octopus Deploy </strong>制作软件包</p>
+
+<h2>目标</h2>
+
+<p>也许您有一个现有的数据库，并且希望从现在开始自动部署对数据库的更改。或者，对于一个新的应用程序，这可能是一个全新的数据库，您希望从一开始就做正确的事情。无论是哪种情况，我们都应该努力实现一些目标:</p>
+
+<ol>
+<li>我们希望它简单</li>
+<li>我们希望它是可重复的</li>
+<li>我们希望对变更的开发、QA和生产部署使用相同的流程</li>
+<li>我们不想变得过于依赖Octopus Deploy或其他工具</li>
+</ol>
+
+<p>第四点可能听起来出乎我的意料，但实际上，Octopus Deploy的目标之一是你创建的包应该是独立有用的，<em>不需要依赖Octopus。这就是为什么Octopus使用web.config文件、appSettings、XML转换和PowerShell等标准约定。在最坏的情况下，您可以将NuGet包重命名为. ZIP，手动提取文件，手动调用脚本，这样您就部署好了。章鱼的存在只是为了让它更容易。</em></p>
+
+<h2>控制数据库:创建脚本</h2>
+
+<p>几年前，我写了一篇关于我如何实现数据库迁移的哲学的博客，我将在这里继续。在我们开始考虑自动化部署之前，我们需要控制数据库。我们将使用<em>变更脚本</em>方法来管理部署。</p>
+
+<p>例如，假设Sally想要向表中添加一列。为此，她可以使用SQL Management Studio中的设计器来添加列并生成一个脚本(Management Studio中有一个按钮可以完成这项工作)。或者她可能会使用类似于<a href="http://www.red-gate.com/products/sql-development/sql-compare/" title="SQL Compare"> Red Gate SQL Compare </a>的工具来帮助创建脚本。或者，她可能对T-SQL非常了解，足以手写它。</p>
+
+<p>无论用来创建的过程是什么，脚本都是无关紧要的。重要的是,<em>将会有</em>剧本。该脚本描述了如何将数据库模式(和数据)从一种状态转换到另一种状态。<strong>这个脚本应该放在源代码控制中。</strong></p>
+
+<p>例如:</p>
+
+<pre><code>alter table dbo.Customer 
+add PhoneNumber varchar(20)
+</code></pre>
+
+<p>这将作为一个文件保存在磁盘上，命名为类似于<code>Script0091 - Add phone number to customer.sql</code>的东西。注意名字中的数字；这是因为迁移脚本总是需要以特定的顺序运行(如果一个脚本添加了一个列，而下一个脚本对其进行了重命名，那么不按顺序运行它们是没有意义的)。</p>
+
+<p>这个想法是脚本描述了数据库如何从一个版本转换到另一个版本。<strong>没有人能在不编写脚本并将其签入源代码控制的情况下更改数据库</strong>——即使是DBA也不行！:-)</p>
+
+<p>通过这样做，您已经成功地拥有了一个更易于维护的数据库:</p>
+
+<ol>
+<li>它在源代码控制中，所以您可以更好地查看数据库的历史</li>
+<li>脚本是连续的，您可以使用任何旧的数据库，通过运行尚未运行的脚本，轻松地将其升级到最新版本</li>
+<li>您在QA中运行的脚本将与您在生产中运行的脚本完全相同</li>
+</ol>
+
+<h2>自动化执行</h2>
+
+<p>下一步是自动运行这些脚本。这里有几个不同的选项，同样，没有一个是Octopus Deploy特定的——您应该能够在不依赖Octopus Deploy的情况下处理数据库部署。</p>
+
+<p>一种选择是让PowerShell脚本获取脚本，对它们进行排序，并将它们传递给<a href="http://msdn.microsoft.com/en-us/library/ms162773.aspx" title="SQL CMD"> SQLCMD </a>实用程序来执行。</p>
+
+<p>另一个选择是使用开源工具，如<a href="http://dbup.github.com" title="DbUp"> DbUp </a>或<a href="http://code.google.com/p/tarantino/wiki/DatabaseChangeManagement" title="Tarantino">塔伦蒂诺</a>，甚至是商业工具，如<a href="http://www.ssw.com.au/ssw/sqldeploy/" title="SSW SQL Deploy"> SSW SQL Deploy </a>。在这个例子中我将使用DbUp，因为我认为它是最简单的工具。</p>
+
+<h2>使用DbUp运行脚本</h2>
+
+<p><a href="http://dbup.github.com"> DbUp </a>是一个类库，您可以从控制台应用程序调用它，所以我将在Visual Studio中创建一个控制台应用程序:</p>
+
+<p><img src="../Images/2112e509f762c470e790c645f5743df1.png" alt="Create console app" data-original-src="https://i.octopus.com/blog/migrated/sql/create-project.png"/></p>
+
+<p>接下来，我将添加DbUp NuGet包:</p>
+
+<p><img src="../Images/cda30e067ed60cf8c4a84aac70ed317e.png" alt="Install DbUp" data-original-src="https://i.octopus.com/blog/migrated/sql/install-dbup.png"/></p>
+
+<p>接下来，我将添加一个脚本文件夹，并添加我的SQL脚本。在每个脚本文件上，我将设置构建操作，以便将它们嵌入到程序集中:</p>
+
+<p><img src="../Images/d66aeb7ade9d68d79d58c83d05e9d382.png" alt="Add scripts" data-original-src="https://i.octopus.com/blog/migrated/sql/add-scripts.png"/></p>
+
+<p>然后，我将把<strong> Program.cs </strong>中的<code>Main()</code>方法替换为:</p>
+
+<pre><code>static int Main(string[] args)
+{
+    var connectionString = ConfigurationManager.ConnectionStrings["DatabaseConnection"].ConnectionString;
+
+    var upgrader =
+        DeployChanges.To
+            .SqlDatabase(connectionString)
+            .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
+            .LogToConsole()
+            .Build();
+
+    var result = upgrader.PerformUpgrade();
+
+    if (!result.Successful)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(result.Error);
+        Console.ResetColor();
+        return -1;
+    }
+
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine("Success!");
+    Console.ResetColor();
+    return 0;
+}
+</code></pre>
+
+<p>注意，连接字符串来自我的app.config文件的<code>ConnectionStrings</code>部分。在我的配置文件中，我添加了以下内容:</p>
+
+<pre><code>&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;configuration&gt;
+  &lt;connectionStrings&gt;
+    &lt;add 
+      name="DatabaseConnection" 
+      connectionString="Server=(local)\SQL2012;Database=SampleDb;Trusted_connection=true" /&gt;
+  &lt;/connectionStrings&gt;
+&lt;/configuration&gt;
+</code></pre>
+
+<p>至此，我已经自动完成了数据库更改——我可以从命令行运行我的应用程序来执行脚本:</p>
+
+<p><img src="../Images/24eb86d4bdc20b9bab2f68e3b7458576.png" alt="First run" data-original-src="https://i.octopus.com/blog/migrated/sql/first-run.png"/></p>
+
+<p>下次运行该应用程序时，DbUp将检测到它已经运行过:</p>
+
+<p><img src="../Images/9e507e22f09fa9ab98699180b97141a9.png" alt="Second run" data-original-src="https://i.octopus.com/blog/migrated/sql/second-run.png"/></p>
+
+<p>它通过使用一个<code>SchemaVersions</code>表来跟踪已经运行的脚本。您可以使用DbUp API自定义这种行为，但我认为这是一个很好的默认设置。</p>
+
+<p><img src="../Images/9bf1ffe61be5a38dd0611fe3bf57de98.png" alt="Schema versions table" data-original-src="https://i.octopus.com/blog/migrated/sql/schema-versions.png"/></p>
+
+<p>这也给开发人员带来了很好的体验——我团队中的其他开发人员可以获得最新版本，并运行控制台应用程序来更新他们自己的数据库本地副本。我们不再需要使用共享数据库来保持同步。</p>
+
+<h2>打包Octopus Deploy的更改</h2>
+
+<p>让我们回顾一下到目前为止我们所拥有的。我们有一套描述数据库需要如何改变的脚本。我们有一个运行这些脚本的控制台应用程序。控制台应用程序从配置文件中获取其连接字符串。所有这些都不依赖于Octopus来运行，如果必须的话，我们可以手动运行脚本(或者请DBA为我们运行它们)。剩下要做的就是将所有东西打包到一个NuGet包中，以便Octopus可以运行它们。</p>
+
+<p>我将从添加一个描述我的包的NuSpec文件开始:</p>
+
+<pre><code>&lt;?xml version="1.0"?&gt;
+&lt;package &gt;
+  &lt;metadata&gt;
+    &lt;id&gt;OctoSample.Database&lt;/id&gt;
+    &lt;title&gt;Octopus Sample - Database Scripts&lt;/title&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+    &lt;authors&gt;OctopusDeploy&lt;/authors&gt;
+    &lt;owners&gt;OctopusDeploy&lt;/owners&gt;
+    &lt;licenseUrl&gt;http://octopusdeploy.com&lt;/licenseUrl&gt;
+    &lt;projectUrl&gt;http://octopusdeploy.com&lt;/projectUrl&gt;
+    &lt;requireLicenseAcceptance&gt;false&lt;/requireLicenseAcceptance&gt;
+    &lt;description&gt;Database deployment scripts for the sample application.&lt;/description&gt;
+  &lt;/metadata&gt;
+&lt;/package&gt;
+</code></pre>
+
+<p>接下来，我将添加一个非常简单的<strong> Deploy.ps1 </strong> PowerShell脚本，它将由Octopus自动执行:</p>
+
+<pre><code>&amp; .\OctoSample.Database.exe | Write-Host
+</code></pre>
+
+<p><strong>注意:记得在<code>Deploy.ps1</code>的属性上设置<code>Copy to Output Directory = Copy if newer</code>以确保它被复制到输出目录</strong></p>
+
+<p>最后，我将安装<a href="https://github.com/OctopusDeploy/OctoPack"> OctoPack NuGet包</a>，它将帮助我创建Octopus的最终包:</p>
+
+<pre><code>Install-Package OctoPack
+</code></pre>
+
+<p>此时，如果我将我的构建配置更改为发布模式，我将在我的bin目录中获得一个NuGet包:</p>
+
+<p><img src="../Images/eb85856ae0fd3fb29b4917513cb3b6f8.png" alt="NuGet package" data-original-src="https://i.octopus.com/blog/migrated/sql/package-in-folder.png"/></p>
+
+<p>检查这个包，我可以看到它包含了我所有的脚本和运行它们的可执行文件:</p>
+
+<p><img src="../Images/87c6831c4bd14ee5da6a2f4f2cae707e.png" alt="NuGet contents" data-original-src="https://i.octopus.com/blog/migrated/sql/package-contents.png"/></p>
+
+<h2>使用Octopus部署软件包</h2>
+
+<p>最后一步是让Octopus部署这个包。首先，我将创建一个步骤，并选择它将要运行的机器:</p>
+
+<p><img src="../Images/3db05030101ea1fa62f482be55eb8531.png" alt="Create step in Octopus" data-original-src="https://i.octopus.com/blog/migrated/sql/create-step.PNG"/></p>
+
+<p>接下来，在Variables下，我将为每个环境配置一个带有连接字符串的变量。</p>
+
+<p><img src="../Images/6212c6deedd68e482f8107c6ea5d2d97.png" alt="Create variables" data-original-src="https://i.octopus.com/blog/migrated/sql/variables.png"/></p>
+
+<p><strong> Octopus会根据我部署到的环境自动更新app.config文件的<code>connectionStrings</code>部分。</strong></p>
+
+<p>现在，我可以将更改部署到暂存:</p>
+
+<p><img src="../Images/1fa3e86900cf8f774a75e9e49e12ba0e.png" alt="Deploy release to staging" data-original-src="https://i.octopus.com/blog/migrated/sql/deploy-release.PNG"/></p>
+
+<p>检查输出日志，我看到:</p>
+
+<p><img src="../Images/3255643df1bf7f338916ff204351f2fc.png" alt="Deployment log" data-original-src="https://i.octopus.com/blog/migrated/sql/deploy-log.PNG"/></p>
+
+<p>这就是用Octopus Deploy实现的自动化数据库部署。</p>
+
+<h2>摘要</h2>
+
+<p>在这篇文章中，我演示了一种使用Octopus Deploy实现自动化数据库部署的技术。还有很多其他的解决方案，如果您使用的是Entity Framework或NHibernate，这些工具内置了迁移支持，但是核心方法是相同的。</p>
+
+<h3>了解更多信息</h3>
+
+
+
+                    
+                    
+</body>
+</html>

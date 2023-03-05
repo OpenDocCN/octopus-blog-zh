@@ -1,0 +1,211 @@
+<html>
+<head>
+<title>Defining Tomcat context paths - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>定义Tomcat上下文路径- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/defining-tomcat-context-paths#2022-09-06">https://octopus.com/blog/defining-tomcat-context-paths#2022-09-06</a></blockquote>
+                        <p>web应用程序的上下文路径定义了最终用户访问应用程序的URL。像<code>myapp</code>这样简单的上下文路径意味着可以从http://localhost:8080/myapp这样的URL访问web应用程序。像<code>myapp/v1</code>这样的嵌套上下文路径意味着可以从http://localhost:8080/myapp/v1这样的URL访问web应用程序。</p>
+
+<p>Tomcat提供了许多方法来定义web应用程序的上下文路径，尽管配置并不像您预期的那样简单。</p>
+
+<p>在这篇博文中，我们将探索Tomcat为部署web应用程序和定义它们的上下文路径提供的选项。</p>
+
+<p>如果您正在寻求自动化您的Java部署，请点击此处开始免费的Octopus试用。</p>
+
+<h2 id="the-host-configuration-element"><code>&lt;Host&gt;</code>配置元素</h2>
+
+<p>Tomcat中用于部署应用程序的许多选项都是在<code>config/server.xml</code>文件的<code>&lt;Host&gt;</code>元素中定义的。</p>
+
+<p>Tomcat 9.01中默认的<code>&lt;Host&gt;</code>元素如下所示:</p>
+
+<pre><code class="language-xml">&lt;Host name="localhost"  appBase="webapps"
+      unpackWARs="true" autoDeploy="true"&gt;
+</code></pre>
+
+<p>下面我们将探讨这些属性如何影响Tomcat中的部署。</p>
+
+<h2 id="exploded-deployments-vs-war-packages">展开部署与战争包</h2>
+
+<p>部署Java web应用程序有两种方法。</p>
+
+<p>第一种方法是部署一个WAR文件。WAR文件只是一个ZIP存档文件，其目录结构可以被像Tomcat这样的Java应用服务器识别。WAR文件很方便，因为它们是易于复制的单个包，并且WAR文件的内容被压缩，使其成为一个非常紧凑的包。</p>
+
+<p>第二种方法是部署组成web应用程序的所有单个文件。这被称为爆炸式部署，或爆炸式战争。这种部署在开发过程中非常有用，因为像HTML页面和CSS文件这样的文件可以在应用程序动态部署和重新加载时进行编辑。</p>
+
+<p>默认情况下，当您将WAR文件部署到Tomcat时，它将被提取到展开的部署中。在下面的截图中，您可以看到部署名为<code>demo.war</code>的文件的最终结果是名为<code>demo</code>的目录，其中提取了<code>demo.war</code>档案的上下文:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/tomcat-exploded-deployment.png" class="zoom" data-title=""><img src="../Images/c7026e5d836aa0b201cdd385cca0fde2.png" class="img-fluid center" alt="Tomcat Exploded Deployment" data-original-src="https://i.octopus.com/blog/2017-10/tomcat-exploded-deployment.png"/>T2】</a></p>
+
+<p>可以通过将<code>&lt;Host&gt;</code>元素上的<code>unpackWARs</code>属性设置为<code>false</code>来禁用这种行为，这将阻止WAR文件在部署过程中被解包。</p>
+
+<h2 id="the-webapps-directory"><code>webapps</code>目录</h2>
+
+<p><code>webapps</code>目录是Tomcat中部署的应用程序所在的位置。</p>
+
+<p><code>webapps</code>目录是默认的部署位置，但是这可以用<code>&lt;Host&gt;</code>元素上的<code>appBase</code>属性来配置。</p>
+
+<p>如果Tomcat设置为自动部署应用程序(默认情况下是这样设置的)，那么任何复制到<code>webapps</code>文件夹中的WAR文件或展开的部署都会在Tomcat运行时自动部署。</p>
+
+<p>通过将<code>&lt;Host&gt;</code>元素上的<code>autoDeploy</code>属性设置为<code>false</code>，可以禁用应用程序的自动部署。在这种情况下，应用程序将在启动时部署。</p>
+
+<p>反过来，可以通过将<code>&lt;Host&gt;</code>元素上的<code>deployOnStartup</code>属性设置为<code>false</code>来禁用启动时的应用程序部署。</p>
+
+<p>如果<code>autoDeploy</code>和<code>deployOnStartup</code>都为假，您可以通过在<code>conf/server.xml</code>文件的<code>&lt;Host&gt;</code>元素中手动添加一个<code>&lt;Context&gt;</code>元素来部署应用程序。参见“在<code>server.xml</code>文件中定义上下文”一节中的示例。</p>
+
+
+<h2 id="embedding-the-path-in-the-exploded-war-filename">在(展开的)WAR文件名中嵌入路径</h2>
+
+<p>当从<code>webapps</code>目录部署应用程序时，它将在与WAR文件名或展开的部署复制到的<code>webapps</code>下的目录名相匹配的上下文路径下可用。</p>
+
+<p>例如，如果您部署一个名为<code>demo.war</code>的WAR文件，它将在<code>demo</code>上下文中可用。同样，如果您将一个爆炸的战争部署到<code>webapps/demo</code>，它也将在<code>demo</code>的上下文中可用。</p>
+
+<p>Tomcat支持嵌套的上下文路径。这些被嵌入到WAR文件名的单个散列字符之后。例如，如果您部署一个名为<code>demo#v1.war</code>的WAR文件，它将在<code>demo/v1</code>上下文中可用。上下文可以有多个层次，所以如果您部署一个名为<code>demo#v1#myfeature.war</code>的WAR文件，它将在<code>demo/v1/myfeature</code>上下文中可用。</p>
+
+<p>同样的模式也适用于存放展开部署的目录。例如，如果您将展开的war部署到<code>webapps/demo#v1</code>，它将在<code>demo/v1</code>上下文中可用。</p>
+
+<h2 id="defining-the-context-path-from-the-server.xml-file">从<code>server.xml</code>文件定义上下文路径</h2>
+
+<p>通过在<code>conf/server.xml</code>文件的<code>&lt;Host&gt;</code>元素中添加一个<code>&lt;Context&gt;</code>元素，可以配置WAR文件或展开的部署目录。这里有一个例子:</p>
+
+<pre><code class="language-xml">&lt;Host name="localhost"  appBase="webapps"
+      unpackWARs="false" autoDeploy="false" deployOnStartup="false"&gt;
+      &lt;Context path="/mydemo/version1" docBase="demo#v1.war"/&gt;
+      ...
+&lt;/Host&gt;
+</code></pre>
+
+<p><code>docBase</code>属性是WAR文件或展开部署目录的路径。虽然可以使用绝对路径，但它是相对于<code>webapps</code>目录的。</p>
+
+<p><code>path</code>属性是我们最感兴趣的，因为它定义了应用程序的上下文路径。在这种情况下，我们已经在<code>/mydemo/version1</code>上下文中公开了web应用程序。</p>
+
+<p>只有当战争或展开部署目录不在<code>webapps</code>目录下，或者<code>&lt;Host&gt;</code>元素上的<code>autoDeploy</code>和<code>deployOnStartup</code>属性为<code>false</code>时，才能定义<code>path</code>属性。</p>
+<p>在这个例子中，我们引用了文件<code>webapps\demo#v1.war</code>，这意味着<code>&lt;Host&gt;</code>元素上的<code>autoDeploy</code>和<code>deployOnStartup</code>属性必须是<code>false</code>。</p>
+<p>引用<a href="https://tomcat.apache.org/tomcat-9.0-doc/config/context.html" class="alert-link" rel="nofollow">文档</a>中的话:</p>
+<blockquote class="blockquote">
+<p>如果不遵守这一规则，很可能会导致双重部署。</p>
+</blockquote>
+
+
+<p>在<code>server.xml</code>文件中定义<code>&lt;Context&gt;</code>元素不是最佳实践。该信息应在保存在<code>conf/Catalina/localhost/</code>下的文件中定义。更多信息参见“令人困惑的<code>context.xml</code>文件案例”。</p>
+
+
+<h2 id="the-confusing-case-of-the-context.xml-file"><code>context.xml</code>档案的疑案</h2>
+
+<p>到目前为止，我们已经看到了两种定义上下文路径的方法:</p>
+
+<ol>
+<li>来自WAR文件的名称或展开的部署目录。</li>
+<li>来自<code>server.xml</code>文件中<code>&lt;Context&gt;</code>元素的<code>path</code>属性(注意被部署的应用程序不在<code>webapps</code>目录下，或者如果在<code>webapps</code>目录下，则<code>&lt;Host&gt;</code>元素的<code>autoDeploy</code>和<code>deployOnStartup</code>属性为<code>false</code>)。</li>
+</ol>
+
+<p>Tomcat还允许我们在web应用程序中包含一个名为<code>META-INF/context.xml</code>的文件，或者在Tomcat目录下创建文件<code>conf/Catalina/localhost/&lt;context&gt;.xml</code>。这些文件包含与<code>server.xml</code>文件中的<code>&lt;Host&gt;</code>元素相同的<code>&lt;Context&gt;</code>元素。</p>
+
+<p>这自然会让您认为可以在这些XML文件中的<code>&lt;Context&gt;</code>元素上定义<code>path</code>属性，Tomcat会将应用程序部署到定义的上下文路径中。</p>
+
+<p>然而，事实并非如此。</p>
+
+<p>例如，让我们假设下面的XML被保存为名为<code>demo#v1.war</code>的WAR文件中的<code>META-INF/context.xml</code>文件:</p>
+
+<pre><code class="language-xml">&lt;Context path="/mydemo/version1"/&gt;
+</code></pre>
+
+<p>当Tomcat将<code>demo#v1.war</code>文件放在<code>webapps</code>文件夹中并进行部署时，它将在<code>demo/v1</code>上下文中可用。<code>path</code>属性被忽略。</p>
+
+<p>同样，如果将相同的XML上下文保存到<code>conf/Catalina/localhost/demo#v1.xml</code>文件中，应用程序仍然可以在<code>demo/v1</code>上下文中使用。</p>
+
+<p>这有点违背直觉，但在<a href="https://tomcat.apache.org/tomcat-9.0-doc/config/context.html" rel="nofollow">文档</a>中有清楚的说明:</p>
+
+<blockquote class="blockquote">
+<p>只有在server.xml中静态定义上下文时，才能使用[path]属性。xml上下文文件或文档库。</p>
+</blockquote>
+
+<p>这意味着定义上下文路径的是WAR文件或展开的部署目录的名称，或者是<code>conf/Catalina/localhost</code>下的XML文件的名称。</p>
+
+<p>事实上，当为了定义从<code>webapps</code>目录部署的应用程序的上下文而在<code>conf/Catalina/localhost</code>目录下创建XML文件时，XML文件需要与WAR文件或展开的部署目录同名。</p>
+
+<p>例如，如果您有一个名为<code>webapps\demo#v1.war</code>的文件，那么相应的XML文件必须名为<code>conf/Catalina/localhost/demo#v1.xml</code>。这些文件需要有匹配的文件名，文件名定义了上下文。</p>
+
+<p>当在<code>webapps</code>目录之外为部署配置上下文时，必须定义<code>docBase</code>属性。该属性指向WAR文件或展开的部署。</p>
+
+<p>在这种情况下，定义上下文的仍然是XML文件的名称。例如，如果下面的XML保存到<code>conf/Catalina/localhost/application#version1.xml</code>，来自<code>/apps/myapp#v1.war</code>的应用程序将在上下文<code>application/version1</code>下可用。在这种情况下，WAR文件名不用于生成上下文。</p>
+
+<pre><code class="language-xml">&lt;Context docBase="/apps/myapp#v1.war"/&gt;
+</code></pre>
+
+<h2 id="uploading-via-the-manager-application">通过管理应用程序上传</h2>
+
+<p>最后，通过manager REST API上传应用程序时，可以定义应用程序的上下文路径。这可以通过对<code>http://localhost:8080/manager/text/deploy?path=/foo</code>的<code>PUT</code>请求来完成，其中请求数据是要部署的WAR文件，而<code>path</code>查询参数是所需的上下文路径。</p>
+
+<p>对<code>/manager/html</code>的请求需要来自<code>manager-gui</code>组的用户的凭证。您可以通过网络浏览器访问此URL来查看管理器应用程序。</p>
+<p>对<code>/manager/text</code>的请求需要来自<code>manager-script</code>组的用户的凭证。这个URL被认为是管理器API。</p>
+<p>仅仅因为您有一个可以通过浏览器访问管理器应用程序的用户，并不一定意味着该用户可以与API进行交互。事实上，单个用户成为<code>manager-gui</code>和<code>manager-script</code>组的一部分被认为是一种不好的做法。引用<a href="https://tomcat.apache.org/tomcat-9.0-doc/manager-howto.html" class="alert-link" rel="nofollow">文件</a>中的话:</p>
+<blockquote class="blockquote">
+<p>建议永远不要向拥有manager-gui角色的用户授予manager-script或manager-jmx角色。</p>
+</blockquote>
+
+
+<p>该文件上传将导致一个部署，其上下文路径嵌入在<code>webapps</code>文件夹内的文件名中。因此，实际上通过管理器应用程序上传文件并不是定义应用程序上下文的新方法，它只是确保正确命名的web应用程序被复制到<code>webapps</code>目录中的一种便捷方式。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>该表总结了各种上下文路径，这些路径将被分配给从<code>webapps</code>部署的、在<code>server.xml</code>文件中引用的或从<code>conf/Catalina/localhost/</code>下的文件中引用的web应用程序。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>配置</th>
+<th>语境</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>部署在<code>webapps/app.war</code>下的WAR文件</td>
+<td><code>app</code></td>
+</tr>
+<tr>
+<td><code>webapps/app</code>下的分解展开</td>
+<td><code>app</code></td>
+</tr>
+<tr>
+<td>部署在<code>webapps/app#v1.war</code>下的WAR文件</td>
+<td><code>app/v1</code></td>
+</tr>
+<tr>
+<td><code>webapps/app#v1</code>下的分解展开</td>
+<td><code>app/v1</code></td>
+</tr>
+<tr>
+<td>部署在<code>webapps/app#v1#feature.war</code>下的WAR文件</td>
+<td><code>app/v1/feature</code></td>
+</tr>
+<tr>
+<td><code>webapps/app#v1#feature</code>下的分解展开</td>
+<td><code>app/v1/feature</code></td>
+</tr>
+<tr>
+<td><code>&lt;Context path="/mydemo/version1" docBase="/apps/demo#v1.war"/&gt;</code>在<code>conf/server.xml</code></td>
+<td><code>/mydemo/version1</code></td>
+</tr>
+<tr>
+<td><code>&lt;Context path="path/is/ignored" docBase="/apps/myapp#v1.war"/&gt;</code>在<code>conf/Catalina/localhost/mydemo#version1.xml</code>中(即<code>/apps/myapp#v1.war</code>的配置)</td>
+<td><code>/mydemo/version1</code></td>
+</tr>
+<tr>
+<td><code>conf/Catalina/localhost/mydemo#version1.xml</code>中的<code>&lt;Context path="/path/is/ignored"/&gt;</code>(即<code>webapps/mydemo#version1.war</code>的配置)</td>
+<td><code>/mydemo/version1</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>如果您对将Java应用程序自动部署到Tomcat感兴趣，<a href="https://oc.to/tomcat-context-paths-trials-bottom" rel="nofollow">开始免费试用Octopus Deploy </a>，看看<a href="https://octopus.com/docs/deployments/java/deploying-java-applications">我们的文档</a>。</p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>Deploy a PHP Site to IIS with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus - Octopus Deploy将PHP站点部署到IIS</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-php-to-iis-with-octopus#2015-09-25">https://octopus.com/blog/deploy-php-to-iis-with-octopus#2015-09-25</a></blockquote>
+                        <p>正如你可能已经读过的，我的背景是LAMP环境中的PHP。做系统管理工作，手动发布和部署PHP站点。因此，当一位客户最近询问他们是否可以在IIS上部署一个PHP站点时，Paul明智地要求我写一篇关于此事的博文。</p>
+
+<h2>一切都在于包装</h2>
+
+<p>正如我们所知，Octopus依赖NuGet包来部署文件。所以首先我们需要把所有的PHP文件放到NuGet包中。幸运的是,<a href="http://docs.octopusdeploy.com/display/OD/Manually"> NuGet Package Explorer </a>已经解决了这个问题。添加文件和创建NuGet包真的是再简单不过了。</p>
+
+<p><img src="../Images/e884c3a1c866adc28f1ee39e342c51b5.png" alt="NuGet Explorer" title="NuGet Package Explorer" data-original-src="https://i.octopus.com/blog/migrated/phpiis_nugetbrowser_ayx0uv.png"/></p>
+
+<p><img src="../Images/dbe7c8f457ca4e99ecd442f25d45bec6.png" alt="Development Folder" title="Development Folder with package and files" data-original-src="https://i.octopus.com/blog/migrated/phpiis_phpfolder_xn11yp.png"/></p>
+
+<p>一旦我的包被创建，并上传到Octopus中的内部NuGet存储库，我就准备好了！</p>
+
+<p><img src="../Images/e050075b1a2c8021cd258fca9145952a.png" alt="NuGet Repository" title="NuGet Octopus Repository" data-original-src="https://i.octopus.com/blog/migrated/phpiis_phppackagelibrary_a3ndzo.png"/></p>
+
+<h2>在Octopus中创建项目</h2>
+
+<p>然后，我创建了一个新项目，并选择了NuGet包步骤。</p>
+
+<p><img src="../Images/da8a0aefb040669c8c07008dfbcc99ab.png" alt="Package Deployment Step" title="Package deployment step" data-original-src="https://i.octopus.com/blog/migrated/phpiis_StepSettings_gt3bkj.png"/></p>
+
+<p>如您所见，我选择了自定义安装目录，因为我有一个预先存在的站点设置，我希望在此实例中始终部署到相同的位置。但是我们使用的是IIS，所以您可以选择其他IIS选项。我还添加了一些其他的Octopus特性来展示它可以与。php文件。因此，我让定制安装目录使用一个变量，并且我还创建了一个测试配置文件，其中包含了在部署到生产环境时需要替换的变量。</p>
+
+<p><img src="../Images/a27412c050af59201bd30cbcddcb846f.png" alt="Test Config File" title="Test Config File" data-original-src="https://i.octopus.com/blog/migrated/phpiis_configvariables_tkui2o.png"/></p>
+
+<p>所以我使用了文件中的替代变量特性并定义了我的<code>config.php</code>文件。</p>
+
+<p><img src="../Images/ea93c1585e2c869465eeed9fb588d712.png" alt="Test Variables" title="Test Variables" data-original-src="https://i.octopus.com/blog/migrated/phpiis_variables_qsmcsv.png"/></p>
+
+<p>所有这三个变量，用于我的自定义安装目录，还有我在<code>config.php</code>文件中的两个变量。</p>
+
+<h2>部署时间到了</h2>
+
+<p>既然我的包被选择为一个步骤，我的变量被配置并确定了范围，那么是时候测试一个版本了。我想我应该创造一个！</p>
+
+<p><img src="../Images/6b1820a779bb8cb25495e8f489244b4f.png" alt="Creating a Release" title="Creating a Release" data-original-src="https://i.octopus.com/blog/migrated/phpiis_Release_you8px.png"/></p>
+
+<p>部署时间！</p>
+
+<p><img src="../Images/4f13e05141103a73965cf97831c2387b.png" alt="Deployment Time" title="Deployment Time" data-original-src="https://i.octopus.com/blog/migrated/phpiis_deploy_rncic6.png"/></p>
+
+<p>这是该包的部署日志:</p>
+
+<p><img src="../Images/c4f7622363c479d8e8813d89bfb63cf1.png" alt="Deployment Log" title="Deployment Log" data-original-src="https://i.octopus.com/blog/migrated/phpiis_deploymentlog_qcjxcg.png"/></p>
+
+<h2>服务器上的结果</h2>
+
+<p>我们完成了，Octopus已经部署了我的PHP文件。所以让我们来看看结果。这是我可爱的<code>phpinfo()</code>页面。</p>
+
+<p><img src="../Images/3cdf84b46dc530ac3f0a5022842fec50.png" alt="PHPINFO display" title="PHPINFO display" data-original-src="https://i.octopus.com/blog/migrated/phpiis_phpinfo_fmxivj.png"/></p>
+
+<p>并且我的文件部署在IIS服务器上的正确位置。</p>
+
+<p><img src="../Images/1956a543767ca7a4f3c652f29de1a9f6.png" alt="Files on Disk" title="Files on Disk" data-original-src="https://i.octopus.com/blog/migrated/phpiis_filesondisk_lpdcoa.png"/></p>
+
+<p>我们也不能忘记我的<code>config.php</code>，它的变量被很好地替换了。</p>
+
+<p><img src="../Images/e8dcaf85079c34227780800b05801aad.png" alt="Config.php Contents" title="config.php contents" data-original-src="https://i.octopus.com/blog/migrated/phpiis_configsubstitute_laymrw.png"/></p>
+
+<h2>完全成功</h2>
+
+<p>因此，我在IIS服务器上部署PHP文件取得了圆满成功。我能够利用Octopus已经做的一切，我唯一要做的就是手动创建我的包，但这实际上是一个“找到一个文件夹并添加”的例子。是的，这个部署是一个IIS服务器，大部分PHP运行在Linux上，但是也许<a href="http://octopusdeploy.com/blog/rfc-linux-deployments">部署现实离我们的未来</a>并不太远。</p>
+
+                    
+                    
+</body>
+</html>

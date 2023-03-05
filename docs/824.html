@@ -1,0 +1,60 @@
+<html>
+<head>
+<title>Deploying to SQL Server with a DACPAC - Will it Deploy? Episode 4 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用DACPAC部署到SQL Server它会部署吗？第4集-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/will-it-deploy-episode-04#2021-07-07">https://octopus.com/blog/will-it-deploy-episode-04#2021-07-07</a></blockquote>
+                        <p>欢迎来到另一个<strong>它会部署吗？</strong>我们尝试使用Octopus Deploy自动部署不同技术的那一集。在本集中，我们尝试使用数据层应用程序包(DACPAC)将Microsoft SQL Server数据库部署到Amazon Web Services (AWS)虚拟机(VM)上。</p>
+
+<iframe src="https://www.youtube.com/embed/zGJthrY-qTQ" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="problem">问题</h2>
+
+<h3 id="tech-stack">技术堆栈</h3>
+
+<p>我们的应用程序是一个报价生成器，名为<a href="https://github.com/OctopusSamples/WillItDeploy-Episode004" rel="nofollow">随机报价</a>。这个应用程序非常简单，但是它允许我们演示如何部署数据库更改和更新。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/sqlserver-logo.png" class="zoom" data-title=""><img src="../Images/27722443ec4ef56c5af1d7fd5c8653a6.png" class="img-fluid center" alt="SQL Server logo" data-original-src="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/sqlserver-logo.png"/>T2】</a></p>
+
+
+
+<p>向我们的营销经理安德鲁致敬，他一直在学习编码并开发了这款应用的第一部分。干得好！</p>
+
+<h3 id="deployment-target">部署目标</h3>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/aws-logo.png" class="zoom" data-title=""><img src="../Images/b671cfc495476c5b16b5c2d45c95d9b1.png" class="img-fluid center" alt="Amazon Web Services logo" data-original-src="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/aws-logo.png"/>T2】</a></p>
+
+
+
+<h2 id="solution">解决办法</h2>
+
+<p>那么它会部署吗？是的，会的！我们的部署流程如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/deployment-process.png" class="zoom" data-title=""><img src="../Images/ce3d8a35a6d964366c1b208590c7d04f.png" class="img-fluid center" alt="Octopus deployment process" data-original-src="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/deployment-process.png"/>T2】</a></p>
+
+<p>然后，我们添加以下步骤来成功部署我们的应用程序。</p>
+
+<ul>
+<li>Octopus <strong>部署一个包</strong>步骤，将我们的数据库脚本复制到我们的数据库部署目标。</li>
+<li>Octopus社区贡献的步骤模板-<strong><a href="https://library.octopusdeploy.com/step-templates/58399364-4367-41d5-ad35-c2c6a8258536/actiontemplate-sql-deploy-dacpac" rel="nofollow">SQL-Deploy DACPAC</a></strong>将我们的DAC PAC部署到我们的SQL Server数据库。</li>
+<li>Octopus <strong>部署到IIS </strong>部署我们的ASP.NET核心web应用程序的步骤。</li>
+</ul>
+
+<p>这个项目使用以下变量来存储我们的应用程序设置、数据库连接细节和web应用程序配置。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/project-variables.png" class="zoom" data-title=""><img src="../Images/61eb206774e53321e4ae337fbd2fd30f.png" class="img-fluid center" alt="Project variables" data-original-src="https://i.octopus.com/blog/2018-02/will-it-deploy-episode-04/project-variables.png"/></a>T2】</p>
+
+<p>本集的<a href="https://github.com/OctopusSamples/WillItDeploy-Episode004" rel="nofollow"> GitHub repo </a>包含了本视频中使用的所有资源和链接。</p>
+
+<h3 id="wrap-up">包裹</h3>
+
+<p>我们希望你喜欢这一集，因为我们有更多的作品！如果你想让我们探索某个框架或技术，请在评论中告诉我们。</p>
+
+<p>不要忘记订阅我们的<a href="https://youtube.com/octopusdeploy" rel="nofollow"> YouTube </a>频道，因为我们会定期添加新视频。愉快的部署！😃</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,265 @@
+<html>
+<head>
+<title>Spring configuration strategies across environments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>跨环境的Spring配置策略——Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/spring-environment-configuration#2021-08-12">https://octopus.com/blog/spring-environment-configuration#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/spring-configuration-strategies_2020.png" class="zoom" data-title=""><img src="../Images/927815b2c60c51b92f4f1bb690bae974.png" class="img-fluid center" alt="Spring configuration strategies across environments" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/spring-configuration-strategies_2020.png"/>T2】</a></p>
+
+<p>Spring对复杂配置有丰富的支持。对概要文件和<a href="https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-external-config" rel="nofollow">外部化配置</a>的内置支持为您提供了很好的自由度来构建特定于环境的配置，这些配置可以捆绑到一个独立的应用程序档案中。</p>
+
+<p>但是大多数开发人员仍将面临一个基本问题，即如何在本地开发应用程序，然后将该应用程序部署到一个配置值(如数据库连接字符串(尤其是它们可能嵌入的密码))必须保密的环境中。</p>
+
+<p>一种解决方案是以环境变量的形式将特定于环境的配置推入环境中。这是一个非常合理的选择，但是当一个应用服务器托管多个应用程序时，必须特别注意环境变量名，以确保特定于应用程序的配置不会冲突。</p>
+
+<p>另一种解决方案是在部署应用程序时对其进行修改，以注入应用程序和环境特定的配置。例如，您可以将<code>localhost</code>上数据库的连接字符串保存到配置文件中。这种配置可以安全地签入源代码控制，为开发人员提供了在本地克隆、构建和运行的能力。但是在部署期间，特定环境的连接字符串会覆盖缺省值，从而导致特定于环境的部署，其凭证不会被窥探。</p>
+
+<p>Octopus很早就支持这种配置文件修改。NET配置文件和JSON文件。这是通过理解。NET XML文件，以便进行适当的修改，或者允许专门命名的变量将值推入JSON文件。</p>
+
+<p>不过，Java和Spring应用程序通常在YAML、XML或属性文件中定义配置。在Octopus 2020.4.0中，增加了将变量推入XML、YAML和属性文件的支持，使Java和Spring开发人员能够从通用应用程序档案创建特定于环境的部署。</p>
+
+<p>在这篇博文中，我们将探讨一些将环境无关的Spring应用程序部署到特定环境的常见策略。</p>
+
+<h2 id="modifying-the-spring-application.yml-file">修改Spring application.yml文件</h2>
+
+<p>让我们从一个简单的例子开始，在这个例子中，我们改变了活动概要文件的名称以匹配环境。下面显示的代码来自<a href="https://github.com/OctopusSamples/RandomQuotes-Java" rel="nofollow">随机引用</a>示例应用程序。</p>
+
+<p>在下面的<code>application.yml</code>文件中，我们将<code>spring.profiles.active</code>属性设置为<code>local</code>,以表明我们正在本地开发环境中工作:</p>
+
+<pre><code class="language-YAML"># The configuration defines the settings used in a local development environment
+# to give developers the ability to clone, develop and build without any
+# additional configuration.
+
+server:
+  port : 5555
+
+spring:
+  profiles:
+    active: local
+  h2:
+    console:
+      enabled: true
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+  datasource:
+    url: jdbc:h2:mem:testdb
+    dbcp2:
+      driver-class-name: org.h2.Driver
+  flyway:
+    locations: classpath:db/migration/{vendor}
+</code></pre>
+
+<p>这个配置文件中没有秘密，直接提交到源代码控制是安全的，开发人员可以删除任何额外的本地配置来开始处理代码。</p>
+
+<p>通过使用<a href="https://docs.spring.io/spring/docs/4.3.10.RELEASE/spring-framework-reference/html/expressions.html" rel="nofollow"> SpEL </a>表达式注入一个值，可以将活动概要文件公开为Spring对象上的一个属性:</p>
+
+<pre><code class="language-Java">@Value("${spring.profiles.active:unknown}")
+private String activeProfile;
+</code></pre>
+
+<p>最终，该值显示在应用程序公开的网页中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/local-dev.png" class="zoom" data-title=""><img src="../Images/da41527c7bbe22bda8a364a3b4a8ed60.png" class="img-fluid center" alt="Random Quotes application with the environment name shown" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/local-dev.png"/>T2】</a></p>
+
+<p>假设我们想要用应用程序将被部署的环境的名称替换<code>spring.profiles.active</code>属性值。我们首先在步骤上启用<strong>结构化配置变量</strong>特性。</p>
+
+<p>这个特性以前被称为<strong> JSON配置变量</strong>，但是在2020.4.0中，我们扩展了这个特性以支持许多新的配置文件:</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/step-feature.png" class="zoom" data-title=""><img src="../Images/b9e50481116190260a90f9e82fb2d00e.png" class="img-fluid center" alt="Configuration features in the Octopus Web Portal" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/step-feature.png"/>T2】</a></p>
+
+<p>然后我们配置这个步骤，用glob <code>**/application.yml</code>将值注入到<code>application.yml</code>文件中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/file-glob.png" class="zoom" data-title=""><img src="../Images/4f1f7c04ee6482911e9c37d860b7886d.png" class="img-fluid center" alt="Image showing the injected glob" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/file-glob.png"/>T2】</a></p>
+
+<p>最后，我们用值<code>#{Octopus.Environment.Name}</code>定义一个名为<code>spring:profiles:active</code>的变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/variables.png" class="zoom" data-title=""><img src="../Images/3d7f3b8ef100727c7c9c0d584224c179.png" class="img-fluid center" alt="Variables defined in the Octopus Web Portal" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/variables.png"/>T2】</a></p>
+
+<p>在部署期间，Octopus将提取应用程序档案(通常是一个JAR或WAR文件)，将名为<code>spring:profiles:active</code>的变量值注入到YAML文件中，重新打包应用程序，并将生成的档案上传到应用服务器或保存在磁盘上，这取决于所使用的特定步骤。我们可以看到应用程序现在报告它正在<strong> Dev </strong>环境中运行:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/dev-environment.png" class="zoom" data-title=""><img src="../Images/ee33289a707e856863456006411afa73.png" class="img-fluid center" alt="Random Quotes application with the environment name shown" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/dev-environment.png"/>T2】</a></p>
+
+<h2 id="modifying-the-web.xml-file">修改web.xml文件</h2>
+
+<p>Spring定义配置文件的能力非常灵活，但是传统的Java XML配置文件在引用外部数据(如环境变量)或采用不同文件名的能力方面非常有限。比如传统Java web应用中用来定义应用设置的<code>web.xml</code>文件，只能叫做<code>web.xml</code>，不包含任何表达式语言来加载外部值或者有条件地定义设置。</p>
+
+<p>在过去，这使得<code>web.xml</code>文件成为定义环境特定配置的一种特别困难的方式，但是有了向XML文件注入值的新能力，Octopus现在可以在部署过程中用环境特定的值修改这个文件。</p>
+
+<p>下面是我们的示例应用程序中的<code>web.xml</code>文件:</p>
+
+<pre><code class="language-xml">&lt;web-app
+        version="3.0"
+        
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"&gt;
+
+    &lt;distributable /&gt;
+    &lt;display-name&gt;Random Quotes&lt;/display-name&gt;
+
+&lt;/web-app&gt;
+</code></pre>
+
+<p>为了修改这个文件，我们使用glob <code>**/web.xml</code>将它添加到<strong>结构化配置变量</strong>特性中，然后定义一个名为<code>//*:display-name</code>和值为<code>Random Quotes #{Octopus.Environment.Name}</code>的变量，这将把Octopus环境嵌入到应用程序的显示名称中。我们可以在Tomcat管理器中看到这个应用程序名:</p>
+
+<p><code>//*:display-name</code>的XPath使用版本2风格的名称空间选择。这比通常看起来像<code>//*[local-name()='display-name']</code>的版本1选择器要方便得多，但是两种样式都可以使用。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/tomcat.png" class="zoom" data-title=""><img src="../Images/4254e83bf69027e291e8166d35ad7aee.png" class="img-fluid center" alt="Tomcat manager displaying the embedded Octopus environment" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/tomcat.png"/>T2】</a></p>
+
+<h2 id="complex-configuration-changes">复杂的配置更改</h2>
+
+<p>到目前为止，我们已经以一对一的方式将变量注入到配置文件的现有值中。这对于简单的配置更改来说很好，但是在某些情况下，特定于环境的配置会导致一些重大的更改，全新的字段和旧的设置会被删除。例如，下面是一个<code>application.yml</code>文件，它配置了一个外部Postgres数据库，而不是在本地开发时使用的内存中的H2数据库:</p>
+
+<pre><code class="language-yaml">server:
+  port : 5555
+
+spring:
+  profiles:
+    active: Dev
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        default_schema: randomquotes
+  datasource:
+    url: jdbc:postgresql://databaseserver:5432/postgres
+    username: postgres
+    password: docker
+  flyway:
+    locations: classpath:db/migration/{vendor}
+</code></pre>
+
+<p>所有H2配置都已删除，JPA配置包括新的嵌套属性。那么我们如何创建这个新的配置文件呢？</p>
+
+<p>我们可以通过用新的YAML对象替换<code>jpa</code>和<code>datasource</code>属性的主体来获得足够的接近。</p>
+
+<p>下面是名为<code>spring:datasource</code>的变量的值:</p>
+
+<pre><code class="language-YAML">url: jdbc:postgresql://databaseserver:5432/postgres
+username: postgres
+password: docker
+</code></pre>
+
+<p>这里是变量<code>spring:jpa</code>的值:</p>
+
+<pre><code class="language-YAML">database-platform: org.hibernate.dialect.PostgreSQLDialect
+properties:
+  hibernate:
+    default_schema: randomquotes
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/yaml-variables.png" class="zoom" data-title=""><img src="../Images/b0ece73dc89ee188db3641c4f73de356.png" class="img-fluid center" alt="YAML variables in the Octopus Web Portal" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/yaml-variables.png"/>T2】</a></p>
+
+<p>请注意，变量值是独立的YAML文档。然后，在部署过程中，这些文档被用来替换<code>spring.datasource</code>和<code>spring.jpa</code>属性的子属性。最终结果是一个看起来像这样的<code>application.yml</code>文件:</p>
+
+<pre><code class="language-YAML"># The configuration defines the settings used in a local development environment
+# to give developers the ability to clone, develop and build without any
+# additional configuration.
+server:
+  port: 5555
+spring:
+  profiles:
+    active: Dev
+  h2:
+    console:
+      enabled: true
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        default_schema: randomquotes
+  datasource:
+    url: jdbc:postgresql://databaseserver:5432/postgres
+    username: postgres
+    password: docker
+  flyway:
+    locations: classpath:db/migration/{vendor}
+</code></pre>
+
+<p>这可能会得到我们需要的结果，但是<code>h2</code>设置仍然被定义。我们当然可以替换<code>spring</code>属性的全部内容来删除不需要的属性，但是对于更彻底的转换，更好的解决方案可能是在部署期间用第二个文件来替换<code>application.yml</code>文件。</p>
+
+<h2 id="configuration-files-and-script-hooks">配置文件和脚本挂钩</h2>
+
+<p>鉴于我们的环境特定的配置需要混合添加和删除内容，我们将创建第二个模板文件来表示这个名为<code>postgres-application.yml</code>的新结构。该文件包含我们期望的结构，但它包含任何敏感内容的占位符值:</p>
+
+<pre><code class="language-YAML">server:
+  port : 5555
+
+spring:
+  profiles:
+    active: Dev
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        default_schema: randomquotes
+  datasource:
+    url: jdbc:postgresql://replaceme:5432/postgres
+    username: replaceme
+    password: replaceme
+  flyway:
+    locations: classpath:db/migration/{vendor}
+</code></pre>
+
+<p>我们可以使用一个定制的部署脚本将该模板复制到原始的<code>application.yml</code>文件上，该脚本作为一个特性启用:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/custom-deployment-script.png" class="zoom" data-title=""><img src="../Images/d0e0ccdeab2fd0c99150f7e40919c83b.png" class="img-fluid center" alt="Enabling the custom deployment script in the Octopus Web Portal" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/custom-deployment-script.png"/>T2】</a></p>
+
+<p>然后，<code>cp WEB-INF\classes\postgres-application.yml WEB-INF\classes\application.yml</code>的<strong>预部署脚本</strong>复制特定于环境的模板，覆盖默认模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/pre-deployment-script.png" class="zoom" data-title=""><img src="../Images/f95912397f349a402b1bf7ce137ae950.png" class="img-fluid center" alt="The pre-deployment script" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/pre-deployment-script.png"/>T2】</a></p>
+
+<p>然后像往常一样将变量注入到<code>application.yml</code>中，结果是环境特定的配置文件，其中只有我们想要的值。</p>
+
+<h2 id="templates">模板</h2>
+
+<p>到目前为止，我们一直在将变量放入配置文件中。这允许我们拥有一个用于本地开发的配置文件，然后用任何特定于环境的变量替换它。</p>
+
+<p>现在我们已经了解了如何在部署时使用定制部署脚本来替换配置文件，我们可以选择创建模板，利用Octopus变量替换将变量放入文件中。例如，我们可能有一个特定于环境的配置文件，如下所示:</p>
+
+<pre><code class="language-YAML">server:
+  port : 5555
+
+spring:
+  profiles:
+    active: Dev
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        default_schema: randomquotes
+  datasource:
+    url: jdbc:postgresql://#{DatabaseServer}:5432/postgres
+    username: '#{DatabaseUsername | YamlSingleQuoteEscape}'
+    password: "#{DatabasePassword | YamlDoubleQuoteEscape}"
+  flyway:
+    locations: classpath:db/migration/{vendor}
+</code></pre>
+
+<p>该模板期望在Octopus中定义<code>DatabaseServer</code>、<code>DatabaseUsername</code>和<code>DatabasePassword</code>变量。使用新的<a href="https://octopus.com/docs/projects/variables/variable-filters#VariableSubstitutionSyntax-Providedfilters">过滤器</a> <code>YamlSingleQuoteEscape</code>和<code>YamlDoubleQuoteEscape</code>将这些值嵌入到YAML中，以确保它们在给定的上下文中被正确转义。</p>
+
+<p>然后我们启用<code>Substitute Variables in Templates</code>特性，允许变量被处理:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/substitute-vars-in-templates.png" class="zoom" data-title=""><img src="../Images/712a4cbafa9dd0862449451c36430e48.png" class="img-fluid center" alt="Enabling substitute variables in templates in the Octopus Web Portal" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/substitute-vars-in-templates.png"/>T2】</a></p>
+
+<p>我们现在在<strong>模板中的替代变量</strong>部分匹配文件，而不是在<strong>结构化配置变量</strong>部分匹配文件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/spring-environment-configuration/substitute-vars.png" class="zoom" data-title=""><img src="../Images/f1e7a8f718c9375902de0fd3d86e8625.png" class="img-fluid center" alt="The substitute variables templates section of the deployment process" data-original-src="https://i.octopus.com/blog/2020-11/spring-environment-configuration/substitute-vars.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>创建支持本地开发而无需特殊工具的环境不可知的应用程序包为开发人员提供了直接的克隆、构建、运行工作流，同时还允许将单个编译的应用程序部署在许多需要任何特定配置的环境中。在这篇文章中，我们看了一个将变量推入XML和YAML文件，并将变量拉入YAML模板的典型例子。我们还看到了如何使用定制部署脚本将本地开发配置文件替换为特定于环境的文件。</p>
+
+<p>借助Octopus 2020.4将变量推入XML、YAML和属性文件的能力，创建与环境无关的Java包比以往任何时候都更容易。同时，新的<a href="https://octopus.com/docs/projects/variables/variable-filters#VariableSubstitutionSyntax-Providedfilters">八进制过滤器</a> <code>YamlSingleQuoteEscape</code>、<code>YamlDoubleQuoteEscape</code>、<code>PropertiesKeyEscape</code>和<code>PropertiesValueEscape</code>允许将变量放入模板中，处理所需的任何格式特定的转义。</p>
+
+<p>我们希望这一新功能将通过使多种环境的部署变得流畅和轻松来增强您的Java部署。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

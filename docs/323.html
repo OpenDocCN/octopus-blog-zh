@@ -1,0 +1,311 @@
+<html>
+<head>
+<title>Implementing an automated database deployment process - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>实施自动化数据库部署流程- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/implementing-db-deployment-process#2021-08-12">https://octopus.com/blog/implementing-db-deployment-process#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/blogimage-implementdatabasedeployment.png" class="zoom" data-title=""><img src="../Images/2d33aec2b5c32f96c27ed9f0c899b8a8.png" class="img-fluid center" alt="Implementing an automated database deployment process" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/blogimage-implementdatabasedeployment.png"/>T2】</a></p>
+
+<p>使用TeamCity、Redgate和Octopus Deploy实现理想的自动化数据库部署过程需要多次迭代。我重点介绍了如何自动化SQL Server的部署，但是这些经验也适用于其他数据库和工具。迭代是学习工具和听取反馈的结果。在本文中，我将带您经历自动化数据库部署过程中的几次迭代。</p>
+
+<p>本文是系列文章的最后一篇。这里是其他文章的链接，以防你错过。</p>
+
+
+
+<p>我们所有的数据库部署文章都可以在这里找到<a href="https://octopus.com/database-deployments">。</a></p>
+
+
+
+<h2 id="general-overview">概述</h2>
+
+<p>所有这些工作都是在我以前工作过的公司完成的。该公司有四个环境。</p>
+
+<ul>
+<li>发展</li>
+<li>试验</li>
+<li>脚手架</li>
+<li>生产</li>
+</ul>
+
+<p>开发人员、数据库开发人员和首席开发人员都拥有对<code>development</code>和<code>test</code>的系统管理员权限。他们对<code>staging</code>和<code>production</code>拥有只读权限。只有数据库管理员拥有所有环境的系统管理员权限。</p>
+
+<p>在自动化数据库部署之前，我们的流程是:</p>
+
+<ol>
+<li>开发人员在<code>test</code>中对数据库进行了更改。所有开发人员在<code>test</code>中都有sysadmin权限。他们应该在<code>development</code>进行变更，但是<code>test</code>有所有的数据来验证变更。这是他们的代码所指向的服务器。</li>
+<li>开发人员在SSMS更改连接，并对<code>development</code>进行更改。所有开发人员在<code>development</code>中都有sysadmin权限。</li>
+<li>数据库开发人员或首席开发人员运行<a href="https://www.red-gate.com/products/sql-development/sql-compare/" rel="nofollow"> Redgate SQL Compare </a>来生成<code>test</code>和<code>staging</code>之间的增量脚本。任何复杂的数据库更改(移动列、合并列等。)被删除并手动编写脚本。脚本保存在共享文件夹中。除了DBA之外，每个人都对<code>staging</code>拥有只读权限。数据库管理员必须运行脚本。</li>
+<li>通过电子邮件通知DBA在<code>staging</code>运行共享文件夹中的脚本。它们运行脚本并将输出发送给请求者。</li>
+<li>在转到<code>production</code>之前，可以将多个数据库更改推送到<code>staging</code>。因此，数据库开发人员或首席开发人员会在<code>staging</code>和<code>production</code>之间生成一个新的Redgate SQL比较增量脚本。就像以前一样，任何复杂的数据库更改(移动列、合并列等。)被删除并手动编写脚本。脚本保存在共享文件夹中。除了DBA之外，每个人都对<code>production</code>拥有只读权限。</li>
+<li>DBA通过变更请求得到通知，在<code>production</code>中运行一组脚本。他们运行脚本，将结果保存到变更请求系统，该系统会向请求者发送电子邮件。</li>
+</ol>
+
+<p>这个过程中有几个缺陷。</p>
+
+<ul>
+<li>多个部署流程，如何将变更部署到<code>development</code>和<code>test</code>与<code>staging</code>和<code>production</code>不同。</li>
+<li>手动生成脚本。</li>
+<li>在每个环境中手动运行每个脚本。</li>
+<li>每个环境唯一的增量脚本。</li>
+<li>独特的delta脚本意味着很难或者几乎不可能测试。</li>
+<li>没有提到跟踪变更以及需要部署什么。</li>
+<li>共享开发环境。</li>
+<li>到了去<code>staging</code>的时候才进行点评。</li>
+<li>因此，在<code>production</code>部署期间，“所有人都在甲板上”。</li>
+</ul>
+
+<p>此时，我们使用的工具是:</p>
+
+<ul>
+<li>Git 正在作为TFS版本控制的替代品进行试点。</li>
+<li>团队城市正在作为TFS 2012的替代项目进行试点。</li>
+<li>没有部署服务器。</li>
+<li>没有数据库部署工具(这就是<a href="https://www.red-gate.com/products/sql-development/sql-toolbelt/" rel="nofollow"> Redgate的工具</a>的用武之地)。</li>
+</ul>
+
+<h2 id="automated-database-deployments-v1">自动化数据库部署v1</h2>
+
+<p>当你有一把锤子时，所有的东西看起来都像钉子。正如我的前一篇文章中所详述的，我首先着手在现有的过程中实现自动化。在那之前，我只知道上面的过程，或者某种形式的过程。</p>
+
+<p>我的重点是:</p>
+
+<ul>
+<li>强制每个人在<code>development</code>中进行数据库更改，并自动部署到<code>test</code>。</li>
+<li>自动生成<code>staging</code>和<code>production</code>的增量脚本。</li>
+</ul>
+
+<p>理想情况下，我们会自动部署到<code>staging</code>和<code>production</code>。这将要求构建服务器(在本例中为TeamCity)在这些环境中运行一个具有权限的代理。数据库管理员说得很清楚，TeamCity无权部署到<code>staging</code>或<code>production</code>。</p>
+
+<p>我已经让TeamCity编写了代码。我需要将数据库注入到现有的构建过程中。Redgate为TeamCity提供了一个插件。查看<a href="https://documentation.red-gate.com/display/SCA3/Use+the+TeamCity+plugin+with+a+SQL+Change+Automation+Project" rel="nofollow"> Redgate的TeamCity插件</a>的文档可以发现它支持三个功能:</p>
+
+<ul>
+<li>构建一个包。</li>
+<li>将包与数据库同步。</li>
+<li>测试那个包裹。</li>
+</ul>
+
+<p>为了使构建包过程能够工作，必须使用<a href="https://documentation.red-gate.com/soc" rel="nofollow"> Redgate的SQL源代码控制</a>将数据库置于源代码控制中。在将数据库放入源代码控制之前，我应该已经解决了每个环境之间的差异。需要不同的用户和角色成员。缺少表、不同的存储过程和其他模式变化，没有那么多。</p>
+
+<p>增量需要通过以下三种方式之一来解决:</p>
+
+<ul>
+<li>如果只是错过了改变，那就去应用它。</li>
+<li>如果变更是有意的，并且不应该包含在源代码控制中(备份表或测试表)，您可以<a href="https://www.codeaperture.io/2016/10/14/using-sql-source-control-to-filter-out-unwanted-items/" rel="nofollow">利用过滤器</a>来排除那些项目。</li>
+<li>如果差异是环境造成的，比如用户和角色成员，您将需要查看文档<a href="https://documentation.red-gate.com/sc13/using-the-command-line/options-used-in-the-command-line#Optionsusedinthecommandline-IgnorePermissions" rel="nofollow">以了解您需要包含哪些开关。</a></li>
+</ul>
+
+<p>难题的最后一部分是自动生成delta脚本。谢天谢地，Redgate的模式比较工具有一个CLI版本。</p>
+
+<p>知道了这一点，我的攻击计划是:</p>
+
+<ol start="0">
+<li>解决所有的差异。</li>
+<li>将<code>development</code>中的内容放入源代码控制中。接下来，所有数据库更改都必须在<code>development</code>中进行，并签入源代码控制。</li>
+<li>让TeamCity从源代码控制中构建包。</li>
+<li>让TeamCity将该包与<code>development</code>同步。</li>
+<li>让TeamCity将该包与<code>test</code>同步。</li>
+<li>让TeamCity运行模式比较CLI，为<code>staging</code>和<code>production</code>生成增量脚本。</li>
+</ol>
+
+<p>步骤1和3相互冲突。所以我们跳过这一步。</p>
+
+<ol start="0">
+<li>解决所有的差异。</li>
+<li>将<code>development</code>中的内容放入源代码控制中。接下来，所有数据库更改都必须在<code>development</code>中进行，并签入源代码控制。</li>
+<li>让TeamCity从源代码控制中构建包。</li>
+<li><del>让TeamCity将该包与<code>development</code>同步。</del></li>
+<li>让TeamCity将该包与<code>test</code>同步。</li>
+<li>让TeamCity运行模式比较CLI，为<code>staging</code>和<code>production</code>生成增量脚本。</li>
+</ol>
+
+<p>我不打算介绍如何将数据库放入源代码控制中。我已经写了<a href="https://www.red-gate.com/hub/product-learning/sql-source-control/database-version-control-2" rel="nofollow">那篇文章</a>。</p>
+
+<p>我完成了四个团队城市项目。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-teamcity-overview.png" class="zoom" data-title=""><img src="../Images/5c3151f55b800f89c4b196ec1a9dabe3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-teamcity-overview.png"/>T2】</a></p>
+
+<p>项目将源代码控制中的内容打包。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-build-overview.png" class="zoom" data-title=""><img src="../Images/eab533268935db59715ffa3f238e893c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-build-overview.png"/>T2】</a></p>
+
+<p>我正在利用TeamCity的<a href="https://www.jetbrains.com/help/TeamCity/snapshot-dependencies.html" rel="nofollow">快照依赖</a>和工件依赖。为了利用这一点，我需要将创建的包标记为工件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-artifacts.png" class="zoom" data-title=""><img src="../Images/be09caf464f9f068ef54dcf6d081f8dc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-artifacts.png"/>T2】</a></p>
+
+<p><code>10_Dev</code>和<code>20_Test</code>遵循相同的流程。首先，我需要配置构建的依赖关系。依赖关系包括快照依赖关系和工件依赖关系。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-dependencies.png" class="zoom" data-title=""><img src="../Images/c50fe113175803a9a7c8fb71005d2860.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-dependencies.png"/>T2】</a></p>
+
+<p>现在我已经配置了包和依赖项，我可以添加步骤来将<code>test</code>数据库与包同步。请注意，为了部署最新的包，我将使用来自<code>00_Build</code>项目的值覆盖内部版本号。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-sync.png" class="zoom" data-title=""><img src="../Images/4100d2daaab6a0a40ec2fbe71fc81aa6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-sync.png"/>T2】</a></p>
+
+<p>建造是非常不同的。首先，我像以前一样配置依赖项。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-staging-dependencies.png" class="zoom" data-title=""><img src="../Images/d1a7e235d88b82eed1886abda59d7c94.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-staging-dependencies.png"/>T2】</a></p>
+
+<p>它不运行同步步骤，而是运行一个PowerShell脚本来生成用于转移和生产的增量脚本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-staging.png" class="zoom" data-title=""><img src="../Images/e533cd028af0b53998bbccf60b3b8082.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v1-staging.png"/>T2】</a></p>
+
+<h2 id="flaws-with-automated-database-deployments-v1">自动化数据库部署的缺陷v1</h2>
+
+<p>让我们重新审视现有流程的缺陷，看看我们在这一努力之后做得如何。</p>
+
+<p>这个过程中有几个缺陷。</p>
+
+<ul>
+<li>两种不同的工艺，一种是针对<code>development</code>和<code>test</code>，另一种是针对<code>staging</code>和<code>production</code>的略有不同。这种情况仍在发生。</li>
+<li>手动生成脚本。<strong>解决了。</strong></li>
+<li>在每个环境中手动运行每个脚本。这仅针对<code>test</code>解决。</li>
+<li>每个环境唯一的增量脚本。这仍在发生</li>
+<li>独特的delta脚本意味着很难或者几乎不可能测试。这仍在发生</li>
+<li>没有提到跟踪变更以及需要部署什么。<strong>解决了。</strong></li>
+<li>共享开发环境。这仍在发生</li>
+<li>直到该去<code>staging</code>的时候，评论才出现。这仍在发生</li>
+<li>因此，在<code>production</code>部署期间，“所有人都在甲板上”。这不是什么大问题，但仍在发生</li>
+</ul>
+
+<p>此外，我还引入了几个新问题。</p>
+
+<ul>
+<li>从<code>30_Staging</code>生成脚本到在<code>staging</code>或<code>production</code>中运行脚本之间的小时数或天数。</li>
+<li>当<code>30_Staging</code>运行时，很难知道将使用什么版本来生成增量脚本。</li>
+<li>只有最新的变化，你不能选择旧版本。</li>
+</ul>
+
+<h2 id="new-process">新进程</h2>
+
+<p>在我之前的文章中，我讨论了Redgate如何帮助我所在公司的一个工作组。让我们回顾一下我们提出的流程。</p>
+
+<ol>
+<li>开发人员/数据库开发人员/首席开发人员创建一个分支。</li>
+<li>所有数据库更改和代码更改都在该分支上进行。</li>
+<li>变更已完成并签入分支。</li>
+<li>创建了一个合并请求，这启动了一个构建。构建验证更改是有效的SQL。</li>
+<li>数据库开发人员或首席开发人员审查合并请求中的数据库更改，并提供修复反馈。</li>
+<li>分支机构被批准并合并。</li>
+<li>构建服务器启动一个构建，验证更改是否是有效的SQL，如果是，将它们打包并推送到部署服务器。构建服务器告诉部署服务器部署到<code>development</code>。</li>
+<li>部署服务器部署到<code>development</code>。</li>
+<li>一个开发人员/数据库开发人员/首席开发人员告诉部署服务器部署到<code>test</code>。</li>
+<li>部署服务器部署到<code>test</code>。</li>
+<li>数据库变更在<code>test</code>进行验证。</li>
+<li>一个开发人员/数据库开发人员/首席开发人员告诉部署服务器部署到<code>staging</code>。部署服务器使用数据库工具来生成审查脚本。</li>
+<li>部署服务器向DBA通知对<code>staging</code>的部署请求。他们审查变更并提供修复反馈。</li>
+<li>DBA批准对<code>staging</code>的更改。</li>
+<li>部署服务器完成对<code>staging</code>的部署。</li>
+<li>在<code>staging</code>中验证数据库变更。</li>
+<li>变更请求被提交给DBA，以将部署服务器中的特定包升级到<code>production</code>。</li>
+<li>几小时后，DBA告诉部署服务器部署到<code>production</code>。部署服务器使用数据库工具来生成审查脚本。</li>
+<li>DBA审查该脚本作为最后的完整性检查。</li>
+<li>部署服务器完成对<code>production</code>的部署。</li>
+</ol>
+
+<p>自动化数据库部署过程的下一次迭代将实现这一点。</p>
+
+<h2 id="automated-database-deployments-v2">自动化数据库部署v2</h2>
+
+<p>Octopus Deploy被添加到自动化数据库部署的v2中。这是我们不知道我们需要的部署服务器。部署服务器使我们能够:</p>
+
+<ul>
+<li>简化TeamCity，它只需构建一个包并将其推送到Octopus Deploy。</li>
+<li>在所有环境中使用相同的流程和工具。</li>
+<li>拥有数据库变更的审计历史记录。不仅如此，它还提供了了解谁部署了变更的能力。</li>
+</ul>
+
+<p>团队城市被简化为两个项目。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-teamcity-overview.png" class="zoom" data-title=""><img src="../Images/4bd1da0d6177f90e7fc76e84fd33ecda.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-teamcity-overview.png"/>T2】</a></p>
+
+<p>会像以前一样构建包。<code>10_Dev</code>推送该包并在Octopus Deploy中触发部署到<code>development</code>。我们的文档很好地向您展示了如何做到这一点。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-teamcity-dev.png" class="zoom" data-title=""><img src="../Images/555a7221842a8c21ed538d5233ca202d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-teamcity-dev.png"/>T2】</a></p>
+
+<p>经过一段时间的反复试验，Octopus Deploy中的部署过程变成了这样:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-octopus-overview.png" class="zoom" data-title=""><img src="../Images/54f32ea44ce6cb9deeb2fce35f4e25d7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-octopus-overview.png"/>T2】</a></p>
+
+<p>在这个过程中，反复试验是围绕步骤1和4进行的。首先，我从TeamCity运行相同的CLI脚本来生成delta脚本以供审查。这与正在部署的不同。最终，我了解了Redgate提供的<a href="https://library.octopus.com/step-templates/c20b70dc-69aa-42a1-85db-6d37341b63e3/actiontemplate-redgate-create-database-release" rel="nofollow">创建数据库发布</a>和<a href="https://library.octopus.com/step-templates/7d18aeb8-5e69-4c91-aca4-0d71022944e8/actiontemplate-redgate-deploy-from-database-release" rel="nofollow">从数据库发布</a>部署步骤模板。</p>
+
+<p>使用Redgate提供的step模板自动生成并上传delta脚本作为<a href="https://octopus.com/docs/deployment-process/artifacts"> Octopus工件</a>。DBA可以下载这些文件，并在批准部署到<code>staging</code>或<code>production</code>时进行审查。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-approve-release.png" class="zoom" data-title=""><img src="../Images/e794b5b3e3f9df224c56e2a22647b006.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-approve-release.png"/>T2】</a></p>
+
+<p>按照这个流程，DBA非常乐意让Octopus部署到<code>staging</code>和<code>production</code>。他们可以在部署期间审查脚本，并且审查脚本的人会被审计。此外，他们很高兴看到只需要按一个按钮。正如一位数据库管理员所说，“这太简单了。”</p>
+
+<p>决定这笔交易的是控制谁可以按下部署按钮的能力。所有开发人员(包括数据库开发人员和首席开发人员)都可以部署到<code>development</code>、<code>test</code>和<code>staging</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployment-v2-developer-permissions.png" class="zoom" data-title=""><img src="../Images/8f8a463cfad0ddb7dc1c6cb7594aef69.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployment-v2-developer-permissions.png"/>T2】</a></p>
+
+<p>虽然DBA可以部署到<code>production</code>，但是他们无权更改部署过程，只有开发人员可以这么做。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployment-v2-dba-permissions.png" class="zoom" data-title=""><img src="../Images/792dfb1e7cb144b505e71e06f62abe34.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployment-v2-dba-permissions.png"/>T2】</a></p>
+
+<p>虽然开发人员可以部署到<code>staging</code>，但是DBA才是批准变更的人。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-dbas-approve.png" class="zoom" data-title=""><img src="../Images/b3169d00b4dff61aed8aad496f6cf6d8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-dbas-approve.png"/>T2】</a></p>
+
+<p>这些安全策略和手动干预在这个过程中建立了很多信任。</p>
+
+<h2 id="flaws-with-automated-database-deployments-v2">自动化数据库部署v2的缺陷</h2>
+
+<p>让我们看看我们的问题列表。</p>
+
+<ul>
+<li>两种不同的工艺，一种针对<code>development</code>和<code>test</code>，另一种针对<code>staging</code>和<code>production</code>略有不同。<strong>解决了。</strong></li>
+<li>手动生成脚本。<strong>解决了。</strong></li>
+<li>在每个环境中手动运行每个脚本。<strong>解决了。</strong></li>
+<li>每个环境唯一的增量脚本。<strong>减轻</strong>，这就是工具的工作原理。</li>
+<li>独特的delta脚本意味着很难或者几乎不可能测试。由于使用了相同的流程，减少了导致错误的机会。</li>
+<li>没有提到跟踪变更以及需要部署什么。<strong>解决了。</strong></li>
+<li>共享开发环境。<strong>解决了。</strong></li>
+<li>到了去<code>staging</code>的时候，评论才发生。<strong>解决了。</strong>，数据库开发人员审核特性分支变更，DBA在<code>staging</code>审核。因此，在<code>production</code>部署期间，“所有人都在甲板上”。<strong>解决了。</strong></li>
+<li>从<code>30_Staging</code>生成脚本到在<code>staging</code>或<code>production</code>运行脚本之间的小时或天。<strong>解决了。</strong></li>
+<li>当<code>30_Staging</code>运行时，很难知道哪个版本将用于生成增量脚本。<strong>解决了。</strong></li>
+<li>只有最新的变化，你不能选择旧版本。<strong>解决了。</strong></li>
+</ul>
+
+<p>太棒了，所有原来的问题，加上v1的问题，都被解决或减轻了。但是有趣的事情发生了。这个过程奏效了，随着时间的推移，我们开始对<code>production</code>和<code>staging</code>进行越来越多的部署。</p>
+
+<ul>
+<li>在编写流程时，DBA必须在每个<code>production</code>部署期间在线。</li>
+<li>开发人员必须等到数据库管理员在部署之前完成对他们在<code>staging</code>中的脚本的审查。数据库管理员跟不上。</li>
+<li>开发人员的本地数据库中没有测试数据；这导致他们将未完成的变更推送到<code>test</code>。然后他们将代码指向<code>test</code>，这样他们就有数据可以测试。</li>
+</ul>
+
+<h2 id="automated-database-deployments-v2.1">自动化数据库部署2.1版</h2>
+
+<p>工作组召开了会议，我们同意对流程进行以下更改:</p>
+
+<ul>
+<li>DBA将只批准<code>staging</code>中的变更。</li>
+<li><code>staging</code>中的批准将在部署发生后进行。</li>
+<li>DBA只想在部署到<code>production</code>失败时得到通知。</li>
+<li>DBA希望在试运行部署期间看到<code>production</code>的增量脚本。不会100%一样，但也足够近，让他们复习。实际的<code>production</code>部署脚本将在<code>production</code>部署期间创建，并保存为工件。</li>
+<li>每次部署后生成<code>test</code>的备份。然后，开发人员可以在他们的实例上恢复备份，以获取测试数据。</li>
+</ul>
+
+<p>最终的过程如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-1.png" class="zoom" data-title="">T35【T36】T1】</a></p>
+
+<p>完成这些更改后，DBA可以利用Octopus Deploy中的<code>Deploy Later</code>功能。他们不再需要每次部署到<code>production</code>都在线。</p>
+
+<p>【T2 <img src="../Images/20190416950d657e8ef903ac77b9391f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-11/implementing-db-deployment-process/automated-database-deployments-v2-1-schedule-release.png"/></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>经过这一过程后，部署到<code>production</code>就不再是一件大事了。数据库管理员只需要在<code>production</code>部署期间出现故障时跳转到在线，这种情况越来越少，但需要几次迭代才能到达。</p>
+
+<p>最让我惊讶的是，从开始到结束，一切都发生了多大的变化。我实话实说。如果我遇到一个有最终数据库部署流程的客户，我会有很多问题。但是在实现它的公司的上下文中是有意义的。这符合他们的要求。不要对你的迭代次数和最终结果感到惊讶。每个公司都不一样。</p>
+
+<p>愉快的部署！</p>
+
+<p>如果你喜欢这篇文章，好消息，我们有一个关于自动化数据库部署的完整系列。</p>
+
+                    
+                    
+</body>
+</html>

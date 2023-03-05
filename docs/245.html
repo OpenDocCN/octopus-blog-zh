@@ -1,0 +1,614 @@
+<html>
+<head>
+<title>Installing Tentacles with DSC in AWS CloudFormation templates - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在AWS CloudFormation模板中使用DSC安装Tentacles-Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/dsc-with-aws-cloudformation#2021-08-12">https://octopus.com/blog/dsc-with-aws-cloudformation#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/dsc-with-aws-cloudformation/dsc-with-aws-cloudformation.png" class="zoom" data-title=""><img src="../Images/9b640b8253c497218d677ceefda48fe3.png" class="img-fluid center" alt="Installing Tentacles with DSC in AWS CloudFormation templates" data-original-src="https://i.octopus.com/blog/2020-08/dsc-with-aws-cloudformation/dsc-with-aws-cloudformation.png"/>T2】</a></p>
+
+<p>在之前的一篇博客文章中，我们查看了一些示例CloudFormation模板，它们在VPC中创建了一个新的EC2虚拟机。</p>
+
+<p>这些模板在<a href="https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/ec2-windows-user-data.html" rel="nofollow">实例用户数据</a>中有占位符脚本。在这篇博文中，我们将通过<a href="https://github.com/OctopusDeploy/OctopusDSC" rel="nofollow"> Octopus DSC模块</a>，看看如何配置这些用户数据脚本来安装一个触手，作为目标或工作者。</p>
+
+<h2 id="install-a-target">安装目标</h2>
+
+<p>下面是完整的CloudFormation模板，我们用它在VPC中构建一个EC2实例，并将一个触手配置为目标:</p>
+
+<pre><code class="language-YAML">AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t3a.medium
+    Description: Enter instance size. Default is t3a.medium.
+  WorkstationIp:
+    Type: String
+    Description: The IP address of the workstation that can RDP into the instance.
+  AMI:
+    Type: String
+    Default: ami-05bb2dae0b1de90b3
+    Description: The Windows AMI to use.
+  Key:
+    Type: String
+    Description: The key used to access the instance.
+  APIKey:
+    Type: String
+    Description: The API key used to connect to the Octopus server.
+  OctopusURL:
+    Type: String
+    Description: The Octopus server URL.   
+  TentacleRole:
+    Type: String
+    Description: The tentacle role.   
+  TentacleEnvironment:
+    Type: String
+    Description: The tentacle environment. 
+  TentacleSpace:
+    Type: String
+    Description: The tentacle space.  
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Windows Target VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Octopus Target Group"
+      GroupDescription: "Tentacle traffic in from hosted static ips, and RDP in from a personal workstation"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.156/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.42/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.31.180/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.132/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.94/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.173/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.171/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.7/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.147/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.240/32
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp:  !Sub ${WorkstationIp}/32
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  Windows:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 250
+      UserData:
+        Fn::Base64: !Sub |
+          &lt;powershell&gt;
+          Set-Content -Path c:\dsc.ps1 -Value @"
+          Configuration SampleConfig
+          {
+              param (`$ApiKey, `$OctopusServerUrl, `$Environments, `$Roles, `$ListenPort, `$Space)
+
+              Import-DscResource -Module OctopusDSC
+
+              Node "localhost"
+              {
+                  cTentacleAgent OctopusTentacle
+                  {
+                      Ensure = "Present"
+                      State = "Started"
+
+                      # Tentacle instance name. Leave it as 'Tentacle' unless you have more
+                      # than one instance
+                      Name = "Tentacle"
+
+                      # Defaults to &lt;MachineName&gt;_&lt;InstanceName&gt; unless overridden
+                      DisplayName = "My Tentacle"
+
+                      # Defaults to 10933 unless otherwise specified
+                      ListenPort = `$ListenPort
+
+                      # Required parameters. See full properties list below
+                      ApiKey = `$ApiKey
+                      OctopusServerUrl = `$OctopusServerUrl
+                      Environments = `$Environments
+                      Roles = `$Roles
+                      Space = `$Space # This is for versions 2019.1 and above.  If null or not specified, it uses the space designated as Default
+                  }
+              }
+          }
+
+          SampleConfig -ApiKey "${APIKey}" -OctopusServerUrl "${OctopusURL}" -Environments @("${TentacleEnvironment}") -Roles @("${TentacleRole}") -ListenPort 10933 -Space "${TentacleSpace}"
+
+          Start-DscConfiguration .\SampleConfig -Verbose -wait
+
+          Test-DscConfiguration
+          "@
+
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Confirm:$false
+          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+          Install-Module -Name OctopusDSC -Force -Confirm:$false
+          Import-Module -Name OctopusDSC
+
+          # Need .NET 4.8 to work around a bug in 4.7
+          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+          choco install dotnetfx -y
+
+          # Dot source the DSC config to install the tentacle
+          . c:\dsc.ps1
+          &lt;/powershell&gt;
+      Tags:
+        -
+          Key: Application
+          Value:  Windows Server
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value:  Windows Server Worker
+        -
+          Key: OS
+          Value: Windows
+        -
+          Key: OwnerContact
+          Value: "@matthewcasperson"
+        -
+          Key: Purpose
+          Value: MattC Test Worker
+        -
+          Key: Source
+          Value: CloudForation Script in Octopus Deploy
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Windows
+Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+        - Windows
+        - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>与前一篇博文中描述的模板相比，该模板有两处变化。</p>
+
+<p>添加了其他参数:</p>
+
+<pre><code class="language-yaml">  APIKey:
+    Type: String
+    Description: The API key used to connect to the Octopus server.
+  OctopusURL:
+    Type: String
+    Description: The Octopus server URL.   
+  TentacleRole:
+    Type: String
+    Description: The tentacle role.   
+  TentacleEnvironment:
+    Type: String
+    Description: The tentacle environment. 
+  TentacleSpace:
+    Type: String
+    Description: The tentacle space.  
+</code></pre>
+
+<p>这些参数定义用于连接Octopus的API键、Octopus服务器URL以及新目标的角色、环境和空间。</p>
+
+<p>为了配置目标，我们在用户数据部分展开了脚本。让我们来分析一下这个脚本。</p>
+
+<p>我们首先将DSC配置保存到第二个PowerShell脚本中。我们需要这样做，因为PowerShell会在运行其他脚本命令之前解析任何<code>Configuration</code>块。<code>Configuration</code>模块中的命令<code>Import-DscResource -Module OctopusDSC</code>将会失败，因为DSC模块尚未安装。</p>
+
+<p>此处使用的解决方法是将<code>Configuration</code>块保存到第二个文件，并在安装DSC模块后对其进行点源处理:</p>
+
+<pre><code>Set-Content -Path c:\dsc.ps1 -Value @"
+    Configuration SampleConfig
+    {
+        param (`$ApiKey, `$OctopusServerUrl, `$Environments, `$Roles, `$ListenPort, `$Space)
+
+        Import-DscResource -Module OctopusDSC
+
+        Node "localhost"
+        {
+            cTentacleAgent OctopusTentacle
+            {
+                Ensure = "Present"
+                State = "Started"
+
+                # Tentacle instance name. Leave it as 'Tentacle' unless you have more
+                # than one instance
+                Name = "Tentacle"
+
+                # Defaults to &lt;MachineName&gt;_&lt;InstanceName&gt; unless overridden
+                DisplayName = "My Tentacle"
+
+                # Defaults to 10933 unless otherwise specified
+                ListenPort = `$ListenPort
+
+                # Required parameters. See full properties list below
+                ApiKey = `$ApiKey
+                OctopusServerUrl = `$OctopusServerUrl
+                Environments = `$Environments
+                Roles = `$Roles
+                Space = `$Space # This is for versions 2019.1 and above.  If null or not specified, it uses the space designated as Default
+            }
+        }
+    }
+
+    SampleConfig -ApiKey "${APIKey}" -OctopusServerUrl "${OctopusURL}" -Environments @("${TentacleEnvironment}") -Roles @("${TentacleRole}") -ListenPort 10933 -Space "${TentacleSpace}"
+
+    Start-DscConfiguration .\SampleConfig -Verbose -wait
+
+    Test-DscConfiguration
+    "@
+</code></pre>
+
+<p>要安装DSC模块，我们需要安装NuGet provider，然后从<a href="https://www.powershellgallery.com/packages/OctopusDSC" rel="nofollow"> PowerShell Gallery </a>安装DSC模块:</p>
+
+<pre><code>Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Confirm:$false
+Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+Install-Module -Name OctopusDSC -Force -Confirm:$false
+Import-Module -Name OctopusDSC
+</code></pre>
+
+<p>由于版本的错误。NET默认安装在VM上，我们需要安装。净4.8。这是通过<a href="https://chocolatey.org/packages/dotnetfx" rel="nofollow">巧克力</a>完成的:</p>
+
+<pre><code>Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+choco install dotnetfx -y
+</code></pre>
+
+<p>具备了所有先决条件后，我们开始进行DSC配置，现在将成功完成:</p>
+
+<pre><code>. c:\dsc.ps1
+</code></pre>
+
+<h2 id="verify-the-installation">验证安装</h2>
+
+<p>用户数据脚本的日志文件在<code>C:\ProgramData\Amazon\EC2-Windows\Launch\Log\UserdataExecution.log</code>中。如果我们在新创建的EC2实例中查看该文件的内容，我们将看到正在安装的触手:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/dsc-with-aws-cloudformation/logs.png" class="zoom" data-title=""><img src="../Images/00d952d792368e44e07df8722028dead.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/dsc-with-aws-cloudformation/logs.png"/>T2】</a></p>
+
+<h2 id="install-a-worker">安装一个工人</h2>
+
+<p>安装工人的模板非常相似:</p>
+
+<pre><code class="language-YAML">AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t3a.medium
+    Description: Enter instance size. Default is t3a.medium.
+  WorkstationIp:
+    Type: String
+    Description: The IP address of the workstation that can RDP into the instance.
+  AMI:
+    Type: String
+    Default: ami-05bb2dae0b1de90b3
+    Description: The Windows AMI to use.
+  Key:
+    Type: String
+    Description: The key used to access the instance.
+  APIKey:
+    Type: String
+    Description: The API key used to connect to the Octopus server.
+  OctopusURL:
+    Type: String
+    Description: The Octopus server URL.   
+  WorkerPools:
+    Type: String
+    Description: The worker pools to add the tentacle to. 
+  TentacleSpace:
+    Type: String
+    Description: The tentacle space.  
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Windows Target VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Octopus Target Group"
+      GroupDescription: "Tentacle traffic in from hosted static ips, and RDP in from a personal workstation"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.156/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.42/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.31.180/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.132/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.94/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.173/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.171/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.7/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.147/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.240/32
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp:  !Sub ${WorkstationIp}/32
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  Windows:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 250
+      UserData:
+        Fn::Base64: !Sub |
+          &lt;powershell&gt;
+          Set-Content -Path c:\dsc.ps1 -Value @"
+          Configuration SampleConfig
+          {
+              param (`$ApiKey, `$OctopusServerUrl, `$WorkerPools, `$ListenPort, `$Space)
+
+              Import-DscResource -Module OctopusDSC
+
+              Node "localhost"
+              {
+                  cTentacleAgent OctopusTentacle
+                  {
+                      Ensure = "Present"
+                      State = "Started"
+
+                      # Tentacle instance name. Leave it as 'Tentacle' unless you have more
+                      # than one instance
+                      Name = "Tentacle"
+
+                      # Defaults to &lt;MachineName&gt;_&lt;InstanceName&gt; unless overridden
+                      DisplayName = "My Tentacle"
+
+                      # Defaults to 10933 unless otherwise specified
+                      ListenPort = `$ListenPort
+
+                      # Required parameters. See full properties list below
+                      ApiKey = `$ApiKey
+                      OctopusServerUrl = `$OctopusServerUrl
+                      WorkerPools = `$WorkerPools
+                      Space = `$Space # This is for versions 2019.1 and above.  If null or not specified, it uses the space designated as Default
+                  }
+              }
+          }
+
+          SampleConfig -ApiKey "${APIKey}" -OctopusServerUrl "${OctopusURL}" -WorkerPools @("${WorkerPools}") -ListenPort 10933 -Space "${TentacleSpace}"
+
+          Start-DscConfiguration .\SampleConfig -Verbose -wait
+
+          Test-DscConfiguration
+          "@
+
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Confirm:$false
+          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+          Install-Module -Name OctopusDSC -Force -Confirm:$false
+          Import-Module -Name OctopusDSC
+
+          # Need .NET 4.8 to work around a bug in 4.7
+          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+          choco install dotnetfx -y
+
+          # Dot source the DSC config to install the tentacle
+          . c:\dsc.ps1
+          &lt;/powershell&gt;
+      Tags:
+        -
+          Key: Application
+          Value:  Windows Server
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value:  Windows Server Worker
+        -
+          Key: OS
+          Value: Windows
+        -
+          Key: OwnerContact
+          Value: "@matthewcasperson"
+        -
+          Key: Purpose
+          Value: MattC Test Worker
+        -
+          Key: Source
+          Value: CloudFormation Script in Octopus Deploy
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Windows
+Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+        - Windows
+        - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>要安装工作线程，我们需要删除角色和环境，并定义一个工作线程池参数:</p>
+
+<pre><code class="language-YAML">  WorkerPools:
+    Type: String
+    Description: The worker pools to add the tentacle to. 
+</code></pre>
+
+<p>然后，我们从DSC配置中删除角色和环境，并定义工作池:</p>
+
+<pre><code class="language-Powershell"># Required parameters. See full properties list below
+ApiKey = `$ApiKey
+OctopusServerUrl = `$OctopusServerUrl
+WorkerPools = `$WorkerPools
+Space = `$Space # This is for versions 2019.1 and above.  If null or not specified, it uses the space designated as Default
+</code></pre>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过利用用户数据脚本和Octopus DSC模块，我们可以快速启动新的虚拟机，在Octopus中自动安装和注册目标或工人。在PowerShell试图解析DSC配置之前，安装DSC模块需要做一些工作，但是一旦您理解了DSC的特点和解决方法，这个过程就相对容易实现了。</p>
+
+                    
+                    
+</body>
+</html>

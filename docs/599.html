@@ -1,0 +1,76 @@
+<html>
+<head>
+<title>Octopus releases and Long Term Support (LTS) - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通发布和长期支持(LTS) -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/releases-and-lts#2021-08-12">https://octopus.com/blog/releases-and-lts#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/releases-and-lts/blogimage-ltsrelease.png" class="zoom" data-title=""><img src="../Images/4c38cd320ab963dc255adb7fffc1279e.png" class="img-fluid center" alt="Octopus releases and Long Term Support" data-original-src="https://i.octopus.com/blog/2020-03/releases-and-lts/blogimage-ltsrelease.png"/>T2】</a></p>
+
+<p>我们正在迭代我们发布Octopus Deploy的方式。亮点是:</p>
+
+<ul>
+<li>我们每年将发布六个功能版本(<code>2020.1</code>、<code>2020.2</code>，...).</li>
+<li>每个功能发布都会收到六个月的关键补丁。</li>
+<li>我们将不再明确地将版本标记为LTS(长期支持)。</li>
+<li>版本将在Octopus Cloud实例中推出，然后供自托管实例下载。</li>
+</ul>
+
+<p>我们相信，这将为我们的客户和我们带来更清晰的信息，甚至更多稳定的版本，以及更好的整体体验。</p>
+
+<p>这些更改会立即生效。2020.1版本目前正在向章鱼云实例推出，并将很快提供下载。</p>
+
+<p>此版本将接收补丁(<code>2020.1.1</code>、<code>2020.1.2</code>等)。)接下来的六个月。下一个功能版本(<code>2020.2</code>)将于4月开始推广到Octopus Cloud实例，并将于5月初提供下载。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/releases-and-lts/release-gantt.png" class="zoom" data-title=""><img src="../Images/941bd1aa4934ef6dbd5fe710cc70d6de.png" class="img-fluid center" alt="Lifecycle of coming releases" data-original-src="https://i.octopus.com/blog/2020-03/releases-and-lts/release-gantt.png"/>T2】</a></p>
+
+<p>以上几点是这篇文章的关键信息。但是对于那些感兴趣的人来说，请继续读下去，了解一些历史背景，并希望能有助于了解我们的想法。</p>
+
+<h2 id="the-challenge-of.0-releases">0版本的挑战</h2>
+
+<p>软件公司发布新版本的方式是客户关系的基础。在Octopus，我们的交付流程已经发生了变化，虽然每个决定在当时都是合理的，但我们对当前的状态并不满意。</p>
+
+<p>原来章鱼只有一个自托管的产品(没有章鱼云)。对于一个用户下载并安装在他们自己的基础设施上的产品来说，有一种紧张:<em>你最想制造噪音的版本也是最不稳定的</em>。包含新功能的版本是最激动人心的，但也是最具颠覆性的。它们的安装率最高，但也最有可能出现问题。这对我们的用户或我们来说都不是一个理想的组合。对于我们的许多客户来说，稳定性比最新的特性更重要，当他们问“我们可以升级到哪个最稳定的版本？”我们不能总是诚实地回答，“最新的。”于是在2018年，<a href="https://octopus.com/blog/long-term-support"> LTS计划</a>诞生了。</p>
+
+<p>通过将某些版本标记为LTS，我们试图给人们这样的选择:</p>
+
+<ol>
+<li>使用最新的功能。</li>
+<li>使用最稳定的版本。</li>
+</ol>
+
+<p>从某种意义上说，这个计划是成功的；它达到了目的。但当我们的大部分用户没有最新的功能时，这让我们很难过。我们也不认为这对新用户来说是最好的体验。当用户第一次访问Octopus下载页面时，我们会让他们在稳定性和最新功能之间做出选择。</p>
+
+<p>我们想给他们两个！</p>
+
+<h2 id="extending-long-term-support">扩展长期支持</h2>
+
+<p>我们将不再指定LTS版本。这并不是删除LTS程序，而是将它扩展到每个版本。我们将为每个功能发布提供六个月的补丁。octopus.com上的下载页面现在将显示一个下载最新版本的选项(如果需要，您仍然可以下载以前的版本)。</p>
+
+<p>但是那些<code>.0</code>版本的稳定性呢？</p>
+
+<p>2018年我们发布了<a href="https://octopus.com/docs/octopus-cloud">章鱼云</a>。这改变了游戏。</p>
+
+<p>也许运送自托管软件的最大缺点是，如果一个版本包含一个问题，没有办法自动升级每个人(我们的许多客户在没有互联网连接的环境中使用Octopus)。对于我们来说，看到用户遇到我们已经发布修复的问题总是令人痛苦的。但是当<em>我们</em>托管Octopus时，如果一个用户发现一个问题，我们可以立即向所有受影响的实例推出一个解决方案，从而大大降低影响。</p>
+
+<p>出于这个原因，我们将首先<strong>向章鱼云实例推出新版本</strong>。这允许我们管理部署的速率(最初部署到少量实例)，并快速稳定发布。当我们对该版本的稳定性有信心时，我们将部署到所有Octopus云实例，并让自托管客户下载。</p>
+
+<h2 id="better-for-everyone">对每个人都更好</h2>
+
+<p>我们相信这对每个人来说都是一个进步。</p>
+
+<ul>
+<li>自托管用户将能够更有信心地安装最新版本，他们将不必在功能或稳定性之间做出选择。</li>
+<li>八达通云用户将更快地获得新功能。以前，我们会在新功能可供下载时发布。那时，这些特性在Octopus Cloud实例上还不可用，我们甚至不能确切地说它们什么时候会可用。从现在起，当我们宣布一项新功能时，它将对所有八达通客户开放。</li>
+<li>在我们的测试中出现的任何问题都会在较短的时间内影响少量的客户。</li>
+</ul>
+
+<p>如果您对这些变化有任何疑问或担心，请联系我们support@octopus.com。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

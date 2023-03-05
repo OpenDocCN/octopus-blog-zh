@@ -1,0 +1,81 @@
+<html>
+<head>
+<title>Writing and linting Jenkinsfiles with Atom - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Atom - Octopus部署编写和林挺Jenkins文件</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/jenkinsfiles-with-atom#2021-08-23">https://octopus.com/blog/jenkinsfiles-with-atom#2021-08-23</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/jenkins-graphic.png" class="zoom" data-title=""><img src="../Images/41266810ba84e18acb468d28e20952ad.png" class="img-fluid center" alt="Writing and linting Jenkinsfiles with Atom" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/jenkins-graphic.png"/>T2】</a></p>
+
+<p>声明性管道是Jenkins中的一个流行特性，允许构建过程与正在构建的代码一起提交。Jenkinsfiles本质上是Groovy语法；然而，对于习惯于依赖本地编译来确保其代码有效的开发人员来说，在发现语法错误之前不得不等待Jenkins尝试执行他们的Jenkinsfile可能会令人沮丧。</p>
+
+<p>Jenkins提供了一个解决方案，它使得在执行Jenkinsfile之前对其进行验证成为可能。这可以从命令行手动执行<a href="https://jenkins.io/doc/book/pipeline/development/#linter" rel="nofollow">，或者使用IDE插件来提供更加集成的体验。</a></p>
+
+<p>在这篇博文中，我们将看看Atom编辑器中可用的Jenkinsfile林挺工具。</p>
+
+<h2 id="preparing-jenkins">准备詹金斯</h2>
+
+<p>林挺一个Jenkins文件涉及到一个对Jenkins服务器的网络请求。有多种方法可以建立这些网络连接，但是Jenkins通常推荐通过SSH访问服务器。</p>
+
+<p>这里需要注意的是，我们不是在讨论对Jenkins运行的操作系统的SSH访问。相反，Jenkins公开了自己的SSH服务器。SSH服务器在<code>SSH Server</code>部分下的Jenkins安全配置屏幕中启用。在下面的截图中，我已经在端口<code>2222</code>上启动了SSH服务器:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/jenkins-ssh.png" class="zoom" data-title=""><img src="../Images/3f345fb20f40e17ba4f4c9fb2162805e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/jenkins-ssh.png"/>T2】</a></p>
+
+<p>下一步是添加用户的公钥，这样他们就可以通过SSH进行身份验证。该密钥是使用以下命令创建的:</p>
+
+<pre><code>ssh-keygen -t rsa -C "your_email@example.com"
+</code></pre>
+
+<p>这将在默认文件<code>~/.ssh/id_rsa.pub</code>中创建公钥。然后，通过打开用户的详细信息，点击<code>Configure</code>选项，并将公钥的内容粘贴到<code>SSH Public Keys</code>字段，将该文件的内容分配给一个Jenkins用户:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/user-public-key.png" class="zoom" data-title=""><img src="../Images/61a2d320d44facfebdb8ee4cca2a599b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/user-public-key.png"/>T2】</a></p>
+
+<p>Jenkins还要求安装<code>Pipeline</code>插件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/pipeline-plugin.png" class="zoom" data-title=""><img src="../Images/4826f2c302139f84cbb536a02d036bbc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/pipeline-plugin.png"/>T2】</a></p>
+
+<p>完成这些更改后，我们就可以配置Atom了。</p>
+
+<h2 id="preparing-atom">准备原子</h2>
+
+<p>Atom中需要安装三个包:</p>
+
+<ul>
+<li>语言-jenkinsfile</li>
+<li>林特-詹金斯公司</li>
+<li>linter-ui-默认</li>
+</ul>
+
+<p>linter-ui-default包将要求安装许多依赖项。这些是必需的，所以允许安装它们:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/linter.png" class="zoom" data-title=""><img src="../Images/ab03cbabf4a79054ee6a4d175b21b9f2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/linter.png"/>T2】</a></p>
+
+<p>linter包需要额外的配置才能与Jenkins建立网络连接。</p>
+
+<p>我们将使用<code>SSH then CLI</code>连接选项:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/linter-options-1.png" class="zoom" data-title=""><img src="../Images/6b3b61afe47bc649cf2f4aff6a94ae24.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/linter-options-1.png"/>T2】</a></p>
+
+<p>必须更新<code>SSH Port</code>和<code>SSH User@Hostname</code>选项，以反映我们在其上公开Jenkins SSH服务器的自定义端口(端口<code>2222</code>)和我们将Linux用户的公共SSH密钥添加到的Jenkins用户名:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/linter-options-2.png" class="zoom" data-title=""><img src="../Images/a67053d0cfb11d42f6cd30d9b5a2c042.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/linter-options-2.png"/>T2】</a></p>
+
+<h2 id="linting-a-jenkinsfile">林挺·詹金斯费尔</h2>
+
+<p>打开Jenkinsfile，用cmd-shift-p (macOS)或ctrl-shift-p (Linux/Windows)显示命令面板，选择<code>Linter: Lint</code>命令:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/lint-command.png" class="zoom" data-title=""><img src="../Images/f5ca725a6b0b860451e0c691615dffb1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/lint-command.png"/>T2】</a></p>
+
+<p>然后，Jenkinsfile的内容被发送到Jenkins服务器进行验证，并返回任何错误:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/lint-results.png" class="zoom" data-title=""><img src="../Images/3ba6daa33c63a293d2a7b872258b27e7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/jenkinsfiles-with-atom/lint-results.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Jenkins IDE插件，就像我们在Atom中演示的那样，减少了Jenkinsfile中错误的反馈时间，使您能够更快地完成成功的构建。因为验证Jenkinsfiles需要连接到Jenkins服务器，所以需要做一些工作来配置一个安全的连接并定义所需的凭证，但是当这个初始配置完成时，只需一个命令就可以验证您的代码。</p>
+
+                    
+                    
+</body>
+</html>

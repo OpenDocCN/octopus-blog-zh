@@ -1,0 +1,112 @@
+<html>
+<head>
+<title>Config as Code strategies - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>配置为代码策略- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/config-as-code-strategies#2022-05-06">https://octopus.com/blog/config-as-code-strategies#2022-05-06</a></blockquote>
+                        <p>自从我们去年以代码形式发布Octopus配置的早期访问预览版以来，就有许多关于如何使用该功能以获得最佳效果的问题。</p>
+
+<p>这篇文章解释了使用Config作为代码的一些好的实践，以及如何在不同的情况下调整你的策略。</p>
+
+<p>你也可以在我们的<a href="https://octopus.com/blog/octopus-release-2022-q1"> 2022年Q1公告帖子</a>中阅读更多关于Octopus中的Config as代码。</p>
+
+<h2 id="why-use-config-as-code">为什么使用配置作为代码？</h2>
+
+<p>Git是对代码进行版本控制和跟踪随时间变化的完美解决方案。它已经建立了代码分支以及发布和批准变更的模式。如果需要的话，它还允许你比较版本和回到过去。</p>
+
+<p>Octopus Config as Code特性允许您将部署过程作为配置文件存储在Git存储库中，而不是Octopus数据库中。您可以使用Config as Code来:</p>
+
+<ul>
+<li>将您的配置分支，并在合并之前测试分支中的更改</li>
+<li>使用拉式请求对变更进行审核和协作</li>
+<li>克隆现有项目以用作未来项目的模板</li>
+<li>使用已经用于应用程序代码的相同工具来跟踪对部署配置的更改</li>
+<li>在您喜欢的文本编辑器或Octopus应用程序中编辑您的部署配置</li>
+</ul>
+
+<p>配置存储为使用Octopus配置语言(OCL)的可读文件。我们设计OCL是为了使阅读和编辑部署过程以及审查任何变更更加容易。有一个<a href="https://marketplace.visualstudio.com/items?itemName=octopusdeploy.vscode-octopusdeploy" rel="nofollow"> Visual Studio代码扩展，使得处理OCL文件</a>更加容易。</p>
+
+<p>当您启用版本控制时，并不是所有东西都被移动到存储库中。在我们的<a href="https://octopus.com/docs/projects/version-control/config-as-code-reference">配置中有一个版本控制资源列表，作为代码引用</a>。</p>
+
+<p>打开项目的版本控制是单向的。一旦项目进入存储库，就不能再将它移回Octopus数据库。您可以克隆一个现有的项目来尝试将Config作为代码，并在为您的生产项目启用它之前确认它满足您的需求。</p>
+
+
+<h2 id="where-to-store-your-configuration">在哪里存储您的配置</h2>
+
+<p>您需要做出的第一个决定是在哪里存储您的部署配置文件。您可以保留您的配置:</p>
+
+<ul>
+<li>除了您的应用程序代码</li>
+<li>在单独的部署存储库中</li>
+</ul>
+
+<p>请继续阅读，了解每个选项什么时候最有效，什么时候应该避免。</p>
+
+<p>您可能已经注意到，您可以在一定范围内安排这些可能性，从与应用程序的一对一关系到单个大型存储库。我们建议将您的部署配置保存在与应用程序代码相同的存储库中，但是在某些特定的情况下，其他选项可能也适用。</p>
+
+<p>将Config设置为代码后，如果您改变主意，您可以<a href="https://octopus.com/docs/projects/version-control/moving-version-control">移动您的部署配置文件</a>。</p>
+
+<h3 id="alongside-application-code">除了应用程序代码</h3>
+
+<p>将部署配置与应用程序代码放在一起是我们推荐的模式。最好是<em>与您的应用程序代码</em>一起发展您的部署过程。将配置放在与应用程序相同的位置符合开发运维实践，在开发运维实践中，工程师对他们的应用程序承担端到端的责任。</p>
+
+<p>如果您选择将您的配置存储在应用程序存储库中，每个应用程序都有自己的<code>.octopus</code>目录和配置文件。这种安排便于为每个应用程序找到合适的部署过程。它还确保对应用程序和部署过程的更改被一起版本化，这消除了应用程序和部署过程的特定版本之间的任何依赖性。</p>
+
+<p>如果您不希望对部署过程的更改触发应用程序的构建，您可以在构建服务器中屏蔽掉<code>.octopus</code>文件夹。</p>
+
+<p>当团队同时负责应用程序及其部署时，这种模式是理想的。</p>
+
+<h3 id="deployment-specific-repository">特定于部署的存储库</h3>
+
+<p>如果您需要将部署配置从应用程序存储库中分离出来，您可以创建一个特定于部署的存储库。您应该只使用一个单独的存储库来在应用程序和它的部署过程之间创建一个明确的划分。例如，如果您需要限制谁可以访问部署存储库，或者如果您需要对变更实施不同的策略。</p>
+
+<p>您的组织设计可以告知您是否使用:</p>
+
+<ul>
+<li>每个应用程序有单独的部署存储库</li>
+<li>每个Octopus空间一个部署存储库</li>
+<li>中央部署存储库</li>
+</ul>
+
+<p>在为您的存储库选择设计时，考虑您可能会创建多少个分支。Octopus应用程序将在分支切换器中显示所有分支。如果您将多个项目分组到一个单一的存储库中，您还应该将每个项目放在<code>.octopus</code>文件夹的子目录中。</p>
+
+<h2 id="using-config-as-code-effectively-with-branches-and-pull-requests">将配置作为代码有效地用于分支和拉取请求</h2>
+
+<p>切换到版本控制后，您可以使用一些熟悉的工具来帮助您成功部署。其中两个是分支和拉请求。</p>
+
+<p>当更改部署过程时，您可以使用分支来控制风险。您可以在Octopus应用程序中为受版本控制的项目创建和切换分支。您也可以在Octopus应用程序之外创建和编辑分支。无论您是选择使用Octopus应用程序、文本编辑器，还是两者都使用，流程将始终与分行保持同步。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-04/config-as-code-strategies/branch-switcher.jpg" class="zoom" data-title=""><img src="../Images/b00a09c9cc5f4357a08cce38501abd87.png" class="img-fluid center" alt="The branch switcher in Octopus Deploy" data-original-src="https://i.octopus.com/blog/2022-04/config-as-code-strategies/branch-switcher.jpg"/></a>T2】</p>
+
+<h2 id="when-config-as-code-is-the-wrong-option">当配置为代码是错误的选项时</h2>
+
+<p>许多部署资源不属于一个项目，例如，空间、租户、环境和帐户。我们并不打算用Config as代码来处理这些项目的版本控制。</p>
+
+<p>你可以使用<a href="https://registry.terraform.io/providers/OctopusDeployLabs/octopusdeploy/latest/docs" rel="nofollow">章鱼部署平台提供商</a>来处理这些资源。您可以在我们的博客上找到<a href="https://octopus.com/blog/octopusdeploy-terraform-provider">如何开始使用面向Octopus Deploy的Terraform provider。</a></p>
+
+<p>您还可以考虑在多个项目之间共享一个配置，以保持过程同步。然而，这需要许多非项目资源在项目之间保持一致，这很快变得难以管理。</p>
+
+<p>不要在多个项目之间共享相同的OCL文件，您应该创建一个定制工具来与<a href="https://octopus.com/docs/octopus-rest-api"> Octopus Deploy REST API </a>进行交互，以执行所需的流程配置。你可以在我们的文档中读到更多关于同步多个实例的信息。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>现在，您可以放心地为代码为的<a href="https://octopus.com/blog/octopus-release-2022-q1">配置选择一个合适的策略。这篇文章解释了如何在版本控制中为您的配置文件选择一个合适的位置，如何使用分支和拉请求来管理您的部署过程，以及当Config as Code不是合适的工具时。</a></p>
+
+<p>您可以在我们的<a href="https://octopus.com/company/roadmap">路线图</a>上保持对未来新增内容的更新，例如将Config作为Runbooks的代码。</p>
+
+<h2 id="watch-our-webinar-introducing-config-as-code-in-octopus">观看我们的网络研讨会:在Octopus中将配置作为代码引入</h2>
+
+<p>德里克·坎贝尔和皮特·加拉格尔将带你了解在Octopus中配置为代码的入门知识，以及在大规模使用配置为代码时的最佳实践。</p>
+
+<iframe src="https://www.youtube.com/embed/Z4DgiJ630FU" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>我们定期举办网络研讨会。请参见<a href="https://octopus.com/events">网络研讨会第</a>页，了解有关即将举行的活动和实时流媒体录制的详细信息。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

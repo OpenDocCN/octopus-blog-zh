@@ -1,0 +1,192 @@
+<html>
+<head>
+<title>Execution containers for workers: Extending the Octopus worker-tools Docker image - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>工人的执行容器:扩展Octopus工人-工具Docker映像- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/extending-octopus-execution-container#2022-08-08">https://octopus.com/blog/extending-octopus-execution-container#2022-08-08</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/execution-workers.png" class="zoom" data-title=""><img src="../Images/86dd4d1bfdf7770a292210fb9ab30d2f.png" class="img-fluid center" alt="Extending the Octopus worker-tools Docker image" data-original-src="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/execution-workers.png"/>T2】</a></p>
+
+<p>我们最近为工人发布了<a href="https://octopus.com/blog/execution-containers">执行容器，我们认为有很多理由使用这个新功能。如果你不熟悉执行容器，Michael在上面链接的文章中做了很好的介绍，你也可以看看</a><a href="https://g.octopushq.com/ExecutionContainersForWorkers" rel="nofollow">的执行容器文档</a>。</p>
+
+<p>在这篇文章中，我将看看如何扩展Octopus worker-tool图像，以及何时需要使用完全不同的图像。</p>
+
+<p>Octopus提供了一个<a href="https://hub.docker.com/r/octopusdeploy/worker-tools" rel="nofollow"> Docker映像</a>，它可以用作部署流程或runbook中某个步骤的<a href="https://g.octopushq.com/ExecutionContainersForWorkers" rel="nofollow">执行容器</a>。该映像已经包含了部署所需的大部分工具。但是，如果您需要一个没有包含在映像中的工具，或者您需要包含在映像中的某个工具的不同版本，该怎么办呢？</p>
+
+
+
+<p>让我们看一个例子，除了Octopus提供的Docker图像之外，我们还需要一些东西。假设我有一个需要与SQL Server数据库交互的项目步骤，在<code>worker-tool</code>映像中没有包含SQL工具。我想使用<a href="https://github.com/dbcli/mssql-cli/" rel="nofollow"> mssql-cli </a>。这是Docker的伟大之处之一；我们可以获取<code>octopusdeploy/worker-tools</code>图像并扩展它以包含附加工具。</p>
+
+<p>这是我们的文档:</p>
+
+<pre><code class="language-dockerfile">FROM octopusdeploy/worker-tools:1.0-ubuntu.18.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN  echo "deb [arch=amd64] https://packages.microsoft.com/debian/8/prod jessie main" | tee /etc/apt/sources.list.d/mssql-cli.list  &amp;&amp; \
+  apt-get -y update  &amp;&amp; \
+  apt-get -y install mssql-cli  &amp;&amp; \
+  # Install missing dependencies
+  apt-get -y install -f
+
+</code></pre>
+
+<p>这个文件基于带有标签<code>1.0-ubuntu.18.04</code>的镜像<code>octopusdeploy/worker-tools</code>，在包管理器<code>apt-get -y update</code>更新后，它安装带有<code>apt-get -y install mssql-cli</code>的<code>mssql-cli</code></p>
+
+<p>在写出版本的基本Octopus步骤中使用它，我们可以看到<code>mssql-cli</code>在那里并且可用:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/octo-worker-extend-add-mssql-cli-highlight.png" class="zoom" data-title=""><img src="../Images/c3bf909e4832fb67c32005fc5661785b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/octo-worker-extend-add-mssql-cli-highlight.png"/>T2】</a></p>
+
+<p>通过扩展<code>octopusdeploy/worker-tools</code>图像并添加几行代码，我们可以使用基础图像<em>中所有可用的工具，并且</em>拥有我们想要的额外工具。</p>
+
+<h3 id="select-a-specific-version-of-powershell">选择特定版本的PowerShell</h3>
+
+<p>Dockerfile文件中指定的软件版本在构建时是固定的；当您使用Docker图像时，您不能更改它们。假设您需要一个更高版本的PowerShell，因为需要修复一个对您的部署过程至关重要的错误。有几种方法可以实现这一点。</p>
+
+<p>首先是将版本更新添加到我们的扩展docker文件中:</p>
+
+<pre><code class="language-dockerfile">FROM octopusdeploy/worker-tools:1.0-ubuntu.18.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG Powershell_Version=7.0.2\*    # UPDATED Powershell Version
+
+RUN  echo "deb [arch=amd64] https://packages.microsoft.com/debian/8/prod jessie main" | tee /etc/apt/sources.list.d/mssql-cli.list  &amp;&amp; \
+  apt-get -y update  &amp;&amp; \
+  apt-get -y install mssql-cli  &amp;&amp; \
+  # Install specific version of Powershell
+  apt-get install -y powershell=${Powershell_Version} &amp;&amp; \
+  # Install missing dependencies
+  apt-get -y install -f
+
+</code></pre>
+
+<p>我已经将它添加到我的<a href="https://hub.docker.com/repository/docker/octocrock/extend-octoworker-sql-cli/general" rel="nofollow">octo crock/extend-octo worker-SQL-CLI</a>docker file中，并在推送到Dockerhub之前用新版本1.0.1标记了编译后的映像。现在图像有两个标记版本:</p>
+
+<ul>
+<li><code>1.0.0</code>:这是通过添加<code>mssql-cli</code>来扩展<code>octopusdeploy/worker-tools</code>图像的第一个版本。</li>
+<li><code>1.0.1</code>:该版本进一步扩展了镜像，设置了不同版本的PowerShell。</li>
+</ul>
+
+<p>通过使用标记为1.0.1的图像，我们可以看到不同版本的PowerShell:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/octo-worker-extend-upgrade-pwsh-highlight.png" class="zoom" data-title=""><img src="../Images/306950b1b44a0ffeb792c83e727e7232.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/octo-worker-extend-upgrade-pwsh-highlight.png"/>T2】</a></p>
+
+<p>指定不同版本的另一种方法是从<a href="https://github.com/OctopusDeploy/WorkerTools" rel="nofollow"> Octopus Worker Tools Github库</a>中获取<a href="https://github.com/OctopusDeploy/WorkerTools/blob/master/ubuntu.18.04/Dockerfile" rel="nofollow"> Dockerfile </a>并使用它来创建您自己的Dockerfile，将版本号<code>ARG</code>值设置为最适合您的部署过程的值:</p>
+
+<pre><code class="language-dockerfile">FROM ubuntu:18.04
+
+ARG Powershell_Version=7.0.2\*      # UPDATED Powershell Version
+ARG Octopus_Cli_Version=7.3.2
+ARG Octopus_Client_Version=8.4.0
+ARG Azure_Cli_Version=2.4.0\*
+ARG Azure_Powershell_Version=2.2.0
+ARG Helm_Version=v3.0.2
+ARG Node_Version=12.16.3\*
+ARG Kubectl_Version=1.11.1-00
+ARG Terraform_Version=0.12.24
+ARG Eks_Cli_Version=0.18.0
+ARG Ecs_Cli_Version=1.18.1
+ARG Aws_Iam_Authenticator_Version=1.16.8
+ARG Umoci_Version=0.4.5
+...
+</code></pre>
+
+<p>这样，您只需安装一次PowerShell，并且不会增加映像的体积，如果您想要指定其他工具的不同版本，这一点尤其正确。</p>
+
+<h2 id="size-considerations">尺寸考虑</h2>
+
+<p>Octopus映像涵盖了许多部署场景，作为执行容器的起始映像，它是一个不错的选择。让我们来看看它的大小:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/octo-worker-tools-size.png" class="zoom" data-title=""><img src="../Images/0d85ea39ce5417d7a7394a7726d44591.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/octo-worker-tools-size.png"/>T2】</a></p>
+
+<p>很大，3.44 GB。这就是Linux的风格；Windows图像更大，但是与某些图像相比，它并不是那么大，并且当您考虑到您不太可能在该图像上使用所有工具时，显然可以节省空间。</p>
+
+<p>在撰写本文时，<code>octopusdeploy/worker-tools</code>图像上的内容如下:</p>
+
+<ul>
+<li>18.04版的PowerShell</li>
+<li>Octopus CLI</li>
+<li>八达通客户端</li>
+<li>AZ PowerShell核心模块</li>
+<li>Helm3</li>
+<li>。NET SDK 3.1</li>
+<li>JDK</li>
+<li>常见Java工具</li>
+<li>Azure CLI</li>
+<li>NodeJS</li>
+<li>库贝特尔</li>
+<li>将（行星）地球化（以适合人类居住）</li>
+<li>谷歌云CLI</li>
+<li>python &amp; groff</li>
+<li>AWS CLI</li>
+<li>EKS CLI</li>
+<li>ECS CLI</li>
+<li>AWS IAM验证器</li>
+<li>Istio CLI</li>
+<li>Linkerd CLI</li>
+<li>不使用Docker守护程序处理Docker映像的工具</li>
+<li>编写脚本的常用实用程序</li>
+</ul>
+
+<p>这太棒了！</p>
+
+<p>您可以使用所有这些工具，而不必知道Docker文件是如何构造的，没有必要建立自己的Docker存储库，也没有必要在Worker VM上安装所有这些依赖项，您可以直接开始使用执行容器。</p>
+
+<p>然而，我还没有看到一个单独的Octopus部署步骤与AWS、GCP和Azure的基础设施进行交互。Net、Java和NodeJS软件。我在这里开玩笑，但是我你能明白我的观点，你不太可能同时需要这张图片上的所有东西。</p>
+
+<h3 id="why-is-docker-image-size-a-consideration">为什么Docker图像大小是一个考虑因素？</h3>
+
+<p>在工作机从存储库中下载了容器映像之后，每当Octopus部署流程步骤需要它时，它就可以重用它；它不会重新下载它。当有一个新版本的图像，只有新的<a href="https://docs.docker.com/storage/storagedriver/#images-and-layers" rel="nofollow">层</a>被下载，而不是整个图像。</p>
+
+<p>当您开始使用多个工作器，尤其是动态工作器时，容器映像大小真正变得引人注目。如果为部署步骤获取了一台工作机，而该机器还没有从存储库中提取Docker映像，则映像越大，执行该步骤所需的时间就越长。</p>
+
+<p>在撰写本文时，章鱼云动态工作人员没有安装Docker。我们正在努力将Docker添加到动态机器映像中，所以它将很快可用！</p>
+
+
+<h3 id="stripping-it-back">把它剥开</h3>
+
+<p>让我们把事情往另一个方向发展。如果我有一个运行Azure CLI bash脚本的部署步骤会怎样？</p>
+
+<p>这里的Linux容器所需的工具很少，基本上只有Ubuntu库和Azure CLI。我还需要<code>wget</code>、<code>apt-utils</code>和<code>software-properties-common</code>，安装<a href="https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest" rel="nofollow"> Azure CLI </a>所需的基本实用程序。考虑到这一点，我可以将docker文件减少到很少几行:</p>
+
+<pre><code class="language-Dockerfile">FROM ubuntu:18.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG Azure_Cli_Version=2.4.0\*
+
+# Install wget, apt-utils, and software-properties-common
+RUN apt-get update &amp;&amp; \ 
+    apt-get install -y wget apt-utils &amp;&amp; \
+    apt-get install -y software-properties-common 
+
+# Install the Azure CLI
+RUN wget --quiet -O - https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/microsoft.asc.gpg &gt; /dev/null &amp;&amp; \
+    echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ bionic main" | tee /etc/apt/sources.list.d/azure-cli.list &amp;&amp; \
+    apt-get update &amp;&amp; \
+    apt-get install -y azure-cli=${Azure_Cli_Version}
+
+# Tidy up        
+RUN apt-get clean
+</code></pre>
+
+<p>大小的减少是显著的，新创建的<code>octocrock/minimumcli-az</code>映像比worker-tools映像小80%,只有687 MB。：</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/az-cli-only-size.png" class="zoom" data-title=""><img src="../Images/63f204e6e2fcbd8b6f0faecc92d8301d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/az-cli-only-size.png"/>T2】</a></p>
+
+<p>使用这个容器，我们可以执行一个Azure脚本步骤，并从<code>az version</code>看到与使用<code>octopusdeploy/worker-tools</code>图像的步骤相同的结果:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/az-cli-only-octopus.png" class="zoom" data-title=""><img src="../Images/b0c6571a46d4ddb9d758c1045bf6f799.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-07/extending-octopus-execution-container/az-cli-only-octopus.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这是我第一次看到Octopus中的执行容器功能，我不得不说，我可以看到它的好处。更重要的是，它取消了服务器软件的配置，意味着您可以通过一种版本控制的方式来指定部署软件的依赖关系。当然，您可以使用脚本通过您选择的包管理器来安装所需的软件，但是通过使用容器，您消除了软件安装冲突的风险，可以使用多个版本的工具，并且保持一个具有最低安装要求的工作人员。这有可能减少您需要的工作机数量，从而降低成本。</p>
+
+<p><code>octopusdeploy/worker-tools</code>映像意味着您可以立即开始，其中包含部署所需的大多数工具。除此之外，如果您使用自己的映像，您可以进一步增加部署流程的灵活性，并有可能减少部署时间。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

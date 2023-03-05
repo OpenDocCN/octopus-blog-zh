@@ -1,0 +1,84 @@
+<html>
+<head>
+<title>How we create the Tentacle Army - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>我们如何创建触手军队-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/how-we-create-the-tentacle-army#2015-09-25">https://octopus.com/blog/how-we-create-the-tentacle-army#2015-09-25</a></blockquote>
+                        <p>作为一个独立的软件供应商，面临的挑战之一是在类似于您的客户正在使用的基础设施上使用您的软件。Octopus Deploy安装在各种操作系统上，并部署在可以想象到的每种网络配置上，目标范围从单个触手到一千个触手怪物。我们典型的开发配置由一个服务器和驻留在同一台机器上的一个或两个触角组成。在这种配置下，一切都很好，直到章鱼被部署到野外，它才开始瓦解。</p>
+
+<h2>触手军团</h2>
+
+<p>触手部队是我们试图复制章鱼将运行的最苛刻的配置。在章鱼发布之前，我们发动了触手军团并试图打破发布。目前，触手军团由位于新加坡和巴西的800只触手组成，这两个地区因其区域间的高延迟而被选中。在这种配置中，我们有40台触手虚拟机，每台机器有20个触手实例。</p>
+
+<h2>供应触手部队</h2>
+
+<p>我们使用亚马逊AWS为触手军提供基础设施。一个配置文件指定了我们在测试环境中需要什么:</p>
+
+<pre><code>{
+  "OctopusServerConfiguration" : {
+      "Environments" : [ "Development", "Test", "Production" ],
+        "InstanceType" : {
+            "Value" : "m3.medium"
+          },
+      "NumberOfInstances" : 1,
+      "Platform" : "OctopusServer",
+      "PrimaryStorage" : 40,
+      "Projects" : [ {
+            "Name" : "Multi release project",
+            "DeploymentSteps" : [ {
+                  "Name" : "Deploy package",
+                  "PackageId" : "100mb",
+                  "PackageUrl" : "https://s3-ap-southeast-1.amazonaws.com/octopus-testing/100mb.1.0.0.nupkg.zip"
+                } ],            
+            "Releases" : [ {
+                  "Environment" : "Development",
+                  "RepeatAfterMinutes" : 10,
+                  "RunAfterMinutes" : 5
+                } ]
+          }],
+      "RegionEndpoint" : "ap-southeast-1",
+      "ServerInstallerDownloadPath" : "http://download.octopusdeploy.com/octopus/Octopus.2.5.12.666-x64.msi",
+      "ToolsInstallerDownloadPath" : "http://download.octopusdeploy.com/octopus-tools/2.5.10.39/OctopusTools.2.5.10.39.zip"
+    },
+  "TentacleConfiguration" : [ {
+        "InstanceType" : {
+            "Value" : "m3.medium"
+          },
+        "Mode" : "Listening",
+        "NumberOfInstances" : 5,
+        "NumberOfTentaclesPerInstance" : 5,
+        "Platform" : "Server2012_R2",
+        "PrimaryStorage" : 40,
+        "RegionEndpoint" : "ap-southeast-1",
+        "TentacleInstallerDownloadPath" : "http://octopusdeploy.com/downloads/latest/OctopusTentacle64"
+      } ],
+  "VPCConfiguration" : [ { 
+        "RegionEndpoint" : "ap-southeast-1"
+      } ]
+}
+</code></pre>
+
+<p>通过配置文件，我们可以指定:</p>
+
+<ul>
+<li>该平台(我们测试了2008年32台服务器、2008年64台服务器、2012年r 2服务器)</li>
+<li>章鱼服务器和触手的版本</li>
+<li>触须的数量和它们的位置</li>
+<li>环境、项目和自动部署</li>
+<li>域控制器配置</li>
+</ul>
+
+<p>该配置被提供给一个调用AWS API的应用程序，以提供所需的机器。一旦配置好机器，就可以通过PowerShell对它们进行设置。除了Octopus服务器和tentacles，我们还提供NAT，如果需要，还提供区域到区域VPN。触手军队最终看起来像这样:</p>
+
+<p><img src="../Images/d2547ef9e0603c221c3e9cf28dea4d80.png" alt="Tentacle Army diagram" data-original-src="https://i.octopus.com/blog/migrated/blog-test-environment_lnuhik.gif"/></p>
+
+<h2>到无限和更远</h2>
+
+<p>触手军团帮助我们更好地与那些给章鱼施加压力的顾客建立联系。我们已经能够识别章鱼挣扎的区域，并通过我们的UI感受到管理大量触角的体验。随着更多的工作，我们将收集指标，以便我们可以对我们的发布进行基准测试，并验证我们在Octopus上继续做出的改进。我们还将提供触须军团作为服务，允许任何团队成员启动测试环境，并将触须军团集成到我们的自动化流程中。</p>
+
+                    
+                    
+</body>
+</html>

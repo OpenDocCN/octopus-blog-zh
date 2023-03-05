@@ -1,0 +1,103 @@
+<html>
+<head>
+<title>Request for feedback - Deploying to Google Cloud Platform with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>请求反馈-使用Octopus - Octopus Deploy部署到Google云平台</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rff-deploying-to-google-cloud-platform-with-octopus#2021-09-21">https://octopus.com/blog/rff-deploying-to-google-cloud-platform-with-octopus#2021-09-21</a></blockquote>
+                        <p>Octopus 2021.2带来了许多功能来支持团队部署到谷歌云平台(GCP)。在2021.2中，Octopus拥有对AWS、Azure和Google云平台的核心支持。</p>
+
+<p>这篇文章介绍了Octopus支持GCP部署的新特性，并提供了如何在您自己的部署过程中使用它们的技巧。</p>
+
+<p>在文章的最后，你可以提供你的反馈，告诉我们这些新功能对你来说是有效的还是无效的，并对GCP未来的功能提出建议。</p>
+
+<h2 id="service-account-support">服务客户支持</h2>
+
+<p>Octopus包括一个名为<strong>谷歌云账户</strong>的新账户类型。该帐户安全地存储为服务帐户生成的JSON密钥:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/serviceaccount.png" class="zoom" data-title=""><img src="../Images/9345016549b2fd1ee79b01d77538eb00.png" class="img-fluid center" alt="Octopus dashboard open on Infrastructure tab and Accounts page showing creating an account for Google Cloud Account" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/serviceaccount.png"/>T2】</a></p>
+
+<h2 id="inheriting-vm-service-accounts">继承VM服务帐户</h2>
+
+<p>对于喜欢在Octopus之外管理凭证的团队，每次与GCP的集成都允许从工作人员那里继承一个服务帐户。</p>
+
+<p>这是一个带有相关服务帐户的Google计算引擎(GCE)虚拟机:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/vm-service-account.png" class="zoom" data-title=""><img src="../Images/2ce46c34f5ca12972c51453e6a82594f.png" class="img-fluid center" alt="GCP dashboard showing VM instances" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/vm-service-account.png"/>T2】</a></p>
+
+<p>该虚拟机上安装了一个工作线程，并链接到<strong> GCP </strong>工作线程池:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/worker.png" class="zoom" data-title=""><img src="../Images/303a456976f4db80ec4597dcf87d6fdb.png" class="img-fluid center" alt="Octopus dashboard open on Infrastructure tab and Worker Pools page showing GCP Worker Pool" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/worker.png"/>T2】</a></p>
+
+<p>然后，我们可以使用与该虚拟机相关联的服务帐户。下面是一个Kubernetes目标的例子，它被配置为继承运行它的工作者的凭证:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/assume-service-account.png" class="zoom" data-title=""><img src="../Images/130f96ca1487d05747f4f80a4e07821d.png" class="img-fluid center" alt="Octopus dashboard open on Infrastructure tab and Settings page showing Authentication for Google Cloud Account" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/assume-service-account.png"/></a>T2】</p>
+
+<p>请注意，目标必须配置有包含GCE工作线程的工作线程池:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/workerpool.png" class="zoom" data-title=""><img src="../Images/283924c0177d8e9e01427126e108b6d8.png" class="img-fluid center" alt="Octopus dashboard open on Infrastructure tab and Worker Pools page with Settings selected and optional Worker Pool set to GCP" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/workerpool.png"/>T2】</a></p>
+
+<p>运行状况检查和部署等操作使用分配给工作虚拟机的凭据执行，无需将这些详细信息存储在Octopus中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/healthcheck.png" class="zoom" data-title=""><img src="../Images/f1fa638b720686a34615a0628ee605b1.png" class="img-fluid center" alt="Octopus dashboard showing Check GKE health" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/healthcheck.png"/>T2】</a></p>
+
+<h2 id="google-container-registry-support">Google容器注册支持</h2>
+
+<p>Google Container Registry (GCR)支持已经包含在现有的Docker提要类型中。将提要URL定义为<a href="https://cloud.google.com/container-registry/docs/pushing-and-pulling#add-registry" rel="nofollow">区域GCR URL</a>之一，并提供一个用于认证的服务帐户JSON密钥。</p>
+
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/gcr.png" class="zoom" data-title=""><img src="../Images/a464818c6fba6f822ef5d8d9035ebfca.png" class="img-fluid center" alt="Octopus dashboard open on Library page showing External Feeds" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/gcr.png"/>T2】</a></p>
+
+<p>然后，可以从GCR源获得图像:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/gcr-test.png" class="zoom" data-title=""><img src="../Images/5f3017f235362fc3ba4db450d5b755d5.png" class="img-fluid center" alt="Octopus dashboard open on Library page showing External Feeds Test GCR" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/gcr-test.png"/>T2】</a></p>
+
+<h2 id="support-for-gcloud-script">支持gcloud脚本</h2>
+
+<p>名为<strong>在脚本中运行g cloud</strong>的新步骤可用于在GCP帐户的上下文中运行脚本。</p>
+
+<p>作为这一步骤的一部分运行的任何脚本都可以利用Octopus管理的登录过程。这使得脚本可以专注于它需要执行的操作，而不是登录的样板过程:</p>
+
+<p>【T2 <img src="../Images/2628df1e585d2ec86730e7f2550be943.png" class="img-fluid center" alt="Octopus dashboard open on Projects tab showing Process Editor with Bash selected for Inline Source Code" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/gcloud-script.png"/></p>
+
+<h2 id="terraform-support">地形支撑</h2>
+
+<p>Terraform步骤包括使用选定的Google凭据建立上下文的能力，将这种担心从Terraform模板转移到步骤中。</p>
+
+<p>部署Terraform需要持久化状态的能力。对谷歌用户来说，一个方便的解决方案是<a href="https://www.terraform.io/docs/language/settings/backends/gcs.html" class="alert-link" rel="nofollow">将Terraform状态保存在谷歌云存储(GCS)桶中</a>:</p>
+<pre><code class="language-hcl">terraform {
+  backend "gcs" {
+    bucket  = "octopus-tf-state" # change this to match the name of your GCS bucket
+    prefix  = "terraform/state"
+  }
+}
+</code></pre>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/terraform.png" class="zoom" data-title=""><img src="../Images/27543cee0fc4bbf3fc7ce8402782d5c5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-09/rff-deploying-to-google-cloud-platform-with-octopus/terraform.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Octopus 2021.2支持GCP服务帐户、GCR feeds、GKE身份验证选项、专用的GCP脚本步骤以及Terraform中的谷歌身份验证支持，可以轻松部署和管理您的GCP基础设施。</p>
+
+<h2 id="we-want-your-feedback">我们需要您的反馈</h2>
+
+<p>我们希望听到您的反馈！我们有一个<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/7" rel="nofollow"> GitHub问题，你可以发表评论</a>关于这些新功能对你来说如何工作，或者不工作，以及对未来GCP功能的任何建议。欢迎所有反馈，我们很想知道:</p>
+
+<ul>
+<li>您目前在GCP执行哪些部署或运营任务？</li>
+<li>部署或管理GCP时的难点是什么？</li>
+<li>你使用谷歌Kubernetes引擎、谷歌应用引擎、谷歌云功能、谷歌云运行或其他平台吗？</li>
+<li>新功能对你有用吗？如果没有，你有什么建议可以改进它们？</li>
+</ul>
+
+<p><span> <a class="btn btn-success" href="https://github.com/OctopusDeploy/StepsFeedback/issues/7">提供反馈</a> </span></p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>What's new in Octopus 2.1 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2.1的新特性- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/2.1#2015-09-25">https://octopus.com/blog/2.1#2015-09-25</a></blockquote>
+                        <p>今天我们发布了章鱼部署2.1的预览版。Octopus 2.0仅在一周前发布，在那一周，我认为我们已经做了很多。让我们看看2.1有什么新功能。</p>
+
+<h2>内置的NuGet存储库</h2>
+
+<p>Octopus现在附带了一个内置的NuGet存储库，你可以将应用程序包推送到这个存储库。这个知识库是基于优秀的<a href="https://github.com/themotleyfool/NuGet.Lucene"> NuGet。Lucene </a>，使它成为比使用文件共享更快的选择。该存储库是只写的；你可以使用NuGet.exe<em>推送</em> NuGet包给它，但是你不能像标准的NuGet feed一样查询它。</p>
+
+<p><img src="../Images/b534dab9d673c20b3fbedbce441ce82e.png" alt="Using the internal feed" data-original-src="https://i.octopus.com/blog/migrated/2014-02-10_14_10_26-Feeds_-_Octopus_Deploy_kj399a.png"/></p>
+
+<p>当然，您可以继续使用其他外部NuGet包存储库；当你正在设置一个Octopus服务器，并且没有你想要使用的现有存储库时，这个存储库只是提供了一个很好的缺省值。</p>
+
+<h2>详细审计</h2>
+
+<p>为了提高责任性和透明度，<a href="http://docs.octopusdeploy.com/display/OD/Auditing">审计日志</a>现在在查看文档更改时会显示不同的更改内容。例如，这里我们可以看到是Bob将测试环境重命名为Staging。淘气的鲍勃！</p>
+
+<p><img src="../Images/e26f6c242f8038c0fbac63194f0af79a.png" alt="Detailed auditing in Octopus 2.0" data-original-src="https://i.octopus.com/blog/migrated/2014-02-07_21_05_28-Audit_-_Octopus_Deploy_z5nzjk.png"/></p>
+
+<p>(有趣的是，自从Octopus 2.0发布以来，我们实际上一直在捕捉这些信息，但直到现在我们还没有一个UI来显示活动细节)</p>
+
+<h2>变量编辑器改进</h2>
+
+<p>我们有很多人要求这样做:你现在可以在变量编辑器中排序和过滤变量。</p>
+
+<p><img src="../Images/6463024f19ef525acab3712aecc56a2b.png" alt="Filtering and sorting variables" data-original-src="https://i.octopus.com/blog/migrated/2014-02-10_14_36_48-OctoFX_variables_-_Octopus_Deploy_woooff.png"/></p>
+
+<h2>作为客人登录</h2>
+
+<p>有时你可能希望允许人们在没有用户帐户的情况下登录Octopus。我们引入了<a href="http://docs.octopusdeploy.com/display/OD/Guest+login">作为访客</a>登录的功能。</p>
+
+<p><img src="../Images/e6ec5c0f0b5cd017ce5802ab3daf6972.png" alt="Sign in as a guest" data-original-src="https://i.octopus.com/blog/migrated/2014-02-08_20_47_01-Sign_in_-_Octopus_Deploy_uwrzsa.png"/></p>
+
+<p>当然，默认情况下<strong>是禁用的。</strong>您可以从Octopus Manager中启用它:</p>
+
+<p><img src="../Images/bb26bd15ca4f9a971f00530921938057.png" alt="Enabling guest access" data-original-src="https://i.octopus.com/blog/migrated/2014-02-10_14_23_00-Octopus_Manager_dv1yan.png"/></p>
+
+<p>来宾用户始终是只读的。您可以通过为他们分配角色来限制他们可以查看的环境和项目。</p>
+
+<h2>多实例管理</h2>
+
+<p>你知道吗，你可以在一台机器上运行多个Octopus服务器和触手，每个都有自己的数据库、配置、Windows服务等等。以前只能通过命令行管理这些实例，但现在我们可以直接从Octopus和触手管理器管理实例。</p>
+
+<p><img src="../Images/e3aa9f1b1857262b1c1949c5ceaa9b6b.png" alt="Managing multiple instances" data-original-src="https://i.octopus.com/blog/migrated/2014-02-10_14_26_40-Untitled_-_Notepad_vfzdze.png"/></p>
+
+<h2>其他变化</h2>
+
+<p>2.1还包括许多小的bug修复和微小的增强，比如克隆项目的能力。<a href="http://octopusdeploy.com/downloads/2.1.1.1171">阅读完整的发行说明</a>看看还有什么变化。愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

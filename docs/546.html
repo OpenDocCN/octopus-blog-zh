@@ -1,0 +1,140 @@
+<html>
+<head>
+<title>Deploying to Tomcat from Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从Octopus Deploy - Octopus Deploy部署到Tomcat</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-tomcat#2022-07-15">https://octopus.com/blog/octopus-tomcat#2022-07-15</a></blockquote>
+                        <p>Octopus Deploy提供了大量有用的步骤(包括自带的和社区提供的)，可用于通过不同的方法将包部署到各种不同的目的地。</p>
+
+<p>幸运的是，这些相同的部署步骤可以用来将Java包部署到运行在Linux上的Java web服务器上。</p>
+
+<p>有一些警告，我要大声说出来。Octopus Deploy团队正在积极研究如何改进对Java的支持，所以期待在未来的版本中看到对Java开发人员的改进。</p>
+
+<p>下面的步骤提供了一个可以用Octopus Deploy实现的过程示例，用于将WAR文件部署到运行在Linux中的Tomcat服务器。</p>
+
+<h2 id="building-the-war-file">构建战争文件</h2>
+
+<p>首先，我假设您手边有一个构建WAR文件的Maven项目。如果没有，在<a href="https://github.com/OctopusDeploy/ThymeleafSpringDemo" rel="nofollow">https://github.com/OctopusDeploy/ThymeleafSpringDemo</a>有一个小的演示应用程序将用于这个例子。</p>
+
+<p>这个项目使用<a href="https://github.com/takari/maven-wrapper" rel="nofollow"> Maven包装器</a>，所以所有Maven命令都通过<code>mvnw</code>脚本传递。如果本地还没有合适的Maven版本，这个脚本将为您下载并安装它，然后将参数传递给<code>mvn</code>可执行文件。</p>
+
+<p>要构建WAR文件，请运行以下命令:</p>
+
+<pre><code>./mvnw clean package
+</code></pre>
+
+<p>这将导致在<code>target</code>目录中创建文件<code>demo##&lt;timestamp&gt;.war</code>(例如<code>demo##201705290808.war</code>)。</p>
+
+<p>WAR文件的时间戳部分由<a href="https://tomcat.apache.org/tomcat-8.0-doc/config/context.html#Parallel_deployment" rel="nofollow"> Tomcat并行部署特性</a>使用。它允许Tomcat排出旧版本web应用程序的连接，同时将新流量导向最新版本。</p>
+
+<h2 id="packaging-the-war-file">打包WAR文件</h2>
+
+<p>这就是Octopus Deploy所需的一些约定不同于Java通常使用的那些约定的地方。</p>
+
+<p>要将一个包上传到Octopus Deploy，它必须遵循许多<a href="https://octopus.com/docs/packaging-applications/versioning-in-octopus-deploy">版本控制规则</a>。在实践中，这意味着用类似于<code>demo.0.0.1.zip</code>的文件名创建一个zip或tar.gz档案。</p>
+
+<p>在Java中，版本控制主要是通过<a href="https://docs.oracle.com/middleware/1212/core/MAVEN/maven_version.htm#MAVEN8855" rel="nofollow"> Maven </a>来完成的。此外，上面创建的WAR文件在WAR文件名中嵌入了时间戳版本，Tomcat可以识别该版本。另一方面章鱼部署使用<a href="http://semver.org/" rel="nofollow">永远</a>。所有这些版本控制方案大多是不兼容的，并且内置的存储库目前不支持WAR文件，这意味着我们不能照原样上传WAR文件。</p>
+
+<p>解决方案是将WAR文件打包成一个适当命名的ZIP文件，然后可以上传到Octopus Deploy。这个“WAR in a ZIP”包允许我们用Octopus Deploy管理WAR文件，但是确实有一些缺点，我将在后面提到。</p>
+
+<p>要打包WAR文件，请使用<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli"> Octopus Deploy CLI工具</a>。CLI工具是一个<a href="https://github.com/dotnet/core" rel="nofollow">。NET Core </a>应用程序，它公开了一些可以在Octopus Deploy中执行的常见操作，以及一些方便的特性，比如使用正确的命名约定创建ZIP存档。</p>
+
+<p>如果你不熟悉。NET Core，对于这篇博文来说，知道它允许。NET应用程序可以跨操作系统运行，包括Linux。Octopus Deploy CLI工具是一个独立的软件包，包括。NET核心运行时，所以当您下载Linux发行版的版本时，您就(几乎)获得了运行CLI所需的一切。</p>
+
+<p>您可能需要安装一些额外的依赖项，以便从使用“最小”安装选项安装的Linux环境中运行CLI工具。从<a href="https://www.microsoft.com/net/core#linuxcentos" rel="nofollow">的文档开始。NET Core </a>页面列出了各种Linux发行版所需的包。</p>
+
+<p>要创建包，请运行命令:</p>
+
+<pre><code>octo pack --id=Demo --version=1.0.0 --basePath=target --include=*.war --format=zip
+</code></pre>
+
+<p>这将创建包含WAR文件的文件<code>Demo.1.0.0.zip</code>。</p>
+
+<p>创建ZIP文件不需要使用CLI工具。任何压缩工具都可以。然而，Octopus Deploy提供的工具旨在根据打包文件的实际内容大幅缩减文件大小。更多信息见<a href="https://octopus.com/docs/deployments/packages/delta-compression-for-package-transfers#OptimizingDeltaCompression" class="alert-link">包传输的增量压缩</a>。</p>
+
+
+<h2 id="pushing-the-package">推动包装</h2>
+
+<p>要推动包装，使用<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli/push">推动命令</a>:</p>
+
+<pre><code>octo push --package Demo.1.0.0.zip --server http://my.octopus.url --apiKey API-XXXXXXXXXXXXXXXX
+</code></pre>
+
+<p>您可以在<a href="https://octopus.com/docs/how-to/how-to-create-an-api-key">如何创建API密钥</a>中找到关于API密钥的信息。</p>
+
+<p>这将把包添加到Octopus Deploy内置包存储库中，以便可以在部署中使用。更多信息见<a href="https://octopus.com/docs/packaging-applications/package-repositories">软件包库</a>。</p>
+
+<p>【T2 <img src="../Images/a3329fe92d0fb588cbdd57c5126af439.png" class="img-fluid center" alt="Library" data-original-src="https://i.octopus.com/blog/2017-06/library-screenshot.png"/></p>
+
+<h2 id="creating-the-octopus-deploy-environment">创建Octopus部署环境</h2>
+
+<p>在Octopus中，环境是您将同时部署到的一组机器；环境的常见示例有测试、验收、试运行或生产。<a href="https://octopus.com/docs/getting-started#Gettingstarted-Createenvironments">入门</a>文档详细介绍了在Octopus Deploy中创建新环境的过程。</p>
+
+<h2 id="creating-an-octopus-deploy-deployment-target">创建Octopus Deploy部署目标</h2>
+
+<p>部署目标代表您的应用程序和服务将被部署到的服务器、机器和云服务。<a href="https://octopus.com/docs/getting-started#Gettingstarted-Adddeploymenttargets">入门</a>文档详细介绍了在Octopus Deploy中创建新部署目标的过程。</p>
+
+<p>在本例中，我们将创建一个部署目标来代表运行在Linux主机上的Tomcat服务器。几乎所有的Linux服务器都运行SSH作为远程管理的手段，而<a href="https://octopus.com/docs/deployment-targets/ssh-targets"> Octopus Deploy本机支持SSH</a>，所以这是我们将用来部署WAR文件的通信手段。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/deployment-target-screenshot.png" class="zoom" data-title=""><img src="../Images/7214a3a73a6191d91dee384f81941aef.png" class="img-fluid center" alt="SSH Connection" data-original-src="https://i.octopus.com/blog/2017-06/deployment-target-screenshot.png"/>T2】</a></p>
+
+<p>Octopus使用一个名为<a href="https://octopus.com/docs/octopus-rest-api/calamari"> Calamari </a>的组件作为引擎在部署目标上执行部署。Calamari目前需要依赖<a href="http://www.mono-project.com/" rel="nofollow"> Mono </a>来提供一个. NET环境，以便在Linux上运行。您需要在Tomcat服务器上安装Mono来运行Calamari。在未来，这将被简化使用。NET核心，而不需要额外的依赖。</p>
+
+<p>这对刚接触Octopus的人来说可能会很困惑，所以我将回顾一下。你只需要知道:</p>
+
+<ul>
+<li>Octopus部署CLI工具使用。NET核心，并且是自包含的，尽管您可能需要安装额外的依赖项。CLI工具既可以在您自己的PC上运行，也可以在诸如TeamCity或Bamboo等CI服务器上运行。</li>
+<li>章鱼部署执行引擎Calamari使用。NET，还有。NET由Linux下的Mono提供。Calamari运行在您要部署到的主机上，就像Tomcat服务器一样，这意味着Tomcat服务器也需要安装Mono。</li>
+</ul>
+
+<p>SSH部署目标需要记住的一点是，建立SSH连接的用户需要拥有部署到Tomcat <code>webapps</code>目录的权限。稍后，我们将定义一些部署步骤，将WAR文件从之前上传的包中复制到webapps目录中，如果SSH用户没有将文件复制到该位置的正确权限，此步骤将会失败。</p>
+
+
+<p>可以从Octopus Deploy部署到Linux服务器，而无需安装Mono。这很方便，但是代价是您会失去很多Calamari在执行部署时提供的功能。更多信息请参见<a href="https://octopus.com/blog/trying-raw-octopus" class="alert-link">尝试生吃章鱼</a>。</p>
+
+
+<h2 id="creating-a-octopus-deploy-project">创建Octopus部署项目</h2>
+
+<p>项目定义了您希望Octopus执行的一组部署步骤，以及它们的配置变量。<a href="https://octopus.com/docs/getting-started#Gettingstarted-Createaproject">入门</a>文档详细介绍了在Octopus Deploy中创建新部署目标的过程。</p>
+
+<p>在项目内部，我们需要打开Process部分，并添加<code>Deploy a package</code>步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/deploy-package-screenshot.png" class="zoom" data-title=""><img src="../Images/65e5bffa8f7695a0b5dff317db34de05.png" class="img-fluid center" alt="Deploy Package" data-original-src="https://i.octopus.com/blog/2017-06/deploy-package-screenshot.png"/>T2】</a></p>
+
+<p><code>Deploy a package</code>步骤为我们提供了一种方法，将包提取到部署目标上的期望位置。在我们的例子中，我们将ZIP包和WAR文件解压到Tomcat <code>webapps</code>目录。</p>
+
+<p><code>Configuration Variables</code>和<code>Configuration transforms</code>部分提供了很多我们在部署Java应用程序时无法使用的功能。这些选项假设某些XML文件可以直接在包中获得。当包包含WAR文件，并且在部署期间不能修改WAR文件中包含的任何配置文件时，情况就不同了。这是将Octopus Deploy与Java工件一起使用的一个限制，但是Octopus团队正在研究这个问题，以便在未来的版本中更好地支持Java。</p>
+
+
+<p>为了定义提取WAR文件的位置，点击<code>Configure features</code>链接。选择<code>Custom installation directory</code>选项并点击<code>Apply</code>。</p>
+
+<p>屏幕上将添加一个<code>Custom install directory</code>部分。将<code>Install to</code>字段设置为<code>webapps</code>文件夹的本地路径，例如<code>/opt/apache-tomcat-8.5.15/webapps</code>。</p>
+
+<p>您很可能希望不选择<code>Purge</code>选项，因为Tomcat可能会托管其他WAR文件，您不希望在解压缩<code>demo##&lt;timetstamp&gt;.war</code>文件时删除这些文件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-06/deploy-package-configuration-screenshot.png" class="zoom" data-title=""><img src="../Images/e6a690ed2eefbe058e64fe76f83f27ff.png" class="img-fluid center" alt="Deploy Package Configuration" data-original-src="https://i.octopus.com/blog/2017-06/deploy-package-configuration-screenshot.png"/>T2】</a></p>
+
+<h2 id="create-an-octopus-deploy-release">创建一个Octopus部署版本</h2>
+
+<p>一个发布捕获了所有的项目和包的细节，所以它可以以一种安全的和可重复的方式被一遍又一遍地部署。<a href="https://octopus.com/docs/getting-started#Gettingstarted-Createareleaseanddeployit">入门</a>文档详细介绍了在Octopus Deploy中创建新版本的过程。</p>
+
+<h2 id="deploy-an-octopus-deploy-release">部署八达通部署释放</h2>
+
+<p>部署是将版本部署到环境中的步骤的执行。一个单独的版本可以多次部署到不同的环境中。<a href="https://octopus.com/docs/getting-started#deploy-a-release">入门</a>文档详细介绍了在Octopus Deploy中部署新版本的过程。</p>
+
+<p>在我们的例子中，部署发行版意味着获取被推送到Octopus Deploy的包，在Tomcat服务器上安装Calamari，将包发送到Tomcat服务器，并使用Calamari将包中的WAR文件提取到Tomcat <code>webapps</code>目录中。</p>
+
+<h2 id="summary">摘要</h2>
+
+<p>此时，Tomcat已经将WAR文件提取到了<code>webapps</code>目录中，Java应用程序将由Tomcat部署并运行。</p>
+
+<p>我们目前正在为CI服务器开发插件，如Bamboo，它将自动完成打包、推送和发布部署的过程，并且已经有了一个用于<a href="https://octopus.com/docs/packaging-applications/build-servers/teamcity"> TeamCity </a>的插件。</p>
+
+<p>将来，我们会寻找将配置转换等特性引入Java包的方法，这意味着特定于环境的配置(如数据库连接字符串)将应用于JAR、WAR和EAR文件，就像它们应用于新环境一样。</p>
+
+                    
+                    
+</body>
+</html>

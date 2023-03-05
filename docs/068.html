@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>Improved Azure App Service deployments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>改进的Azure应用服务部署- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/azure-app-service-step#2021-08-12">https://octopus.com/blog/azure-app-service-step#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/azure-app-service-step/img-blog-azure-app-service-zip-deploy-2021.png" class="zoom" data-title=""><img src="../Images/4b9e907baec7d626b70fd6fe748b3fd6.png" class="img-fluid center" alt="Octopus, a zip file and Azure logo connected in the clouds" data-original-src="https://i.octopus.com/blog/2021-06/azure-app-service-step/img-blog-azure-app-service-zip-deploy-2021.png"/>T2】</a></p>
+
+<p>章鱼部署Q2版本包括一个新的T2部署Azure应用服务的步骤。这一步对部署Azure web应用程序进行了重大改进，包括:</p>
+
+<ul>
+<li>部署到Linux应用服务计划(没有晦涩的配置黑客)。</li>
+<li>部署容器映像。</li>
+<li>在Linux Octopus workers上执行部署。</li>
+<li>配置应用程序设置和连接字符串。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/azure-app-service-step/azure-app-service-step-tile.png" class="zoom" data-title=""><img src="../Images/c50b6999d12498dedafb6d66f59454b3.png" class="img-fluid center" alt="Add Azure App Service step tile" data-original-src="https://i.octopus.com/blog/2021-06/azure-app-service-step/azure-app-service-step-tile.png"/>T2】</a></p>
+
+<h2 id="whats-changed">什么变了？</h2>
+
+<p><em>部署Azure应用服务</em>步骤旨在取代现有的<em>部署Azure Web应用</em>步骤，然而，原始步骤仍然可用。</p>
+
+<p><em>部署Azure Web App </em>步骤依赖于<a href="https://www.iis.net/downloads/microsoft/web-deploy" rel="nofollow">微软Web Deploy </a>作为部署机制。这限制了在Windows workers上执行的步骤，需要特殊的配置来使用Linux应用服务计划，并且不支持容器映像。新的步骤依赖于用于基于文件的包(zip、nupkg、war)的<a href="https://docs.microsoft.com/en-us/azure/app-service/deploy-zip#rest" rel="nofollow"> zip部署API </a>，并且还支持部署容器映像。</p>
+
+<h2 id="app-settings-and-connection-strings">应用程序设置和连接字符串</h2>
+
+<p>新的步骤还带来了配置Azure应用程序设置和连接字符串的能力。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/azure-app-service-step/app-settings-and-connection-strings.png" class="zoom" data-title=""><img src="../Images/183bea54c1fd596e6ffb2931e5cb6de8.png" class="img-fluid center" alt="Configuring app settings and connection strings" data-original-src="https://i.octopus.com/blog/2021-06/azure-app-service-step/app-settings-and-connection-strings.png"/>T2】</a></p>
+
+<p>这是通过以JSON的形式提供设置和/或连接字符串来实现的。</p>
+
+<p>使用JSON格式的好处是:</p>
+
+<ul>
+<li>它与Azure门户网站中的<a href="https://docs.microsoft.com/en-us/azure/app-service/configure-common#edit-in-bulk" rel="nofollow">批量编辑功能是相同的JSON格式，这使得将现有的应用程序设置移动到Octopus变得很容易。</a></li>
+<li>这些字段接受<a href="https://octopus.com/docs/projects/variables/variable-substitutions"> Octopus变量表达式</a>，允许高级场景，例如有条件地包含值，并迭代Octopus变量集合以构建应用程序设置或连接字符串。</li>
+</ul>
+
+<p>在未来，我们希望在这些字段上添加一个更友好的UI，并保持JSON配置为“高级”模式。</p>
+
+<h2 id="transforming-configuration-files">转换配置文件</h2>
+
+<p>当部署打包为zip、nupkg或war文件的应用程序时，有多个选项可用于转换包中的配置文件。Octopus将提取包并在推送到Azure之前执行这些转换。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/azure-app-service-step/azure-app-service-config-files.png" class="zoom" data-title=""><img src="../Images/e7521d9634ef40b746e528810534a341.png" class="img-fluid center" alt="Azure app service configuration file options" data-original-src="https://i.octopus.com/blog/2021-06/azure-app-service-step/azure-app-service-config-files.png"/>T2】</a></p>
+
+<p>提供了以下用于转换配置文件的选项:</p>
+
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>我们向Clear Measure的朋友们致敬，感谢他们帮助我们开发这个新的Azure应用服务集成。</p>
+
+<p><em>部署Azure应用服务</em>步骤现在在Octopus Cloud实例和自托管<a href="https://octopus.com/downloads">下载页面</a>上的Octopus 2021.1中都可用。我们希望这使得部署Azure web应用程序比以往任何时候都更容易。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,150 @@
+<html>
+<head>
+<title>What's new in Octopus 2.4 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2.4的新特性- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/2.4#2015-09-25">https://octopus.com/blog/2.4#2015-09-25</a></blockquote>
+                        <p>我刚刚在一个预发布版本的<a href="http://octopusdeploy.com/downloads/2.4.1">章鱼部署2.4 </a>上按下按钮。这次发行比宾虚还大！我们上一次主要发布是在大约两个月前，它显示:我们关闭了GitHub中的79个问题，并添加了一堆大的新功能。它是如此之大，以至于我们将做一个关于2.4 中新特性的<a href="http://octopusdeploy.com/blog/new-in-2.4-webinar">免费网络研讨会。希望你能成功！</a></p>
+
+<p>以下是此版本中新增内容的简要概述。</p>
+
+<h2>库标签</h2>
+
+<p>2.4中最显著的变化是我们增加了一个新的顶级区域，叫做<strong>库</strong>:</p>
+
+<p><img src="../Images/bdd75c4b2f7762a5b02d0e4cfbd2f006.png" alt="Library tab" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_11_49_55-Packages_-_Octopus_Deploy_xdim2w.png"/></p>
+
+<p>以前，NuGet feed设置和库变量集位于Configuration选项卡下，仅供管理员使用。由于我们增加了许多新的特性，这些特性将在项目间共享，我们决定是时候为这些设置提供一个专用的地方了。</p>
+
+<h2>更好的内置NuGet存储库管理</h2>
+
+<p>库下面有许多选项卡，默认是内置的NuGet存储库。</p>
+
+<p><img src="../Images/9b3eb1fc94492792334dd22cba461498.png" alt="Packages tab under the library" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_30_46-Packages_-_Octopus_Deploy_pwp8yo.png"/></p>
+
+<p>您可以单击任何包来查看版本列表:</p>
+
+<p><img src="../Images/4e1df2dc1b597ff7e601e972127fa961.png" alt="Package versions" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_31_12-Packages_-_Octopus_Deploy_c2pfl6.png"/></p>
+
+<p>您可以选择包来删除它们，或者单击某个版本来查看详细信息:</p>
+
+<p><img src="../Images/05f6d6fcbfe297191a1e6b61729ca7ac.png" alt="Package details" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_31_46-Packages_-_Octopus_Deploy_qpwuz2.png"/></p>
+
+<p>您甚至可以直接从UI上传软件包，这在部署一次性实用程序时非常有用:</p>
+
+<p><img src="../Images/064e5307181f3acf70b3779328713ad8.png" alt="Upload a package" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_32_09-Packages_-_Octopus_Deploy_s2yyxb.png"/></p>
+
+<p>作为保留策略的一部分，内置存储库中的软件包现在会自动清理。当相应的发行版被删除时，不再被任何发行版使用的软件包将被自动从磁盘中删除。</p>
+
+<h2>步骤模板</h2>
+
+<p>这个功能在我看来是2.4中<strong>最酷的</strong>功能。<strong>步骤模板</strong>允许您创建可以跨项目使用的可重用步骤。这个功能实际上是来自<a href="http://www.sportingsolutions.com/">体育解决方案</a>的大卫·桑苏姆的一个拉式请求，我们喜欢这个概念。非常感谢大卫和运动解决方案！</p>
+
+<p>它是这样工作的。“步骤模板”选项卡是您的模板所在的位置:</p>
+
+<p><img src="../Images/2857ab2e5ffb662104aa6da25cec873c.png" alt="Step templates" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_20_22-Step_Templates_-_Octopus_Deploy_lzcrdz.png"/></p>
+
+<p>添加模板时，您可以选择使用任何内置步骤类型。对于这个例子，我将使用一个PowerShell脚本:</p>
+
+<p><img src="../Images/4eb2f55a5c5b608651e436076ebef08f.png" alt="Template type" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_20_35-Step_Templates_-_Octopus_Deploy_vnvmwt.png"/></p>
+
+<p>为您的模板命名和描述，以便其他人知道它的用途:</p>
+
+<p><img src="../Images/f8e8762feef614057581a77532cc3897.png" alt="Name and description of a step template" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_44_43-New_Step_Template_-_Octopus_Deploy_adhxp7.png"/></p>
+
+<p>我的脚本将停止一个Windows服务，所以我希望使用我的步骤模板的人告诉我他们想要停止哪个服务。我通过定义参数来做到这一点:</p>
+
+<p><img src="../Images/0f80a3af4ad033f77ae49a911df4bd9f.png" alt="Step template parameters" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_45_10-Edit_Step_Template_-_Octopus_Deploy_odd9da.png"/></p>
+
+<p>定义了参数后，我现在可以定义如何运行我的步骤模板，并利用这些参数:</p>
+
+<p><img src="../Images/9d3b652876598e447e94db135d157fcf.png" alt="Defining the step template script" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_45_54-Edit_Step_Template_-_Octopus_Deploy_bidu4m.png"/></p>
+
+<p>这是激动人心的部分。当定义任何项目的部署过程时，我可以使用我的步骤模板<strong>，就好像它是一个内置步骤</strong>:</p>
+
+<p><img src="../Images/3faa56466bf08f804bb0116045b38477.png" alt="Using a step template" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_46_22-OctoFX_Rate_Service_deployment_process_-_Octopus_Deploy_aicce7.png"/></p>
+
+<p>使用步骤模板时，我定义的参数可以编辑，并且可以绑定到变量:</p>
+
+<p><img src="../Images/900d87fb6a228a461405e546a92b1c52.png" alt="Configuring the new step template" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_46_56-New_step_-_Octopus_Deploy_qzb2ya.png"/></p>
+
+<p>我认为这个特性将会开启大量的可能性，围绕着能够创建可重用的脚本块或其他步骤。我们将在未来为人们建立一个共享他们的step模板的地方，所以请关注这个空间！:-)</p>
+
+<h2>脚本模块</h2>
+
+<p>如果您的所有部署都遵循相似的模式，那么创建一组可重用的PowerShell函数在它们之间使用是很有诱惑力的。在过去，虽然这是可能的，但从来没有一个非常好的方法能够轻松地使用共享这些功能。</p>
+
+<p>现在在Octopus 2.4中，您可以使用脚本模块来定义一组PowerShell函数——本质上是一个<code>.psm1</code>文件:</p>
+
+<p><img src="../Images/b3aed0199584632dc2bdb9fa2383d124.png" alt="Defining the script" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_52_20-My_script_module_-_Octopus_Deploy_euf6la.png"/></p>
+
+<p>然后，您可以将脚本模块作为项目部署过程的一部分:</p>
+
+<p><img src="../Images/0509e1040e72453b1a098a29422305d8.png" alt="Using the PowerShell modules" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_12_53_42-OctoFX_Rate_Service_deployment_process_-_Octopus_Deploy_xddf5t.png"/></p>
+
+<p>现在，无论何时在该项目中运行PowerShell，该模块都是可用的。这意味着您可以从脚本步骤或者在您的<code>Deploy.ps1</code>和相关文件中引用该模块。在运行期间，Octopus将确保模块在触手上并被加载；没有额外的工作要做:</p>
+
+<h2>团队中的Active directory组</h2>
+
+<p>用户之声的<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/3885904-have-the-ability-to-link-teams-to-ad-groups-so-th">第三高投票建议现在已经完成——你可以将Octopus中的团队链接到活动目录组:</a></p>
+
+<p><img src="../Images/961f9fba364b207593fa6ad82ae10295.png" alt="Linking teams to AD groups" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_01_22-Octopus_Administrators_-_Octopus_Deploy_m6pre4.png"/></p>
+
+<p><strong>我们需要你的帮助</strong>来测试这一点，因为即使在最好的情况下，活动目录集成也是棘手的。如果你正在使用AD，并且可以为我们试用2.4.1以确保群组成员工作，我们将非常感谢。</p>
+
+<h2>自定义角色</h2>
+
+<p>在Octopus 2.0中，我们通过创建一些高级角色极大地简化了权限系统。然而，一些客户需要修改这些内置角色的能力，或者定义新的角色。在2.4中，您现在可以定义自己的。</p>
+
+<p>可以在团队页面中找到角色:</p>
+
+<p><img src="../Images/19eeaa427f762d71932d4cb4e26b8132.png" alt="Configuring roles" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_01_55-Teams_-_Octopus_Deploy_nuqqgb.png"/></p>
+
+<p>在那里，您可以添加自定义角色，或修改内置角色的权限:</p>
+
+<p><img src="../Images/f150abe1edf24e3c83c4e3e51f6a5470.png" alt="Configuring roles some more" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_02_42-Roles_-_Octopus_Deploy_aowrn3.png"/></p>
+
+<h2>集成Windows身份验证</h2>
+
+<p>如果您使用的是Active Directory身份验证，用户现在可以选择使用集成的windows身份验证质询登录，而不是直接键入密码:</p>
+
+<p><img src="../Images/7518e63b8f34747c4c1ba22b181130ea.png" alt="Integrated sign in" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_35_28-Sign_in_-_Octopus_Deploy_gtrz7s.png"/></p>
+
+<p>当然，如果您有时需要以不同的用户身份登录，或者由于某种原因这不起作用，您可以继续以旧的方式登录。</p>
+
+<h2>保留有限数量的备份</h2>
+
+<p>Henrik 在他工作的第一天就实现了这一点。现在，您可以告诉Octopus应该保留Octopus数据库的多少个备份:</p>
+
+<p><img src="../Images/6f0744ade8c91057ccf8a7d64f5b06e2.png" alt="Keep a limited number of backups" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_38_11-Backup_-_Octopus_Deploy_dtredc.png"/></p>
+
+<h2>可定制的版本号策略</h2>
+
+<p>当您创建一个版本时，Octopus试图通过增加以前的版本号来为您生成一个版本号。现在，您可以通过编辑项目设置来更好地控制这种行为。您可以告诉Octopus使发布号与特定NuGet包的号相匹配:</p>
+
+<p><img src="../Images/2bf2075b6f7cc2590a9055c712c41766.png" alt="Package version format" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_41_11-OctoFX_Rate_Service_settings_-_Octopus_Deploy_f6mje2.png"/></p>
+
+<p>或者，您可以使用如下语法自行指定格式:</p>
+
+<p><img src="../Images/1d425feafd7e7cbc3cb949bc9005671b.png" alt="Custom version format" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_40_38-My_project_settings_-_Octopus_Deploy_leuwbg.png"/></p>
+
+<h2>项目徽标</h2>
+
+<p>有时，在像Octopus这样的应用程序中，搞清楚自己的确切位置可能会令人困惑。在2.4中，我们增加了为每个项目上传自定义徽标的功能。导航您的项目时，此徽标将出现在左上角:</p>
+
+<p><img src="../Images/86465f192d84e5def0b1a877063069ac.png" alt="Logo for a project" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_42_37-OctoFX_Rate_Service_-_Octopus_Deploy_odgsso.png"/></p>
+
+<p>您可以从设置页面更改徽标:</p>
+
+<p><img src="../Images/b5195c2e15947949c11fe2121c1f8c61.png" alt="Edit the logo" data-original-src="https://i.octopus.com/blog/migrated/2014-04-30_13_08_55-OctoFX_Trading_Website_settings_-_Octopus_Deploy_bfsqr0.png"/></p>
+
+<h2>试试吧，告诉我们你的想法！</h2>
+
+<p>现在这个版本的Octopus是一个预发布版本，虽然它修复了大量的问题，但它总是有可能引入一些问题。由于有这么多的变化，我们真的很希望你下载它，并采取了一个旋转。我认为新功能使它成为一个相当引人注目的升级！</p>
+
+                    
+                    
+</body>
+</html>

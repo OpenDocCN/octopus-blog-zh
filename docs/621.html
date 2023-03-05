@@ -1,0 +1,232 @@
+<html>
+<head>
+<title>RFC: Linux Deployments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC: Linux部署——Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-linux-deployments#2015-09-25">https://octopus.com/blog/rfc-linux-deployments#2015-09-25</a></blockquote>
+                        <p>目前我们投票最高的<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/5730566-linux-support"> Uservoice想法</a>是在Octopus中增加对Linux部署的支持。我们将通过添加对运行SSH的服务器的一流支持来实现这一点，这将非常接近今天使用Octopus的Windows部署的工作方式。</p>
+
+<p><img src="../Images/5fae02d28acb98c7e57b08bab59bdf7e.png" alt="octopenguin" data-original-src="https://i.octopus.com/blog/migrated/BPmCnuhCAAA_vqp_lgmp0x.png"/></p>
+
+<p>为此，我们将在Octopus中引入一个新术语，<strong><em/></strong>。无代理的机器将不会运行触手，而是使用不同的通信方法，例如SSH。</p>
+
+<p>我们的RFC目标是确保我们实现这一特性的方式适合最广泛的客户。</p>
+
+<h3>无代理机器简介</h3>
+
+<p>在Octopus中设置一台新的无代理机器，例如运行SSH的Linux服务器，其工作方式与添加一台运行触手的新机器相同。</p>
+
+<p><strong>添加无代理机器</strong></p>
+
+<p>通过选择<em> SSH </em>而不是<em>监听</em>或<em>轮询</em>作为通信方式来配置无代理机器。</p>
+
+<p><img src="../Images/d78ab4f79e3a8cc9932c378390565b5c.png" alt="Adding an agentless machine" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-Add_Ssh_Machine_lu8akk.png"/></p>
+
+<p><strong>无代理机器环境</strong></p>
+
+<p>无代理计算机就像普通触须一样出现在“环境”页面上，显示它们的位置和状态(在线/离线)</p>
+
+<p><img src="../Images/25a544e72641097528e39d5d970ad44b.png" alt="Environment with an agentless machine" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-Environments_Ssh_Machine_g2e2bc.png"/></p>
+
+<p><strong>检查无代理机器的运行状况</strong></p>
+
+<p>典型的Octopus任务，如健康检查、特别脚本等，可以在所有适当的机器上运行，包括触手和无代理机器(如果两种类型都使用的话)。</p>
+
+<p><img src="../Images/117008b75263aac785b31fb6c9e69ecb.png" alt="Health check an agentless machine" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-Ssh_Machine_health_check_yjdg8g.png"/></p>
+
+<h4>证明</h4>
+
+<p>我们的目标是为SSH目标机器支持以下认证类型</p>
+
+<p><img src="../Images/1bdad6c8cfa3fda49684a560ba103575.png" alt="Authentication Types" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-AuthenticationTypes_gty7ym.png"/></p>
+
+<p><strong>密码</strong></p>
+
+<p><img src="../Images/a35c7586d7ae50c9f75f048be2638733.png" alt="Password" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-AuthenticationType_UsernamePassword_k5wcrt.png"/></p>
+
+<p><strong>无密码的密钥</strong></p>
+
+<p><img src="../Images/8b479b72164faf389c98bce69df6aea7.png" alt="Key without passphrase" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-AuthenticationType_PrivateKey_gzqmmg.png"/></p>
+
+<p><strong>带有密码短语的密钥</strong></p>
+
+<p><img src="../Images/0d48e4c716bacc4b2cacce2c4abb1402.png" alt="Key with passphrase" data-original-src="https://i.octopus.com/blog/migrated/2014-06-20-AuthenticationType_PrivateKey_withPassphrase_lkap22.png"/></p>
+
+<p><em>私钥将作为加密属性存储在Octopus数据库中。</em></p>
+
+<h3>网络拓扑结构</h3>
+
+<p>不会直接从Octopus服务器连接到无代理机器；取而代之的是，一个或多个触角将用于与机器进行出站连接。我们计划在Octopus服务器上添加一个隐藏的、运行在低特权进程中的“影子”触手，作为一个方便的默认设置，但是使用特定的触手来处理不同的网络拓扑也是我们正在考虑的一个功能。</p>
+
+<h3>无代理机器上的Octopus足迹</h3>
+
+<p>Octopus会在进行任何部署之前将压缩包上传到目标机器上，所以我们需要目标机器上的一些本地存储空间，这些存储空间将转到<code>~/.tentacle/</code>。我们还将把包解压到一个默认的位置，就像我们在一个触手机器上所做的一样，例如<code>~/.tentacle/apps/{environment}/{project}/{package}/{version}</code>，并且我们还将支持自定义的安装位置来将文件移动到其他地方。</p>
+
+<h3>包装采购</h3>
+
+<p>因为执行SSH部署需要一个触手机器，所以这些部署的包获取将与今天使用Octopus的Windows部署略有不同。</p>
+
+<p>触手机器将提取NuGet包并创建一个<code>.tar.gz</code> tarball，然后上传到目标机器。</p>
+
+<p>触手机器可以与目标机器位于同一位置，以优化带宽使用，即Octopus将包上传到触手，触手再将包发送到目标机器。</p>
+
+<h3>部署</h3>
+
+<p>包部署步骤将完全通过目标机器上的单个shell会话来运行。</p>
+
+<ol>
+<li>我们将检查并确保八达通脚本是最新的</li>
+<li>包和支持部署文件将通过SCP上传</li>
+<li>将执行部署业务流程脚本</li>
+<li>如果默认安装目录不存在，将创建该目录</li>
+<li>tar文件将被解压缩</li>
+<li><code>predeploy</code>会跑</li>
+<li>如果已经指定了自定义安装目录<ul>
+<li>如果在部署前清除目录的选项为真，我们将清除自定义安装目录</li>
+<li>将提取的文件复制到自定义目录</li>
+</ul></li>
+<li><code>deploy</code>会跑</li>
+<li><code>postdeploy</code>将运行</li>
+<li>运行保留策略来清理旧部署</li>
+<li>删除Octopus变量文件(确保敏感变量不会留在服务器上)</li>
+</ol>
+
+<p><strong>部署脚本</strong></p>
+
+<p>主要的部署编排脚本将用bash编写，因为这是*nix发行版中最少的共同点。这个脚本将寻找用户可以创建的<code>predeploy</code> / <code>deploy</code> / <code>postdeploy</code>脚本，如果它们存在，就执行它们。</p>
+
+<p><code>predeploy</code> / <code>deploy</code> / <code>postdeploy</code>脚本可以用用户偏好的脚本语言编写(但是用户必须确保它安装在运行部署的服务器上)。</p>
+
+<ul>
+<li><code>predeploy</code><ul>
+<li>部署前需要运行的任务，例如应用程序所需的配置转换。</li>
+</ul></li>
+<li><code>deploy</code><ul>
+<li>实际部署应用程序所需的任务。</li>
+</ul></li>
+<li><code>postdeploy</code><ul>
+<li>部署后需要运行的任务。例如，清理应用程序部署期间创建的任何临时文件。</li>
+</ul></li>
+</ul>
+
+<p>工作目录将是预先部署脚本的默认安装目录，也是部署和后期部署脚本的默认或自定义安装目录。</p>
+
+<p><strong>部署的环境变量</strong></p>
+
+<p>Octopus拥有比Linux环境变量所能支持的更复杂的变量系统和语法。不得不在像<code>Octopus.Action[Install website].Status.Code</code>这样的名字和有效的POSIX等价物之间进行映射，这看起来很不舒服，而且容易出错。大型Octopus部署也倾向于携带大量的<em>变量，所以我们不愿意将这些任意地放入部署脚本运行的环境中。</em></p>
+
+<p>与直接设置环境变量不同，部署脚本将可以访问一个<code>tentacle</code>命令，该命令可用于检索它们需要的值。例如，要检索部署使用的自定义安装目录，用户可以像这样调用<code>tentacle</code>命令:</p>
+
+<pre><code>DEST=$(tentacle get Octopus.Action.Package.CustomInstallationDirectory)
+</code></pre>
+
+<p>这声明了一个环境变量<code>DEST</code>来保存定制安装目录(随后作为<code>$DEST</code>可用于脚本)。</p>
+
+<p>使用<code>"</code>引号可以支持带有嵌入式空格等的值。</p>
+
+<p>尽管我们不太可能在该命令的第一个版本中实现它，但我们正在考虑一些更复杂的特性，如迭代:</p>
+
+<pre><code>for ACTION in $(tentacle get "Octopus.Action[*]")
+do
+    echo "The status of $ACTION was $(tentacle get "Octopus.Action[$ACTION].Status.Code")"
+done
+</code></pre>
+
+<p>这突出了我们看到的使编写部署脚本变得更加愉快的机会。</p>
+
+<h3><code>tentacle</code>命令的其他功能</h3>
+
+<p>使用<code>tentacle</code>助手还将提供对在<em> Windows </em>机器上使用<em>PowerShell</em>cmdlet支持的命令的一致访问。</p>
+
+<p><strong>设置输出变量</strong></p>
+
+<p>可以使用<code>tentacle set</code>将输出变量发送到Octopus服务器:</p>
+
+<pre><code>tentacle set ActiveUsers 3
+</code></pre>
+
+<p>或者:</p>
+
+<pre><code>ps -af | tentacle set RunningProcesses
+</code></pre>
+
+<p><strong>收集工件</strong></p>
+
+<p>可以使用<code>tentacle collect</code>将目标机器上的文件收集为Octopus工件:</p>
+
+<pre><code>tentacle collect InstallLog.txt
+</code></pre>
+
+<p><strong>送入工具</strong></p>
+
+<p>当我们(或其他人)提供助手脚本时，这些脚本本身需要访问变量、路径等等，可以使用<code>tentacle exec</code>调用这些脚本:</p>
+
+<pre><code>tentacle exec xmlconfig Web.config
+</code></pre>
+
+<h3>部署功能</h3>
+
+<p>XML配置转换/appsettings支持等功能将在目标机器上运行。</p>
+
+<p>支持Octopus脚本和可执行文件将是目标机器上默认文件夹结构的一部分，即<code>~/.tentacle/tools/</code>，在这个文件夹中，我们还可以包含使用Mono进行支持的助手应用程序。特定于. NET的约定，如XML配置转换/appsettings。</p>
+
+<p>我们还可以包括不同的脚本/可执行选项来支持其他部署功能。</p>
+
+<h3>保留策略</h3>
+
+<p>部署完成后，我们将应用为项目指定的保留策略，就像我们处理Windows部署一样。</p>
+
+<p>用户可以指定保留若干天的部署，或者特定数量的部署。如果指定了其中任何一项，我们将删除不在指定保留策略范围内的任何文件。</p>
+
+<h3>系统需求</h3>
+
+<p>Linux发行版的默认配置和可用的软件包可能会有很大的不同。我们的目标是选择一个得到广泛支持的基线，使Octopus能够部署到几乎任何当前的Linux发行版上。</p>
+
+<p>我们对目标机器的基本假设是:</p>
+
+<ul>
+<li>可以使用SSH和SCP访问它</li>
+<li>用户的登录shell是Bash 4+</li>
+<li><code>tar</code>可用</li>
+</ul>
+
+<p>我们自己计划构建和测试的平台有:</p>
+
+<ul>
+<li><em>亚马逊Linux AMI 2014.03 </em></li>
+<li><em> LTS Ubuntu服务器12.04 </em></li>
+</ul>
+
+<p>我们将尽最大努力保持发行版无关性，但是如果您能够为您自己的服务器选择这些选项中的一个，您将帮助我们提供有效的测试和支持。</p>
+
+<h3>未解决的问题</h3>
+
+<ol>
+<li>管理特定于平台的路径<ul>
+<li>当应用程序同时部署到Windows和Linux服务器时，需要为Linux和Windows分别指定“自定义安装目录”等路径。我们能让这种体验变得更好吗？</li>
+</ul></li>
+<li>部署脚本的命名<ul>
+<li>预先部署/部署/后期部署，或</li>
+<li>预先部署/部署/后期部署，或</li>
+<li>pre_deploy/deploy/post_deploy？</li>
+</ul></li>
+<li>默认情况下，我们将上传包和提取包的路径的定制<ul>
+<li>有必要通过Octopus进行配置吗，或者像<code>~/.tentacle/apps</code>这样的位置可以根据需要由管理员链接到其他位置吗？</li>
+</ul></li>
+<li>像我们在PowerShell中一样写出变量<ul>
+<li>在PowerShell中，我们首先使用DPAPI对它们进行加密，在Linux上有类似的标准加密功能吗？</li>
+</ul></li>
+</ol>
+
+<h3>我们需要你的帮助！</h3>
+
+<p>我们真正希望的是，已经在Octopus中使用SSH的客户，或者希望开始使用SSH的客户，能够就我们如何在Octopus中实现SSH部署的计划给我们提供反馈。</p>
+
+<p>无论是对上面建议的实现的改进，还是如果我们已经做出了<em>假设</em>认为<strong>无法工作</strong>，那么请在下面的评论中告诉我们。</p>
+
+                    
+                    
+</body>
+</html>

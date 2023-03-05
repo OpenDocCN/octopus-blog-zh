@@ -1,0 +1,150 @@
+<html>
+<head>
+<title>Octopus 2020.3: Runbooks++, Jenkins Pipelines, and Octopus Linux Docker image - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2020.3: Runbooks++、Jenkins Pipelines和Octopus Linux Docker image-Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2020-3#2021-08-12">https://octopus.com/blog/octopus-release-2020-3#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/release-2020.3.png" class="zoom" data-title=""><img src="../Images/7472909bb4899f783fbbbbb1f94ced10.png" class="img-fluid center" alt="Octopus 2020.3: Runbooks++, Jenkins Pipelines, and Octopus Linux Docker image" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/release-2020.3.png"/>T2】</a></p>
+
+<p>我们很高兴推出Octopus 2020.3，这是我们今年的第三个版本。这个版本包括一些伟大的更新，以改善您的日常八达通体验。</p>
+
+<ul>
+<li><a href="/blog/octopus-release-2020-3#runbooks">runbook改进</a>:该版本包括一批客户驱动的改进，包括runbook专用项目、Octopus CLI支持、环境范围界定、每个runbook的指导性故障模式，以及添加run book保留策略。</li>
+<li><a href="/blog/octopus-release-2020-3#jenkins-pipelines"> Jenkins Pipelines </a>支持使您能够从您的<code>Jenkinsfile</code>与Octopus集成。</li>
+<li><a href="/blog/octopus-release-2020-3#streamlined-process-editor"> Streamlined process editor </a>允许您一次编辑多个步骤，并通过一次更新保存您的更改。</li>
+<li><a href="/blog/octopus-release-2020-3#octopus-linux-docker-image"> Octopus Linux Docker镜像(早期访问)</a>现已可用，使得在Linux Docker容器中运行Octopus成为可能。</li>
+</ul>
+
+<p>这个版本是2020年六个版本中的第三个，包括六个月的长期支持。下表显示了我们长期支持的当前版本:</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>释放；排放；发布</th>
+<th>长期支持</th>
+<th>LTS结束日期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>八达通2020.3</td>
+<td>是</td>
+<td>2021-01-20</td>
+</tr>
+<tr>
+<td>章鱼2020.2</td>
+<td>是</td>
+<td>2020-09-31</td>
+</tr>
+<tr>
+<td>八达通2020.1</td>
+<td>是</td>
+<td>2020-08-24</td>
+</tr>
+<tr>
+<td>章鱼2019.12</td>
+<td>期满</td>
+<td>2020-07-14</td>
+</tr>
+</tbody>
+</table>
+
+<p>请继续阅读，了解更多更新信息。</p>
+
+<h2 id="runbooks">运行手册</h2>
+
+<p>我们在Octopus 2019.11中首次提供了Runbook自动化支持，这是我们有史以来增长最快的功能之一！我们对使用水平感到兴奋，并积极听取您的反馈。在这个版本中，我们发布了几项客户驱动的改进，以更好地使用runbooks。</p>
+
+<h3 id="runbook-only-projects">仅Runbook项目</h3>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/runbook-only-projects.png" class="zoom" data-title=""><img src="../Images/bb59f663be82bcdf2942ff85fb72a104.png" class="img-fluid center" alt="Runbook only projects" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/runbook-only-projects.png"/>T2】</a></p>
+
+<p>Octopus现在支持更干净的runbook-only项目风格，并且UI反映了这一点。以后仍然有可能将部署添加到项目中，但是这使得更关注操作的项目变得更容易。如果您的项目只包含runbooks，则应用此样式。</p>
+
+<p>要激活仅运行手册项目样式，请创建一个新项目，并添加至少包含一个步骤的运行手册。那么项目的部署部分将会折叠。</p>
+
+<h3 id="octopus-cli-support">Octopus CLI支持</h3>
+
+<p>【T2 <img src="../Images/90b208d2df439b8765e383eea13e17be.png" class="img-fluid center" alt="Octopus CLI run-runbook command in a terminal" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/octopus-cli-run-runbook.png"/></p>
+
+<p>我们已经更新了Octopus CLI，添加了一个<code>run-runbook</code>命令，以便在您选择的平台上从命令行和脚本执行您的操作手册。</p>
+
+<h3 id="runbook-run-settings">Runbook运行设置</h3>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/runbook-run-settings.png" class="zoom" data-title=""><img src="../Images/7874a2bc6b4b5667cb16d4ca7470fc6c.png" class="img-fluid center" alt="New runbook run settings" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/runbook-run-settings.png"/>T2】</a></p>
+
+<p>我们添加了新的runbook运行设置，以实现对runbook执行的更高级控制:</p>
+
+<ul>
+<li>环境范围:你可以选择运行手册的环境。</li>
+<li>每个操作手册的引导故障:您可以自定义每个操作手册的引导故障设置。这意味着您可以选择是否使用引导式故障模式，使用目标环境中的默认设置，或者始终使用引导式故障模式。</li>
+<li>Runbook保留策略:您还可以控制您的runbook保留，以便更好地管理它们的执行工件和清理。</li>
+</ul>
+
+<p><a href="https://octopus.com/docs/runbooks">了解更多信息</a></p>
+
+<h2 id="jenkins-pipelines">詹金斯管道公司</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/jenkins-pipelines.png" class="zoom" data-title=""><img src="../Images/0b7ed6bbfbde67f0cb1d340ed181a100.png" class="img-fluid center" alt="Jenkins Pipelines support" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/jenkins-pipelines.png"/>T2】</a></p>
+
+<p>我们已经更新了我们的Jenkins插件，增加了对从您的<code>Jenkinsfile</code>集成Octopus的支持。以前，您需要使用Octopus CLI自动完成这项工作，但是现在已经支持开箱即用了。语法更加简洁明了。</p>
+
+<p><a href="/blog/using-jenkins-pipelines">了解更多信息</a></p>
+
+<h2 id="streamlined-process-editor">简化流程编辑器</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/streamlined-process-editor.png" class="zoom" data-title=""><img src="../Images/a3206c7c75d4da82b51efb5f933e2c1d.png" class="img-fluid center" alt="Streamlined process editor" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/streamlined-process-editor.png"/>T2】</a></p>
+
+<p>作为我们的<a href="https://octopus.com/roadmap#pipeline-as-code"> Config as Code </a>特性的一部分，我们已经更新了我们的流程编辑器，使您的部署和操作手册更容易自动化。现在，您可以编辑整个流程，包括更新多个步骤，并通过单击保存所有更改。以前，您需要一次保存一个更改，这对于较大的更新来说是令人沮丧的。这是不再需要的，因为八达通现在跟踪你所有的变化，并允许你只保存一次。</p>
+
+<p>亲自尝试一下，我想你会发现这是一种自然得多的编辑体验。</p>
+
+<h2 id="octopus-linux-docker-image">Octopus Linux Docker映像(早期访问)</h2>
+
+<p>【T2 <img src="../Images/c7440b9ffd4601ccde1e6de919e593ea.png" class="img-fluid center" alt="Octopus Linux Docker image" data-original-src="https://i.octopus.com/blog/2020-08/octopus-release-2020-3/octopus-linux-image.png"/></p>
+
+<p>去年，我们将Octopus云服务从基于Windows的虚拟机转移到运行在Kubernetes 上的基于Linux的容器中。我们进行这种改变是为了降低运行成本，提高服务的性能和可伸缩性。这个解决方案已经运行了将近12个月，我们对结果非常满意。</p>
+
+<p>我们为自己做了这种转变，但我们也设想我们的客户用我们的Docker图像自托管Octopus。因此，我们很高兴地宣布提前访问我们的Octopus Deploy Docker映像，这些映像基于支持Octopus Cloud的相同代码。这些映像允许Linux用户在他们选择的操作系统上自托管Octopus。</p>
+
+<p>查看我们的<a href="https://hub.docker.com/r/octopusdeploy/octopusdeploy" rel="nofollow"> DockerHub库</a>开始吧，我强烈推荐您点击<strong>了解更多</strong>链接，找到更详细的说明和完整的示例。</p>
+
+<p><strong>注意</strong>:我们的Docker图片是早期版本；我们预计会有一些错误和粗糙的边缘，我们不支持这个版本用于生产部署。也就是说，我们渴望得到反馈，因此如果有任何意见或问题，请耐心等待并联系我们的<a href="https://octopus.com/support">支持团队</a>。</p>
+
+<p><a href="/blog/introducing-linux-docker-image">了解更多信息</a></p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>这个版本包括两个突破性的变化。</p>
+
+<ul>
+<li>我们已经否决了我们的Azure VM扩展，我们建议使用PowerShell DSC作为替代。我们的文档介绍了这一决定，并链接到关于如何使用PowerShell DSC实现这一点的更多文章。参见下面的<a href="/blog/octopus-release-2020-3#related-posts">相关文章</a>了解如何使用Amazon Web Services完成这项工作。</li>
+<li>我们已经更新了我们的<a href="https://octopus.com/docs/deployment-examples/iis-websites-and-application-pools">部署到IIS步骤</a>，删除了对部署到Azure应用服务的支持。我们建议使用我们的<a href="https://octopus.com/docs/deployment-examples/azure-deployments"> Azure support </a>来代替。</li>
+</ul>
+
+<h2 id="upgrading">升级</h2>
+
+<p>章鱼云用户已经在运行这个版本，自主托管的章鱼客户现在可以<a href="https://octopus.com/downloads/2020.3.0">下载</a>最新版本。</p>
+
+<p>像往常一样，升级Octopus Deploy 的<a href="https://octopus.com/docs/administration/upgrading">步骤适用。更多信息，请参见</a><a href="https://octopus.com/downloads/compare?to=2020.3.0">发行说明</a>。</p>
+
+<h2 id="whats-coming-in-octopus-2020.4">章鱼2020.4有什么新内容？</h2>
+
+<p>查看我们的<a href="https://octopus.com/roadmap">公共路线图</a>看看接下来会有什么，并注册更新。随着代码进展顺利，我们正在增加对YAML、XML和application.properties配置文件更新的更好支持，并且我们正在增加对Octopus Cloud上内置Linux Workers的支持。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Octopus 2020.3现已正式发布，它包括一些改进，使团队更容易构建自动化部署和runbook流程、Jenkins管道支持等。我们希望你喜欢它！</p>
+
+<p>欢迎发表评论，让我们知道你的想法！愉快的部署！</p>
+
+<h2 id="related-posts">相关职位</h2>
+
+
+
+                    
+                    
+</body>
+</html>

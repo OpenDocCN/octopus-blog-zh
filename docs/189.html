@@ -1,0 +1,1317 @@
+<html>
+<head>
+<title>Deploying AWS Lambdas across environments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>跨环境部署AWS Lambdas-Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-lambdas#2021-08-12">https://octopus.com/blog/deploying-lambdas#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/deploy-lambdas-multiple-environments.png" class="zoom" data-title=""><img src="../Images/cba3cc9d1c3623b736c8c15d67cece02.png" class="img-fluid center" alt="Deploying AWS Lambdas across environments" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/deploy-lambdas-multiple-environments.png"/>T2】</a></p>
+
+<p>无服务器是从管理物理机或虚拟机稳步转变的最新版本。术语“无服务器”有点误导，因为仍然有服务器在运行代码。但是无服务器的承诺是你不必再考虑服务器。像AWS Lambda这样的无服务器平台为您处理创建、销毁、更新和公开这些服务器，让您专注于运行您的代码。</p>
+
+<p>无服务器模式对于某些类型的工作负载非常有吸引力。不经常运行的代码，比如由文件上传或添加数据库行触发的函数，作为Lambda托管非常方便。您甚至会发现，Lambdas可以以经济高效且可扩展的方式处理更多传统工作负载，如网站托管。</p>
+
+<p>如今，部署无服务器应用程序是微不足道的。CLI工具和IDE插件使您只需一个命令或点击，就可以从代码进入生产。不过，最终这种部署将需要一个更健壮的过程，允许不写代码的团队一起批量修改和验证。满足这些需求的传统解决方案是拥有多个环境，并在进入生产环境之前通过内部测试环境进行部署。</p>
+
+<p>在这篇博文中，我们将深入探讨如何在CloudFormation中表达多环境无服务器部署，并以可靠的方式进行。</p>
+
+<h2 id="the-sample-applications">示例应用程序</h2>
+
+<p>在这个例子中，我们将部署两个非常简单的Lambda应用程序，它们只是在响应体中返回它们接收到的输入对象。</p>
+
+<p>第一个是用Go写的，可以在<a href="https://github.com/OctopusSamples/GoLambdaExample" rel="nofollow">https://github.com/OctopusSamples/GoLambdaExample</a>找到。</p>
+
+<p>第二个是用Node.js写的，可以在<a href="https://github.com/OctopusSamples/NodeLambdaExample" rel="nofollow">https://github.com/OctopusSamples/NodeLambdaExample</a>找到。</p>
+
+<h2 id="self-contained-and-decoupled-deployments">独立和分离的部署</h2>
+
+<p>在这篇文章中，我们将考虑两种类型的无服务器部署。</p>
+
+<p>自包含风格将所有Lambda函数和触发它们的服务(在我们的例子中是API Gateway)包装成一个单一的CloudFormation模板，为每个环境创建独立和隔离的基础设施栈。</p>
+
+<p>独立部署具有以下优势:</p>
+
+<ul>
+<li>万物作为一个整体被创造和毁灭。</li>
+<li>部署作为一个组进展到下一个环境。</li>
+<li>即使应用程序有多个Lambdas，也很容易推断已部署应用程序的状态。</li>
+</ul>
+
+<p>虽然自包含部署很容易创建，但它也有缺点，即您不能独立地部署单独的Lambdas。无服务器平台非常适合微服务，为了充分利用微服务，您必须能够独立开发和部署每个微服务。</p>
+
+<p>分离式风格提供了微服务部署所需的灵活性。在解耦部署中，每个Lambda都是独立部署的，同时仍然由单个共享API网关公开。</p>
+
+<p>分离部署具有以下优势:</p>
+
+<ul>
+<li>每个Lambda管理自己的部署生命周期。</li>
+<li>一个共享的API网关允许Lambdas通过相对URL进行交互。</li>
+<li>共享主机名使得管理HTTPS证书更加容易。</li>
+</ul>
+
+<h2 id="creating-a-self-contained-deployment">创建自包含部署</h2>
+
+<p>自包含部署涉及使用以下资源创建单个CloudFormation模板:</p>
+
+
+
+<h3 id="the-awsapigatewayrestapi-resource"><code>AWS::ApiGateway::RestApi</code>资源</h3>
+
+<p><code>AWS::ApiGateway::RestApi</code>资源创建一个REST API。</p>
+
+<p>API Gateway提供了多种API，其中<a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-rest-api.html" rel="nofollow">REST API</a>是第一种，也是最可配置的。<a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api.html" rel="nofollow">HTTP API</a>是另一个选项，但是我们在这里不会使用HTTP API。</p>
+
+<p>下面的代码片段创建了REST API资源:</p>
+
+<pre><code class="language-json">    "RestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Description": "My API Gateway",
+        "Name": "Self-contained deployment",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    }
+</code></pre>
+
+<h2 id="the-awslogsloggroup-resource"><code>AWS::Logs::LogGroup</code>资源</h2>
+
+<p>为了帮助调试和监控我们的Lambda函数，我们创建了一个CloudWatch日志组。</p>
+
+<p>日志组的名称基于Lambda的名称。<a href="https://stackoverflow.com/a/39233203/157605" rel="nofollow">这个名称是不可配置的</a>，因此我们从环境名称和服务名称构建日志组名称，这两个名称组合起来创建Lambda的名称:</p>
+
+<pre><code class="language-JSON">    "AppLogGroupOne": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": { "Fn::Sub": "/aws/lambda/${EnvironmentName}-NodeLambda" }
+      }
+    }
+</code></pre>
+
+<h2 id="the-awsiamrole-resource"><code>AWS::IAM::Role</code>资源</h2>
+
+<p>为了让我们的Lambda拥有与日志组交互的权限，我们需要一个IAM角色来授予访问权限:</p>
+
+<pre><code class="language-JSON">    "IamRoleLambdaOneExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": { "Fn::Sub": "${EnvironmentName}-NodeLambda-policy" },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentName}-NodeLambda*:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": { "Fn::Sub": "${EnvironmentName}-NodeLambda-role" },
+      }
+    }
+</code></pre>
+
+<h2 id="the-awslambdafunction-resource"><code>AWS::Lambda::Function</code>资源</h2>
+
+<p>这是我们创建Lambda本身的地方。</p>
+
+<p>Lambda示例应用程序已经上传到S3。如果你正在复制这个模板，那么<code>S3Bucket</code>和<code>S3Key</code>必须被改变以反映你上传Lambda代码的位置。</p>
+
+<p>这个Lambda将使用上面创建的IAM角色执行:</p>
+
+<pre><code class="language-JSON">    "LambdaOne": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "deploy-lambda-blog",
+          "S3Key": "nodelambdaexample.zip"
+        },
+        "Environment": {
+          "Variables": {}
+        },
+        "FunctionName": { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "PackageType": "Zip",
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaOneExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs12.x",
+        "Timeout": 20
+      }
+    }
+</code></pre>
+
+<h2 id="the-awslambdapermission-resource"><code>AWS::Lambda::Permission</code>资源</h2>
+
+<p>为了让REST API执行Lambda，需要授予它访问权限。</p>
+
+<p>有两种方法授予API网关对Lambda的访问权限:<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_compare-resource-policies.html" rel="nofollow"> IAM角色或基于资源的策略</a>。我们在这里选择使用基于资源的策略，因为如果您手动集成两个系统，这就是API网关控制台授予自己对Lambda的访问权限的方式:</p>
+
+<pre><code class="language-JSON">    "LambdaOnePermissions": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "LambdaOne",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":execute-api:",
+              {
+                "Ref": "AWS::Region"
+              },
+              ":",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":",
+              {"Ref": "RestApi"},
+              "/*/*"
+            ]
+          ]
+        }
+      }
+    }
+</code></pre>
+
+<h2 id="the-awsapigatewayresource-resources"><code>AWS::ApiGateway::Resource</code>资源</h2>
+
+<p>API网关公开的路径中的元素称为资源。例如，<code>/vehicles/cars/car1</code>的URL路径由三个资源组成:<code>vehicles</code>、<code>cars</code>和<code>car1</code>。</p>
+
+<p>资源可以用<code>{proxy+}</code>语法匹配整个剩余路径。</p>
+
+<p>下面的模板创建了两个资源，它们组合起来匹配路径<code>/nodefunc/{proxy+}</code>:</p>
+
+<pre><code class="language-JSON">    "ResourceOne": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"},
+        "ParentId": { "Fn::GetAtt": ["RestApi", "RootResourceId"] },
+        "PathPart": "nodefunc"
+      }
+    },
+    "ResourceTwo": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"},
+        "ParentId": {
+          "Ref": "ResourceOne"
+        },
+        "PathPart": "{proxy+}"
+      }
+    }
+</code></pre>
+
+<h2 id="the-awsapigatewaymethod-resources"><code>AWS::ApiGateway::Method</code>资源</h2>
+
+<p>为了响应资源上的HTTP请求，我们需要公开一个方法。</p>
+
+<p>当调用Lambda时，API Gateway可以选择使用<a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-set-up-simple-proxy.html" rel="nofollow">代理集成</a>。</p>
+
+<p>在代理集成选项出现之前，从API Gateway调用Lambda需要大量的样板文件配置来连接HTTP请求和Lambda执行。HTTP请求在请求的URL、查询字符串、头和HTTP主体中公开了一系列信息。然后，HTTP响应可以包括状态代码、标头和正文。另一方面，我们有一个Lambda，它接受单个对象作为输入，返回单个对象作为输出。这意味着在调用Lambda时，API Gateway必须配置为将HTTP调用中的各种输入编组到单个对象中，并将Lambda的响应解组到HTTP响应中。在实践中，对每个方法都进行了相同的配置，导致了大量的重复工作。</p>
+
+<p>创建代理集成是为了给这个常见问题提供一个勾选框解决方案。启用代理集成后，API Gateway将传入的HTTP请求整理成一个由Lambda 使用的<a href="https://docs.amazonaws.cn/en_us/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format" rel="nofollow">标准对象，并期望返回一个具有特定形状的</a><a href="https://docs.amazonaws.cn/en_us/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-output-format" rel="nofollow">对象</a>，由此生成HTTP响应。</p>
+
+<p>更“传统”的方法是将一个API网关阶段与一个Lambda别名相匹配，阶段和别名都表示环境中的进展。然而，Lambda别名有很大的局限性，我认为这使得它们根本不适合解决环境发展的常见用例。你可以在博客文章<a href="https://octopus.com/blog/multi-environment-lambda-deployments">中读到更多关于为什么你不应该使用Lambda别名来定义环境</a>的内容。所以我们避免使用别名，并为每个环境部署一个新的Lambda。</p>
+
+<p>下面是代理集成的两种方法:</p>
+
+<pre><code class="language-JSON">    "LambdaOneMethodOne": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {       
+        "AuthorizationType": "NONE", 
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Ref": "ResourceOne"
+        },
+        "RestApiId": {"Ref": "RestApi"}
+      }
+    },
+    "LambdaOneMethodTwo": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {        
+        "AuthorizationType": "NONE",
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Ref": "ResourceTwo"
+        },
+        "RestApiId": {"Ref": "RestApi"}
+      }
+    }
+</code></pre>
+
+<h2 id="the-awsapigatewaydeployment-resource"><code>AWS::ApiGateway::Deployment</code>资源</h2>
+
+<p>上面描述的资源和方法已经被配置在一种工作阶段中。此配置不会暴露给流量，直到在部署中被捕获并升级到某个阶段。</p>
+
+<p>请注意，我们在资源名称上附加了一个随机字符串。部署是不可变的，因此每次这个CloudFormation模板被发布到一个堆栈时，我们都会创建一个新的部署资源:</p>
+
+<pre><code class="language-JSON">    "Deployment93b7b8be299846a5b609121f6fca4952": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"}
+      },
+      "DependsOn": [
+        "LambdaOneMethodOne",
+        "LambdaOneMethodTwo"
+      ]
+    }
+</code></pre>
+
+<h2 id="the-awsapigatewaystage-resource"><code>AWS::ApiGateway::Stage</code>资源</h2>
+
+<p>这个过程的最后一步是创建一个阶段，并通过引用部署资源“提升”工作阶段:</p>
+
+<pre><code class="language-json">    "Stage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "CanarySetting": {
+          "DeploymentId": {"Ref": "Deployment93b7b8be299846a5b609121f6fca4952"},
+          "PercentTraffic": 0
+        },
+        "DeploymentId": {"Ref": "Deployment93b7b8be299846a5b609121f6fca4952"},
+        "RestApiId": {"Ref": "RestApi"},
+        "StageName": {"Fn::Sub": "${EnvironmentName}"}
+      }
+    }
+</code></pre>
+
+<h2 id="the-complete-template">完整的模板</h2>
+
+<p>部署第二个Go Lambda与我们在上面部署的Node Lambda非常相似，所以我们不会再讨论所有的资源。</p>
+
+<p>下面的模板是自包含的CloudFormation模板的完整副本，其中一个参数定义了构建阶段URL的环境名称和输出变量。</p>
+
+<p>环境名称的默认值已使用包含当前环境名称的Octopus系统变量进行了配置。这意味着该模板很容易作为Octopus中的<strong>部署AWS CloudFormation模板</strong>步骤的一部分进行部署:</p>
+
+<pre><code class="language-JSON">{
+  "Parameters" : {
+    "EnvironmentName" : {
+      "Type" : "String",
+      "Default" : "#{Octopus.Environment.Name}"
+    }
+  },
+  "Resources": {
+    "RestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Description": "My API Gateway",
+        "Name": "Self-contained deployment",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "AppLogGroupOne": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": { "Fn::Sub": "/aws/lambda/${EnvironmentName}-NodeLambda" }
+      }
+    },
+    "IamRoleLambdaOneExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": { "Fn::Sub": "${EnvironmentName}-NodeLambda-policy" },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentName}-NodeLambda*:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": { "Fn::Sub": "${EnvironmentName}-NodeLambda-role" },
+      }
+    },
+    "LambdaOne": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "deploy-lambda-blog",
+          "S3Key": "nodelambdaexample.zip"
+        },
+        "Environment": {
+          "Variables": {}
+        },
+        "FunctionName": { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "PackageType": "Zip",
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaOneExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs12.x",
+        "Timeout": 20
+      }
+    },
+    "LambdaOnePermissions": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "LambdaOne",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":execute-api:",
+              {
+                "Ref": "AWS::Region"
+              },
+              ":",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":",
+              {"Ref": "RestApi"},
+              "/*/*"
+            ]
+          ]
+        }
+      }
+    },
+    "ResourceOne": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"},
+        "ParentId": { "Fn::GetAtt": ["RestApi", "RootResourceId"] },
+        "PathPart": "nodefunc"
+      }
+    },
+    "ResourceTwo": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"},
+        "ParentId": {
+          "Ref": "ResourceOne"
+        },
+        "PathPart": "{proxy+}"
+      }
+    },
+    "LambdaOneMethodOne": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {      
+        "AuthorizationType": "NONE",  
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Ref": "ResourceOne"
+        },
+        "RestApiId": {"Ref": "RestApi"}
+      }
+    },
+    "LambdaOneMethodTwo": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {      
+        "AuthorizationType": "NONE",  
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Ref": "ResourceTwo"
+        },
+        "RestApiId": {"Ref": "RestApi"}
+      }
+    },
+    "AppLogGroupTwo": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": { "Fn::Sub": "/aws/lambda/${EnvironmentName}-GoLambda" }
+      }
+    },
+    "IamRoleLambdaTwoExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": { "Fn::Sub": "${EnvironmentName}-GoLambda-policy" },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentName}-GoLambda*:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": { "Fn::Sub": "${EnvironmentName}-GoLambda-role" },
+      }
+    },
+    "LambdaTwo": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "deploy-lambda-blog",
+          "S3Key": "golambdaexample.zip"
+        },
+        "Environment": {
+          "Variables": {}
+        },
+        "FunctionName": { "Fn::Sub": "${EnvironmentName}-GoLambda" },
+        "Handler": "GoLambdaExample",
+        "MemorySize": 128,
+        "PackageType": "Zip",
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaTwoExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": "go1.x",
+        "Timeout": 20
+      }
+    },
+    "LambdaTwoPermissions": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "LambdaTwo",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":execute-api:",
+              {
+                "Ref": "AWS::Region"
+              },
+              ":",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":",
+              {"Ref": "RestApi"},
+              "/*/*"
+            ]
+          ]
+        }
+      }
+    },
+    "ResourceThree": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"},
+        "ParentId": { "Fn::GetAtt": ["RestApi", "RootResourceId"] },
+        "PathPart": "gofunc"
+      }
+    },
+    "ResourceFour": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"},
+        "ParentId": {
+          "Ref": "ResourceThree"
+        },
+        "PathPart": "{proxy+}"
+      }
+    },
+    "LambdaTwoMethodOne": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {     
+        "AuthorizationType": "NONE",   
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-GoLambda" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Ref": "ResourceThree"
+        },
+        "RestApiId": {"Ref": "RestApi"}
+      }
+    },
+    "LambdaTwoMethodTwo": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {      
+        "AuthorizationType": "NONE",  
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambda" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Ref": "ResourceFour"
+        },
+        "RestApiId": {"Ref": "RestApi"}
+      }
+    },
+    "Deployment93b7b8be299846a5b609121f6fca4952": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Properties": {
+        "RestApiId": {"Ref": "RestApi"}
+      },
+      "DependsOn": [
+        "LambdaOneMethodOne",
+        "LambdaOneMethodTwo"
+      ]
+    },
+    "Stage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "CanarySetting": {
+          "DeploymentId": {"Ref": "Deployment93b7b8be299846a5b609121f6fca4952"},
+          "PercentTraffic": 0
+        },
+        "DeploymentId": {"Ref": "Deployment93b7b8be299846a5b609121f6fca4952"},
+        "RestApiId": {"Ref": "RestApi"},
+        "StageName": {"Fn::Sub": "${EnvironmentName}"}
+      }
+    }
+  },
+  "Outputs": {
+    "StageURL": {
+      "Description": "The url of the stage",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {"Ref": "RestApi"},
+            ".execute-api.",
+            {
+              "Ref": "AWS::Region"
+            },
+            ".amazonaws.com/",
+            {
+              "Ref": "Stage"
+            },
+            "/"
+          ]
+        ]
+      }
+    }
+  }
+}
+</code></pre>
+
+<h2 id="deploying-self-contained-lambdas">部署独立的Lambdas</h2>
+
+<p>通过Octopus将上面的模板部署到一个名为<strong>开发</strong>的环境中，会创建一个API网关，其中包含一个名为<strong>开发</strong>的阶段，资源层次会创建路径<code>/gofunc/*</code>和<code>nodefunc/*</code>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/api-gateway-development-shared.png" class="zoom" data-title=""><img src="../Images/0c68f1298f3b2ba21454566cf8478229.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/api-gateway-development-shared.png"/>T2】</a></p>
+
+<p>我们还有两个Lambda，称为<strong> Development-GoLambda </strong>和<strong> Development-NodeLambda </strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/lambda-development-shared.png" class="zoom" data-title=""><img src="../Images/983754f5f07e5aaa3397f8690056ffd3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/lambda-development-shared.png"/>T2】</a></p>
+
+<p>已经编写了Lambdas来返回API Gateway在响应体中作为输入传递的对象。这允许我们检查API Gateway通过其代理集成构建的对象的详细信息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/gofunc-return.png" class="zoom" data-title=""><img src="../Images/89d94e85c560cc2d221bb80e890f5901.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/gofunc-return.png"/></a>T2】</p>
+
+<p>如果我们将这个自包含的Lambda部署提升到一个新环境，我们将创建第二个API网关，它有自己的stage和另外两个Lambda。每个环境都由自己的CloudFormation堆栈定义，我们创建的任何资源都不会在环境之间共享。</p>
+
+<p>通过CloudFormation模板部署Lambda堆栈的一个好处是，它被认为是一个<a href="https://docs.aws.amazon.com/lambda/latest/dg/deploying-lambda-apps.html" rel="nofollow">应用</a>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/lambda-application.png" class="zoom" data-title=""><img src="../Images/8f60b145993414cb753fdf1dfc118718.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/lambda-application.png"/>T2】</a></p>
+
+<p>应用仪表板提供了组成堆栈的各个资源的集中视图:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/lamda-application-dashboard.png" class="zoom" data-title=""><img src="../Images/3d695ad69cbb3f4ced6e8812f7243113.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/lamda-application-dashboard.png"/>T2】</a></p>
+
+<p>为了清理环境，我们删除了CloudFormation堆栈:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/delete-stack.png" class="zoom" data-title=""><img src="../Images/033d3bbe26043c7e01a2e0ee1bfca6b9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/delete-stack.png"/>T2】</a></p>
+
+<p>在这篇文章的开头，我们提到了自包含部署的以下好处:</p>
+
+<ul>
+<li>万物作为一个群体被创造和毁灭。</li>
+<li>部署作为一个组进展到下一个环境。</li>
+<li>即使应用程序有多个Lambdas，也很容易推断已部署应用程序的状态。</li>
+</ul>
+
+<p>我们现在可以看到将部署堆栈定义为单个自包含的CloudFormation模板是如何提供这些好处的。</p>
+
+<p>然而，自包含部署的一个显著缺点是所有Lambdas的生命周期彼此紧密耦合。在我们的例子中，您不能独立于Go Lambda部署节点Lambda。当你的栈变得越来越复杂，单个团队开始对每个Lambda负责时，这就成了一个问题。</p>
+
+<p>随着您的堆栈发展成为真正的微服务架构，您需要分离每个Lambda的部署。一种方法是将每个Lambda拆分成它自己的自包含部署。但是，扩展多个自包含部署几乎肯定需要一个服务发现层来应对每个API网关实例暴露的独特URL的激增。</p>
+
+<p>另一种方法是将每个Lambda部署到一个共享API网关实例中。这样，每个Lambda都可以使用相对URL来访问兄弟Lambda。这就是我们所说的分离部署。</p>
+
+<h2 id="creating-a-decoupled-deployment">创建分离的部署</h2>
+
+<p>分离部署在以下方面不同于自包含部署:</p>
+
+<ul>
+<li>API网关被认为是共享资源，并且是在Lambdas的部署之外创建的。</li>
+<li>API网关资源(即URL中的路径元素)被视为共享资源。例如，你可能有两辆兰博达响应路径<strong>/汽车</strong>。一个Lambda将响应HTTP POST方法，第二个响应HTTP DELETE方法。在这种情况下，Lambda都不能声明对资源的独占所有权。</li>
+<li>这些阶段被视为共享资源。</li>
+</ul>
+
+<p>让我们看看这在实践中是如何工作的。我们从现有的API网关REST API开始。我们需要API ID和根资源的ID:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/common-api-gateway.png" class="zoom" data-title=""><img src="../Images/32e64156ab991dcc72800bdc4e948e1b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/common-api-gateway.png"/>T2】</a></p>
+
+<p>我们需要构建构成URL路径的资源。因为这些资源不再只有一个所有者，所以我们不需要在CloudFormation模板中表示它们。下面我们创建资源，通过CLI公开节点Lambda:</p>
+
+<pre><code class="language-bash">RESULT=`aws apigateway create-resource --rest-api-id d0oyqaa3l6 --parent-id 6fpwrle83e --path-part nodefunc`
+ID=`jq -r  '.id' &lt;&lt;&lt; "${RESULT}"`
+aws apigateway create-resource --rest-api-id d0oyqaa3l6 --parent-id $ID --path-part {proxy+}
+</code></pre>
+
+<p>然后，我们可以部署Lambda并创建附加到上面创建的资源的方法。这里的代码类似于自包含部署，但是通过参数提供了API网关和资源id，因为这些资源是在CloudFormation模板之外创建的:</p>
+
+<pre><code class="language-JSON">{
+  "Parameters" : {
+    "EnvironmentName" : {
+      "Type" : "String",
+      "Default" : "#{Octopus.Environment.Name}"
+    },
+    "ResourceOne" : {
+      "Type" : "String"
+    },
+    "ResourceTwo" : {
+      "Type" : "String"
+    },
+    "ApiGatewayId" : {
+      "Type" : "String"
+    }
+  },  
+  "Resources": {
+    "AppLogGroupOne": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": { "Fn::Sub": "/aws/lambda/${EnvironmentName}-NodeLambdaDecoupled" }
+      }
+    },
+    "IamRoleLambdaOneExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": { "Fn::Sub": "${EnvironmentName}-NodeLambdaDecoupled-policy" },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentName}-NodeLambdaDecoupled*:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": { "Fn::Sub": "${EnvironmentName}-NodeLambdaDecoupled-role" }
+      }
+    },
+    "Lambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Description": "Octopus Release #{Octopus.Release.Number}",
+        "Code": {
+          "S3Bucket": "deploy-lambda-blog",
+          "S3Key": "nodelambdaexample.zip"          
+        },
+        "Environment": {
+          "Variables": {}
+        },
+        "FunctionName": { "Fn::Sub": "${EnvironmentName}-NodeLambdaDecoupled" },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "PackageType": "Zip",
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaOneExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs12.x",
+        "Timeout": 20
+      }
+    },
+    "LambdaPermissions": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "Lambda",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":execute-api:",
+              {
+                "Ref": "AWS::Region"
+              },
+              ":",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":",
+              {
+                "Fn::Sub": "${ApiGatewayId}"
+              },
+              "/*/*"
+            ]
+          ]
+        }
+      }
+    },
+    "LambdaMethodOne": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {      
+        "AuthorizationType": "NONE",  
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambdaDecoupled" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Fn::Sub": "${ResourceOne}"
+        },
+        "RestApiId": {
+          "Fn::Sub": "${ApiGatewayId}"
+        }
+      }
+    },
+    "LambdaMethodTwo": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {      
+        "AuthorizationType": "NONE",  
+        "HttpMethod": "ANY",
+        "Integration": {          
+          "IntegrationHttpMethod": "POST",          
+          "TimeoutInMillis": 20000,
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":apigateway:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":lambda:path/2015-03-31/functions/",
+                "arn:aws:lambda:",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ":",
+                {
+                  "Ref": "AWS::AccountId"
+                },
+                ":function:",
+                { "Fn::Sub": "${EnvironmentName}-NodeLambdaDecoupled" },
+                "/invocations"
+              ]
+            ]
+          }
+        },        
+        "ResourceId": {
+          "Fn::Sub": "${ResourceTwo}"
+        },
+        "RestApiId": {
+          "Fn::Sub": "${ApiGatewayId}"
+        }
+      },
+      "DependsOn": [
+        "LambdaVersion479fe95fb94b6c89fb86f412be60d8"
+      ]
+    },
+    "Deploymented479fe95fb94b6c89fb86f412be60d8": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Properties": {
+        "RestApiId": {
+          "Fn::Sub": "${ApiGatewayId}"
+        },
+        "Description": "Octopus Release #{Octopus.Release.Number}"
+      },
+      "DependsOn": [
+        "LambdaMethodOne",
+        "LambdaMethodTwo"
+      ]
+    },
+  },
+  "Outputs": {
+    "DeploymentId": {
+      "Description": "The Deployment ID",
+      "Value": {
+        "Ref": "Deploymented479fe95fb94b6c89fb86f412be60d8"
+      }
+    }
+  }
+}
+</code></pre>
+
+<p>和以前一样，我们需要创建一个阶段来公开API网关配置。然而，这次stage是在一个单独的CloudFormation模板中创建的。</p>
+
+<p>贡献给共享API网关的每个Lambda部署将部署一个更新的模板，用一个新的<code>DeploymentId</code>属性定义阶段。这意味着CloudFormation堆栈名称必须能够从API网关ID和阶段名称中重新创建。例如，您可以创建一个名为<strong>APIG-d0oyqaa3l 6-开发</strong>的堆栈，为ID为<strong> d0oyqaa3l6 </strong>的API网关定义名为<strong>开发</strong>的阶段。</p>
+
+<p>以下是该阶段的云形成模板:</p>
+
+<pre><code class="language-JSON">{
+  "Parameters" : {
+    "EnvironmentName" : {
+      "Type" : "String",
+      "Default" : "#{Octopus.Environment.Name}"
+    },
+    "DeploymentId" : {
+      "Type" : "String",
+      "Default" : "#{Octopus.Action[Deploy Lambda].Output.AwsOutputs[DeploymentId]}"
+    },
+    "ApiGatewayId" : {
+      "Type" : "String"
+    }
+  },
+  "Resources": {
+    "Stage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "DeploymentId": {"Fn::Sub": "${DeploymentId}"},
+        "RestApiId": {"Fn::Sub": "${ApiGatewayId}"},
+        "StageName": {"Fn::Sub": "${EnvironmentName}"}
+      }
+    }
+  }
+}
+</code></pre>
+
+<h2 id="deploying-decoupled-lambdas">部署分离的Lambdas</h2>
+
+<p>在我们研究解耦部署如何工作之前，让我们考虑一个非常重要的问题，即我们期望每个环境有一个API网关和阶段。这是类似于serverless.io 这样的工具所采取的<a href="https://github.com/serverless/serverless/issues/2445#issuecomment-257479953" rel="nofollow">设计决策。</a></p>
+
+<h3 id="why-limit-ourselves-to-one-stage-per-environment">为什么要将我们自己限制在每个环境的一个阶段呢？</h3>
+
+<p>工作阶段(我称之为API Gateway控制台中的<strong> Resources </strong>视图)累积变更，工作阶段的当前状态基本上是由不可变的<code>AWS::ApiGateway::Deployment</code>资源作为快照捕获的。</p>
+
+<p>当您拥有代表多个环境的多个阶段时，将部署从测试环境推进到生产环境意味着使用分配给测试阶段的<code>AWS::ApiGateway::Deployment</code>资源的ID来更新生产阶段。</p>
+
+<p>重要的是，API Gateway中没有将工作阶段重置为先前部署的状态、进行隔离更改，然后将隔离的更改提升回阶段的概念。这意味着当您有代表多个环境的多个阶段时，您必须假设对工作阶段的每个更改都可以在部署中被捕获，并提升到生产中。</p>
+
+<p>实际上，这也意味着将部署提升到新阶段意味着了解前一阶段或环境，检查前一阶段以找到分配给它的部署，然后用前一阶段的部署ID更新下一阶段。</p>
+
+<p>这使得常见的部署场景变得复杂。例如，如何在生产中回滚单个Lambda？</p>
+
+<p>我们想要做的是用生产阶段的状态重置工作阶段，在工作阶段部署旧的Lambda版本，用新的<code>AWS::ApiGateway::Deployment</code>资源拍摄工作阶段的快照，并将该<code>AWS::ApiGateway::Deployment</code>资源提升到生产阶段。对于GIT这样的源代码控制工具，这是开发人员想当然的工作流。</p>
+
+<p>然而，因为我们不能用生产阶段的状态来重置工作阶段，所以我们首先必须将旧的Lambda版本部署到工作阶段的任何当前状态，用新的<code>AWS::ApiGateway::Deployment</code>资源来快照工作阶段，然后通过开发、测试和生产阶段来促进这种变化。实际上，这意味着我们只是将工作阶段的每个开发Lambda版本提升到生产阶段，因为我们试图将单个Lambda角色还原。</p>
+
+<p>人们很容易想到，我们可以简单地将旧的<code>AWS::ApiGateway::Deployment</code>资源分配给生产阶段。但是，如果在您意识到您需要回滚Lambda之前，其他几个团队已经将他们的Lambda版本投入生产了，那该怎么办呢？现在，没有一个<code>AWS::ApiGateway::Deployment</code>资源具有Lambda版本和API网关设置的正确组合，我们可以回滚到:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/hotfix.png" class="zoom" data-title=""><img src="../Images/c72f50a67c4fbda4a8cbbe5363086004.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/hotfix.png"/>T2】</a></p>
+
+<p>特性分支部署也使<code>AWS::ApiGateway::Deployment</code>资源进入生产的过程变得复杂。创建临时URL来测试特性分支Lambda部署和主线Lambda部署是很好的。但是因为任何处于工作状态的东西都可能被快照到一个<code>AWS::ApiGateway::Deployment</code>资源中并提升到生产环境中，所以您很可能会发现您的临时特性分支部署是公开的。</p>
+
+<p>无法将API Gateway工作阶段恢复到先前已知的良好状态、进行孤立的更改，以及将该更改升级到某个阶段，这使得回滚或热修复等常见部署模式实际上无法用于多个阶段。此外，工作阶段的每一个变更都是生产部署的候选，这意味着特性分支变得很危险。</p>
+
+<p>通过确保每个环境由具有单个阶段的单个API网关表示，我们可以假设工作阶段包含相关公共阶段的最后已知状态。这意味着我们可以通过部署单个Lambda的旧版本来回滚单个Lambda，通过跳过代表早期环境的API网关和阶段来执行热修复部署，并通过不将功能分支Lambda部署到生产工作阶段来确保功能分支部署不会出现在生产中。</p>
+
+<h3 id="demonstrating-decoupled-deployments">演示分离部署</h3>
+
+<p>通过解耦部署，每个单独的Lambda部署栈现在都可以将自己插入到一个共享的API网关中。最终结果与自包含部署没有区别，这正是我们想要的，因为最终用户不应该看到自包含或解耦部署之间的任何差异。这也意味着分离的部署共享单个域，具有证书等通用设置:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/decoupled-gateway.png" class="zoom" data-title=""><img src="../Images/9853bd1051659941655317af108bcb1d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/decoupled-gateway.png"/>T2】</a></p>
+
+<p>与自包含部署一样，AWS将通过CloudFormation模板创建的资源识别为应用程序。对于分离部署，我们只能看到单独的Lambda资源，而看不到API网关:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/decoupled-application-dashboard.png" class="zoom" data-title=""><img src="../Images/633dd172fc49045fd1d9776f1ed4c3f4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/decoupled-application-dashboard.png"/></a>T2】</p>
+
+<p>我们还可以通过删除相关的CloudFormation堆栈来清理任何资源:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/deploying-lambdas/decoupled-stack.png" class="zoom" data-title=""><img src="../Images/f96773662a684fad44babaea1658ad4d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-01/deploying-lambdas/decoupled-stack.png"/>T2】</a></p>
+
+<p>在本文的开头，我们提到了解耦部署的以下优势:</p>
+
+<ul>
+<li>每个Lambda管理自己的部署生命周期。</li>
+<li>一个共享的API网关允许Lambdas通过相对URL进行交互。</li>
+<li>共享主机名使得管理HTTPS证书更加容易。</li>
+</ul>
+
+<p>我们现在可以看到解耦部署如何有助于共享API网关，给予每个Lambda自己的部署生命周期，同时仍然保留共享域名。我们现在有了一个部署策略，允许独立部署微服务，而不改变呈现给最终用户的内容。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>无服务器平台的承诺是，您不再需要担心什么服务器或操作系统正在运行您的应用程序。这使得在高度可伸缩和安全的环境中启动和运行您的第一批Lambdas变得非常容易。</p>
+
+<p>随着您的Lambdas数量和复杂性的增长，常见的部署问题，如环境、热修复、功能分支和独立的微服务生命周期变得至关重要。</p>
+
+<p>不幸的是，AWS提出的解决方案，特别是Lambda别名和API网关阶段，并不能很好地解决这些模式。帖子<a href="https://octopus.com/blog/multi-environment-lambda-deployments">为什么不应该使用Lambda别名来定义环境</a>描述了别名如何无法将安全性、性能和日志记录等问题分开，而这篇帖子解释了为什么API网关阶段不支持热修复和特性分支。</p>
+
+<p>然而，由于环境与API网关和stage之间的一对一关系，以及环境与Lambdas之间的一对多关系，我们可以设计一个无服务器的部署过程，它可以跨许多环境扩展，同时支持常见的部署模式。</p>
+
+<p>在这篇文章中，我们展示了自包含的、解耦的无服务器部署，并强调了使用CloudFormation制作这些部署的许多好处。示例模板为任何希望设计可大规模管理的无服务器部署的人提供了基础。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

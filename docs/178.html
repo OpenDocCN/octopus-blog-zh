@@ -1,0 +1,379 @@
+<html>
+<head>
+<title>Deploy ASP.NET applications to Azure Web Sites - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>将ASP.NET应用程序部署到Azure网站- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-aspnet-applications-to-azure-websites#2015-09-25">https://octopus.com/blog/deploy-aspnet-applications-to-azure-websites#2015-09-25</a></blockquote>
+                        
+
+<p><em>现在回到最初的博文...</em></p>
+
+<p>最近，越来越多的人希望从Octopus部署他们的Azure网站。问题是目前还没有这方面的<abbr title="Out of the box"> OOTB </abbr>功能。</p>
+
+<p>由于目前没有内置的方法来完成它，我们的一个用户创建了一个step模板(它可以在<a href="http://library.octopusdeploy.com"> Octopus Library </a>网站上找到，还有一堆其他有用的step模板),它运行一个PowerShell脚本，该脚本使用Web Deploy将您的应用程序部署到Azure，考虑到这一点，我想我应该写一个小的(有点)博客帖子，逐步介绍如何使用这个step模板设置您的ASP.NET应用程序并准备好部署到Azure。</p>
+
+<p>出于这篇博文的目的，我将在Visual Studio 2013中创建一个演示ASP.NET MVC应用程序。</p>
+
+<h3>创建您的ASP.NET应用程序</h3>
+
+<p>首先让我们选择我们的项目类型，并给它一个名字</p>
+
+<p><img src="../Images/5db38595607c1c42facfd95d4ab2701a.png" alt="Create New Project" data-original-src="https://i.octopus.com/blog/migrated/CreateProject.png"/></p>
+
+<p>然后指定要使用的模板，我将只使用提供的MVC模板，我将保留<code>Host in the cloud</code>复选框未选中，因为我想使用Octopus Deploy来处理我的部署。</p>
+
+<p><img src="../Images/9f0fbc67bd30fb58aeedd9f5048bf00a.png" alt="Specify Web Template" data-original-src="https://i.octopus.com/blog/migrated/SelectProjectType.png"/></p>
+
+<p>一旦项目被创建，按F5运行你的新的和闪亮的ASP.NET MVC应用程序。</p>
+
+<p><img src="../Images/75cc317331b63926334fb7eb07c422f6.png" alt="Web site up and running" data-original-src="https://i.octopus.com/blog/migrated/WebSiteRunning.png"/></p>
+
+<p>没什么太激动人心的，但是它给了我们一个起点，我们可以从这里开始部署设置和运行。</p>
+
+<h4>创建NuGet包</h4>
+
+<p>由于Octopus Deploy在部署您的应用程序时使用NuGet包，我们创建了一个小工具，它将从您构建项目时创建的输出文件中创建一个NuGet包。</p>
+
+<p><em> <strong>边注</strong>:OctoPack创建的NuGet包和你从NuGet图库安装的NuGet包略有不同。我们的NuGet包只是一堆文件和文件夹，它们组成了你的应用程序的结构。</em></p>
+
+<h5>将OctoPack NuGet包添加到您的项目中</h5>
+
+<p>要将OctoPack添加到我们的项目中，右键单击您的解决方案并选择Manage NuGet Packages for Solution，搜索<code>octopack</code>并单击<code>Install</code>按钮。</p>
+
+<p><img src="../Images/04502296833835b03ab67c5b8185ebd5.png" alt="Install OctoPack" data-original-src="https://i.octopus.com/blog/migrated/InstallOctoPack.png"/></p>
+
+<p>选择要安装OctoPack的项目，在我的例子中，我只有一个项目，所以我选择它并单击确定。</p>
+
+<p><img src="../Images/3caa946a4be8db50fe333443aee65fa6.png" alt="Select project to install OctoPack in" data-original-src="https://i.octopus.com/blog/migrated/SelectProjectsToInstallOctoPackIn.png"/></p>
+
+<p><img src="../Images/6502108f6ccafd3e27d447786d690d31.png" alt="OctoPack Installed" data-original-src="https://i.octopus.com/blog/migrated/OctoPackInstalled.png"/></p>
+
+<h6>使用MSBuild从命令行构建项目并生成NuGet包</h6>
+
+<p>现在OctoPack已经安装好了，当我们从命令行构建我们的解决方案时，我们可以告诉它为我们生成一个NuGet包。</p>
+
+<p>在命令提示符下输入:</p>
+
+<pre><code>C:\Code\OctoWeb\OctoWeb&gt;msbuild OctoWeb.sln /t:build /p:RunOctoPack=true
+</code></pre>
+
+<p>如果一切正常，您应该会看到类似下面的输出:</p>
+
+<pre><code>Microsoft (R) Build Engine version 12.0.30723.0
+[Microsoft .NET Framework, version 4.0.30319.34014]
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Building the projects in this solution one at a time. To enable parallel build, please add the "
+/m" switch.
+Build started 23/09/2014 3:25:24 PM.
+Project "C:\Code\OctoWeb\OctoWeb\OctoWeb.sln" on node 1 (build target(s)).
+ValidateSolutionConfiguration:
+  Building solution configuration "Debug|Any CPU".
+Project "C:\Code\OctoWeb\OctoWeb\OctoWeb.sln" (1) is building "C:\Code\OctoWeb\OctoWeb\OctoWeb\
+OctoWeb.csproj" (2) on node 1 (default targets).
+...
+CopyFilesToOutputDirectory:
+  OctoWeb -&gt; C:\Code\OctoWeb\OctoWeb\OctoWeb\bin\OctoWeb.dll
+OctoPack:
+  OctoPack: Get version info from assembly: C:\Code\OctoWeb\OctoWeb\OctoWeb\bin\OctoWeb.dll
+  Using package version: 1.0.0.0
+  OctoPack: Written files: 101
+  OctoPack: A NuSpec file named 'OctoWeb.nuspec' was not found in the project root, so the file
+   will be generated automatically. However, you should consider creating your own NuSpec file  
+  so that you can customize the description properly.
+  OctoPack: Packaging an ASP.NET web application
+  OctoPack: Add content files
+  ...
+  OctoPack: Add binary files to the bin folder
+  ...
+  OctoPack: Attempting to build package from 'OctoWeb.nuspec'.
+  OctoPack: Successfully created package 'C:\Code\OctoWeb\OctoWeb\OctoWeb\obj\octopacked\OctoWe
+  b.1.0.0.0.nupkg'.
+  OctoPack: Copy file: C:\Code\OctoWeb\OctoWeb\OctoWeb\obj\octopacked\OctoWeb.1.0.0.0.nupkg
+  OctoPack: OctoPack successful
+Done Building Project "C:\Code\OctoWeb\OctoWeb\OctoWeb\OctoWeb.csproj" (default targets).
+
+Done Building Project "C:\Code\OctoWeb\OctoWeb\OctoWeb.sln" (build target(s)).
+
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.86
+</code></pre>
+
+<p>如果你看一下OctoPack说它创建了NuGet包的文件夹，你应该看到它确实在那里。</p>
+
+<p><img src="../Images/887881ccdbab83340c9b5091cbfdac9f.png" alt="OctoPack NuGet package created" data-original-src="https://i.octopus.com/blog/migrated/OctoPackNuGetPackageGenerated.png"/></p>
+
+<p>如果您在NuGet Package Explorer中打开生成的NuGet包，您应该看到OctoPack已经打包了您的网站，因为它将被部署到您的web服务器。</p>
+
+<p><img src="../Images/b1af8cbf4fd5d42aa04c20b2e2e9c446.png" alt="NuGet Package Explorer" data-original-src="https://i.octopus.com/blog/migrated/NuGetPackageExplorer.png"/></p>
+
+<p>如果您想让OctoPack将创建的NuGet包复制到本地文件夹或文件共享，您可以使用下面的调用<code>msbuild</code></p>
+
+<pre><code>C:\Code\OctoWeb\OctoWeb&gt;msbuild OctoWeb.sln /t:build /p:RunOctoPack=true /p:OctoPackPublishPackageToFileShare=C:\NuGet
+</code></pre>
+
+<p>或者，发布到Octopus中的内置存储库中</p>
+
+<pre><code>C:\Code\OctoWeb\OctoWeb&gt;msbuild OctoWeb.sln /t:build /p:RunOctoPack=true /p:OctoPackPublishPackageToHttp=http://your-octopus-server/nuget/packages /p:OctoPackPublishApiKey=API-ABCDEFGMYAPIKEY
+</code></pre>
+
+<h6>修改。csproj在构建项目时生成NuGet包</h6>
+
+<p>如果您想在每次构建解决方案时生成NuGet包并将其发布到本地文件共享，那么您可以修改您的<code>.csproj</code>文件并将以下OctoPack标记添加到项目属性组中:</p>
+
+<pre><code>&lt;PropertyGroup&gt;
+    &lt;Configuration Condition=" '$(Configuration)' == '' "&gt;Debug&lt;/Configuration&gt;
+    &lt;Platform Condition=" '$(Platform)' == '' "&gt;AnyCPU&lt;/Platform&gt;
+    ...
+    &lt;RunOctoPack&gt;true&lt;/RunOctoPack&gt;
+    &lt;OctoPackPublishPackageToFileShare&gt;C:\Packages&lt;/OctoPackPublishPackageToFileShare&gt;
+&lt;/PropertyGroup&gt;
+</code></pre>
+
+<p>或者，如果您希望在执行调试构建时将NuGet包发布到本地文件共享，并且仅在执行发布构建时发布到内置存储库:</p>
+
+<pre><code>&lt;PropertyGroup&gt;
+    &lt;Configuration Condition=" '$(Configuration)' == '' "&gt;Debug&lt;/Configuration&gt;
+    &lt;Platform Condition=" '$(Platform)' == '' "&gt;AnyCPU&lt;/Platform&gt;
+    ...
+    &lt;RunOctoPack&gt;true&lt;/RunOctoPack&gt;
+&lt;/PropertyGroup&gt;
+&lt;PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' "&gt;
+    &lt;OctoPackPublishPackageToFileShare&gt;C:\Packages&lt;/OctoPackPublishPackageToFileShare&gt;
+&lt;/PropertyGroup&gt;
+&lt;PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' "&gt;
+    ...
+    &lt;OctoPackPublishPackageToHttp&gt;http://your-octopus-server/nuget/packages&lt;/OctoPackPublishPackageToHttp&gt;
+    &lt;OctoPackPublishApiKey&gt;API-ABCDEFGMYAPIKEY&lt;/OctoPackPublishApiKey&gt;
+&lt;/PropertyGroup&gt;
+</code></pre>
+
+<hr/>
+
+<h3>设置您的新Azure网站</h3>
+
+<p>现在我们将设置我们将要部署到的Azure网站。</p>
+
+<p>登录到<a href="https://manage.windowsazure.com"> Azure管理门户</a>并创建一个新网站。</p>
+
+<p><img src="../Images/b8be4d8509390640d7a7f7f2e39cb4f4.png" alt="Create New Azure Web Site" data-original-src="https://i.octopus.com/blog/migrated/AzureCreateNewWebSite.png"/></p>
+
+<p>一旦创建了网站，</p>
+
+<p><img src="../Images/e987479ed4a76c188ea80cdb615e2ec2.png" alt="Azure Web Site created" data-original-src="https://i.octopus.com/blog/migrated/AzureNewWebSiteCreated.png"/></p>
+
+<p>单击它可以访问网站的设置。</p>
+
+<h4>下载发布配置文件</h4>
+
+<p>从起始页，我们将下载发布配置文件设置文件，以获取在Octopus Deploy中设置部署流程所需的值。所以点击<code>Download the publish profile</code>链接下载所需的设置文件。</p>
+
+<p><img src="../Images/5fc2fe561e2360af65f5541db0931c86.png" alt="Download Publish Profile" data-original-src="https://i.octopus.com/blog/migrated/DownloadPublishProfile.png"/></p>
+
+<p>现在我们已经获得了Octopus部署设置之外的所有东西，我们可以继续到您的Octopus服务器来获得我们的项目和部署过程设置，并准备好部署您的新Azure网站。</p>
+
+<hr/>
+
+<h3>将Web部署步骤模板添加到Octopus</h3>
+
+<p>我们需要做的第一件事是，现在我们已经将我们的网站打包到一个NuGet包中，从<a href="http://library.octopusdeploy.com"> Octopus库站点</a>导入<code>Web Deploy - Publish Website (MSDeploy)</code>步骤模板。</p>
+
+<h4>从Octopus库中获取“Web部署-发布网站(MSDeploy)”步骤模板</h4>
+
+<p>在Octopus库站点上，搜索web deploy</p>
+
+<p><img src="../Images/163e89086a29de7a5494e0842a3396d1.png" alt="Web Deploy Step Template" data-original-src="https://i.octopus.com/blog/migrated/OctopusLibraryWebDeploy.png"/></p>
+
+<p>单击返回的结果，然后单击绿色的大按钮<code>Copy to clipboard</code>。</p>
+
+<p><img src="../Images/d45035cdba274ea46d68810add95d12a.png" alt="Web Deploy Step Template details" data-original-src="https://i.octopus.com/blog/migrated/OctopusLibraryWebDeployDetails.png"/></p>
+
+<h4>将步骤模板导入Octopus Deploy</h4>
+
+<p>登录到你的八达通服务器，进入图书馆-&gt;步骤模板。在步骤模板选项卡上，单击<code>Import</code>链接</p>
+
+<p><img src="../Images/7f42cfaaacde1015e056b3e4cb5065dd.png" alt="Import Step Template" data-original-src="https://i.octopus.com/blog/migrated/OctopusLibraryStepTemplates.png"/></p>
+
+<p>这将显示<code>Import</code>对话框，将您从Octopus库站点复制的Web Deploy步骤模板粘贴到提供的文本区域中。</p>
+
+<p><img src="../Images/1b73efff4d655350133fc3d663533c96.png" alt="Import" data-original-src="https://i.octopus.com/blog/migrated/OctopusLibraryStepTemplatesImport.png"/></p>
+
+<p>点击<code>Import</code>按钮，步骤模板将被导入</p>
+
+<p><img src="../Images/73fb68809713504380008c2e772b4336.png" alt="Imported" data-original-src="https://i.octopus.com/blog/migrated/OctopusLibraryStepTemplatesImported.png"/></p>
+
+<p>很好，现在我们已经准备好设置我们的项目和部署流程，开始将我们的ASP.NET MVC应用程序部署到Azure网站。</p>
+
+<hr/>
+
+<h3>在Octopus Deploy中设置项目</h3>
+
+<p>接下来要做的是设置我们的新项目，并定义部署流程，我们将使用该流程将我们的ASP.NET MVC应用程序部署到我们的Azure网站。</p>
+
+<h4>创建我们的项目</h4>
+
+<p>进入“项目”-&gt;“所有项目”，然后点击项目组上的<code>Add Project</code>按钮。</p>
+
+<p><img src="../Images/981cff4330ef2b8d3f854f9a05aee400.png" alt="Create New Octopus Project" data-original-src="https://i.octopus.com/blog/migrated/CreateNewOctopusProject.png"/></p>
+
+<p><img src="../Images/4872bcf9df7818a54c7d255aef8ee5ee.png" alt="Create New Octopus Project Details" data-original-src="https://i.octopus.com/blog/migrated/CreateNewOctopusProjectDetails.png"/></p>
+
+<p><img src="../Images/753ea49e1c0e9ee1b65fba044c5c3e8e.png" alt="Octopus Project" data-original-src="https://i.octopus.com/blog/migrated/OctopusProject.png"/></p>
+
+<p>恭喜你，你得到了一个闪亮的新项目！；)</p>
+
+<h4>定义您的项目变量</h4>
+
+<p>为了使设置您的项目来部署多个环境变得容易，我们将创建可以限定环境、角色和机器范围的项目变量。</p>
+
+<p>打开项目站点上的变量选项卡，然后为网站名称、发布URL、用户名和密码添加变量。我们将把密码变量设为<code>Sensitive Variable</code>,这样我们就可以保密。</p>
+
+<p>打开您先前下载的发布概要文件，并从Web Deploy的发布概要文件中获取<code>publishUrl</code>、<code>msdeploySite</code>、<code>userName</code>和<code>userPWD</code>(例如<code>&lt;publishProfile profileName="octowebdemo - Web Deploy"&gt;</code>，然后在适当的变量中填入值。然后点击<code>Save</code>。</p>
+
+<p><img src="../Images/046a3d9d547fc6c2b50e1fa16dcb73c8.png" alt="Octopus Project Variables" data-original-src="https://i.octopus.com/blog/migrated/OctopusProjectVariables.png"/></p>
+
+<p>在这个演示中，我不会限定变量的范围，因为我只有一个环境、一台机器和一个角色。</p>
+
+<h4>定义您的部署流程</h4>
+
+<p>好了，现在我们来谈谈整个过程的商业方面。</p>
+
+<p>现在我们开始为我们的项目指定部署过程，它将由两个步骤组成，一个NuGet包步骤和我们为Web Deploy导入的PowerShell步骤。</p>
+
+<p><em> <strong>可选地</strong> </em>一旦部署完成，您可以添加另一个步骤来“预热”网站。恰好在图书馆网站上，我们有一个步骤模板。搜索<code>Test URL</code>并导入返回的步骤模板。</p>
+
+<p>打开项目页面上的<code>Process</code>选项卡。</p>
+
+<p><img src="../Images/6d20063d630e233456182b19ae707f55.png" alt="Deployment Process tab" data-original-src="https://i.octopus.com/blog/migrated/DeploymentProcess.png"/></p>
+
+<h5>添加“部署NuGet包”步骤</h5>
+
+<p>点击<code>Add Step</code>按钮。</p>
+
+<p>选择<code>Deploy a NuGet package</code>步骤。</p>
+
+<p><img src="../Images/3be042b29d22bd88a330bc6ba5c3ad3f.png" alt="NuGet Package step" data-original-src="https://i.octopus.com/blog/migrated/NuGetPackageStep.png"/></p>
+
+<p><img src="../Images/2ab265e63b59225f7c909f89ed569c02.png" alt="NuGet Package step setup" data-original-src="https://i.octopus.com/blog/migrated/NuGetPackageStepSetup.png"/></p>
+
+<p>填写必要的细节，从发布它的NuGet提要(在我的例子中是磁盘上的本地文件夹)中指定您的web应用程序NuGet包。</p>
+
+<p><img src="../Images/b8369fb44cdc6fd7f65c49dbe9303d1e.png" alt="NuGet Package step completed" data-original-src="https://i.octopus.com/blog/migrated/NuGetPackageStepCompleted.png"/></p>
+
+<p>点击<code>Save</code></p>
+
+<p><img src="../Images/3f91e4c87d2d4dbd4d45a24a3fa5ea85.png" alt="Project deployment process with 1 step" data-original-src="https://i.octopus.com/blog/migrated/ProjectDeploymentProcessStep1.png"/></p>
+
+<h5>添加“Web部署-发布网站(MSDeploy)”步骤</h5>
+
+<p>现在是时候添加我们的Web部署步骤了，再次点击<code>Add Step</code>按钮并选择<code>Web Deploy - Publish Website (MSDeploy)</code></p>
+
+<p><img src="../Images/62c78b79d5a9099f6e843aa611b0b8b9.png" alt="Web Deploy step" data-original-src="https://i.octopus.com/blog/migrated/WebDeployStep.png"/></p>
+
+<p>填写必要的细节，使用变量绑定来指定Azure特定的细节。</p>
+
+<p><img src="../Images/7ea1e7e7ea0d06e82670c67e730ec024.png" alt="Web Deploy step details completed" data-original-src="https://i.octopus.com/blog/migrated/WebDeployStepSetup.png"/></p>
+
+<p>所需的<code>Package Step Name</code>是提取NuGet包中包含的文件的步骤的名称，这用于在磁盘上定位需要上传到Azure网站的文件。</p>
+
+<p>点击<code>Save</code></p>
+
+<p><img src="../Images/d06366abdb547b8a58922e4ef5f59467.png" alt="Project deployment process with 2 steps" data-original-src="https://i.octopus.com/blog/migrated/ProjectDeploymentProcessStep2.png"/></p>
+
+<p>就这样，我们现在准备创建一个版本并将其部署到Azure。</p>
+
+<h3>创建一个版本</h3>
+
+<p>要创建一个发布，点击项目页面顶部的<code>Create Release</code>按钮。</p>
+
+<p><img src="../Images/313726e9221dcf11b3d39ae8a4d7b59c.png" alt="Create a Release" data-original-src="https://i.octopus.com/blog/migrated/CreateRelease.png"/></p>
+
+<p>在release页面上，您可以选择为Octopus Deploy将为您预先填充的内容指定一个不同的版本号(基于您选择的项目设置)，为您的web应用程序指定要使用的NuGet包的版本号(我只有1个版本，所以我将使用它)以及发行版中应该包含的任何发行说明。</p>
+
+<p><img src="../Images/0f1baa7226a95520c14c8af6eb7e7c6a.png" alt="Release details completed" data-original-src="https://i.octopus.com/blog/migrated/CreateReleaseCompleted.png"/></p>
+
+<p>点击<code>Save</code>。这将带您进入发布概述页面。</p>
+
+<p><img src="../Images/7cca94e712aebc8e22d674127d76ed89.png" alt="Release Overview" data-original-src="https://i.octopus.com/blog/migrated/ReleaseOverview.png"/></p>
+
+<p>现在我们想把这个版本部署到我们的Azure网站上，所以点击<code>Deploy this release</code>按钮。选择要部署到的环境。在我的例子中，我只有我的<code>Dev</code>环境设置，所以我将选择这个。</p>
+
+<p><img src="../Images/060048d23e1f03805942d67b7a82b756.png" alt="Deploy Release to Dev" data-original-src="https://i.octopus.com/blog/migrated/DeployReleaseDev.png"/></p>
+
+<p><img src="../Images/728e168482cbc8fa2e2342f1de24184c.png" alt="Deploy Release to Dev details" data-original-src="https://i.octopus.com/blog/migrated/DeployReleaseDevDetails.png"/></p>
+
+<p>在deployment页面上，您可以选择将发布安排在稍后的日期/时间，以及部署哪些步骤(以及部署到什么机器)。</p>
+
+<p>我将坚持使用默认设置，只需点击<code>Deploy Release</code>按钮。</p>
+
+<p><img src="../Images/b4293456cb22dcdc7625a86ded17b6f8.png" alt="Deploy progressed" data-original-src="https://i.octopus.com/blog/migrated/DeployInProgress2.png"/></p>
+
+<p>部署完成后，打开一个浏览器，然后浏览Azure中运行的web应用程序的URL。</p>
+
+<p><img src="../Images/2a990f2a6f331a7850ef2e2b0bd3d604.png" alt="Deploy completed" data-original-src="https://i.octopus.com/blog/migrated/DeployCompleted.png"/></p>
+
+<p><img src="../Images/17e358357bb9e8dfeca90313f9916c03.png" alt="Azure Web Site running" data-original-src="https://i.octopus.com/blog/migrated/AzureWebSiteRunning.png"/></p>
+
+<p>恭喜，您已经使用Web Deploy从Octopus Deploy部署了您的Azure网站！</p>
+
+<hr/>
+
+<h3>将应用程序更新并重新部署到Azure</h3>
+
+<p>现在我们已经将应用程序从Octopus部署到Azure，让我们对应用程序做一些修改，然后将新版本部署到Azure。</p>
+
+<p>我将更新应用程序的名称，以及使用的一些颜色。</p>
+
+<p><img src="../Images/d937d927ce0002ee91d440dd6b5e817a.png" alt="Modified web site running" data-original-src="https://i.octopus.com/blog/migrated/ModifiedWebSiteRunning.png"/></p>
+
+<h4>重新创建您的NuGet包</h4>
+
+<p>当从命令行重新创建NuGet包时，不使用存储在<code>AssemblyInfo.cs</code>文件的<code>[assembly: AssemblyVersion]</code>中的版本，我将通过将<code>OctoPackPackageVersion</code>参数传递给MSBuild来覆盖它。</p>
+
+<pre><code>C:\Code\OctoWeb\OctoWeb&gt;msbuild OctoWeb.sln /t:build /p:RunOctoPack=true /p:OctoPackPackageVersion=1.0.0.1
+</code></pre>
+
+<p>最终结果应该类似于下图</p>
+
+<pre><code>  OctoPack: Attempting to build package from 'OctoWeb.nuspec'.
+  OctoPack: Successfully created package 'C:\Code\OctoWeb\OctoWeb\OctoWeb\obj\octopacked\OctoWeb.1.0.0.1.nupkg'.
+</code></pre>
+
+<p>将新的NuGet包复制到Octopus可以访问的位置。</p>
+
+<h4>在Octopus Deploy中创建新版本</h4>
+
+<p>在Octopus中，返回到发布选项卡并点击<code>Create Release</code>。Octopus现在应该拿起最新的包(v1.0.0.1)。</p>
+
+<p><img src="../Images/5c2d4d4fb266b9d9750bd58a98e69212.png" alt="Create a new release" data-original-src="https://i.octopus.com/blog/migrated/CreateNewRelease.png"/></p>
+
+<p>点击<code>Save</code>。</p>
+
+<h4>将最新版本部署到Azure网站</h4>
+
+<p>现在剩下的就是将新版本(<code>0.0.2</code>)部署到Azure。</p>
+
+<p>点击<code>Deploy this release</code>，选择要部署到的环境，最后点击<code>Deploy Release</code>。</p>
+
+<p><img src="../Images/812fbba636826f2a95a87f57ccbfc8fd.png" alt="Create new release completed" data-original-src="https://i.octopus.com/blog/migrated/CreateNewReleaseCompleted.png"/></p>
+
+<p><img src="../Images/a740c65cac96f3f04f36d511285d6e53.png" alt="Deploy new release in progress" data-original-src="https://i.octopus.com/blog/migrated/DeployNewReleaseInProgress.png"/></p>
+
+<p>此部署应该比初始部署快得多，因为它将只上传已更改的文件。部署完成后，Azure网站应该会根据所做的更改进行更新。</p>
+
+<p><img src="../Images/7f291770d10dedddaeb05fe74e3a8fa9.png" alt="Deploy new release completed" data-original-src="https://i.octopus.com/blog/migrated/DeployNewReleaseCompleted.png"/></p>
+
+<p><img src="../Images/e306f7ba3bf3813d4f0445935dfa3d32.png" alt="Modified Azure Web Site running" data-original-src="https://i.octopus.com/blog/migrated/ModifiedAzureWebSiteRunning.png"/></p>
+
+<hr/>
+
+                    
+                    
+</body>
+</html>

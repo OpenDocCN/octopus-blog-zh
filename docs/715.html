@@ -1,0 +1,211 @@
+<html>
+<head>
+<title>SQL Server and PowerShell made easier with dbatools: Practical Examples - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用dbatools简化SQL Server和PowerShell:实用示例- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/sql-server-powershell-dbatools#2022-08-09">https://octopus.com/blog/sql-server-powershell-dbatools#2022-08-09</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/sql-server-powershell-dbatools/sql-server-powershell-examples.png" class="zoom" data-title=""><img src="../Images/3b3bebb83ec5acedf409528e0f6e6d2b.png" class="img-fluid center" alt="SQL Server and PowerShell made easier with dbatools: Practical Examples" data-original-src="https://i.octopus.com/blog/2020-06/sql-server-powershell-dbatools/sql-server-powershell-examples.png"/>T2】</a></p>
+
+<h2>说重点！</h2>
+
+
+
+<h2 id="why-ps">为什么选择PowerShell？</h2>
+
+<p>我们的数据在规模和复杂性方面继续呈指数级增长。DevOps和SRE运动正在重新定义对弹性和响应性的期望。数据泄露、数据丢失或报告延迟的成本正在急剧增加。</p>
+
+<p>四十五年前，<a href="https://en.wikipedia.org/wiki/The_Mythical_Man-Month" rel="nofollow">神话中的人月</a>告诉我们，满足指数级增长需求的答案不仅仅是增加员工数量。生产率不会以同样的方式增长。</p>
+
+<p>我们这些负责管理这些数据的人需要扩展我们的能力，来大规模地设计、交付和保护我们的数据，以满足对我们服务的需求。坦率地说，如果我们的技能只是扩展到使用SQL Server Management Studio (SSMS)中的向导，我们将跟不上。</p>
+
+<p>我们拥抱自动化至关重要。</p>
+
+<p>如果您的数据在SQL Server数据库中，这意味着有必要学习PowerShell。如果PowerShell还不是您工具箱中的关键部分，那么它很快就会成为。如果您还不习惯使用PowerShell作为您与SQL Server的主要接口，并且您希望保持可雇佣性，那么是时候进行一些研发了。</p>
+
+<h2 id="why-dba">为什么选择dbatools？</h2>
+
+<p>几个月前，James写了<a href="https://octopus.com/blog/sql-server-powershell#installing-the-sql-server-powershell-module">这篇关于使用SqlServer PowerShell模块</a>的精彩文章。他正确地指出“微软建议使用SqlServer模块从PowerShell与SQL Server进行交互”。他没有错。微软确实这么说。但我没有。在我看来，<a href="https://dbatools.io/" rel="nofollow"> dbatools </a>应该是任何SQL Server工作的默认PowerShell模块。</p>
+
+<p>dbatools是一个社区驱动的开源PowerShell模块，用于管理SQL Server。它由<a href="https://twitter.com/cl" rel="nofollow">克里斯·勒梅尔</a>发起，但在克里斯鼓舞人心的指导下，已经由<a href="https://github.com/sqlcollaborative/dbatools/graphs/contributors" rel="nofollow"> 189个贡献者</a>扩展。它继续有机增长，包括真正的最终用户需要的命令。在撰写本文时，它附带了超过500个cmdlet的<a href="https://dbatools.io/commands/" rel="nofollow">,比您在SqlServer模块中获得的大约多5倍。</a></p>
+
+<p>而且不仅仅是数量；也是品质。相对于SqlServer模块，dbatools也出奇的好用。这既是因为命令更简单，也是因为有一个巨大的社区，人们热衷于相互支持，他们中的许多人整天都在公共SQL Server社区Slack workspace中放松。如果您有任何问题或遇到困难，通常会在几分钟内得到回复。虽然这是一个社区的事情，你需要尊重这些人是出于好心帮助你。你将很难找到一个官方的支持团队来帮助任何一个能够击败它的厂商。</p>
+
+<h2 id="basic">基本示例</h2>
+
+<p>在本文中，我首先向您展示所有James示例的dbatools等价物，以展示使用dbatools的相对简单性和可维护性。然后，我将讨论除了SqlServer模块提供的功能之外，dbatools将为您提供的一些更加强大的功能。</p>
+
+<p>就像詹姆斯一样，我所有的脚本都在<a href="https://github.com/Alex-Yates/dbatools-powershell-examples" rel="nofollow">一个公共的GitHub repo </a>中。如果您对如何改进它们有任何建议，我很乐意查看您的拉动请求。😛</p>
+
+<h3 id="install">安装dbatools PowerShell模块</h3>
+
+<p>首先，James安装了SqlServer模块。对于dbatools，过程是相同的:</p>
+
+<pre><code class="language-powershell">#Install the dbatools module from the PowerShell gallery
+Install-Module -Name dbatools
+
+#If the module is already installed, update it using the following commands:
+#For PowerShell 5.0 or later
+Update-Module -Name dbatools
+
+#For PowerShell version earlier than 5.0
+Uninstall-Module -Name dbatools
+Install-Module -Name dbatools
+</code></pre>
+
+<h3 id="connect">测试与SQL Server的连接</h3>
+
+<p>接下来，我们需要测试我们可以连接到我们的SQL实例。</p>
+
+<p>我们可以通过使用<a href="https://docs.dbatools.io/#Test-DbaConnection" rel="nofollow">Test-DBA connection</a>cmdlet在实例级别对此进行测试，或者我们可以使用<a href="https://docs.dbatools.io/#Get-DbaDatabase" rel="nofollow"> Get-DbaDatabase </a> cmdlet在数据库级别进行测试。如同(全部/大部分？)的dbatools cmdlets中，cmdlet试图为我们捕捉任何异常以避免<em>红色的海洋</em>堆栈跟踪，但是如果我们想要启用异常并自己处理它们，我们可以使用<code>-EnableException</code>参数:</p>
+
+<pre><code class="language-powershell"># To test connectivity to a SQL instance
+Test-DbaConnection localhost
+
+# To test connectivity to a specific database
+Get-DbaDatabase -SqlInstance localhost -Database MyDatabase
+</code></pre>
+
+<p>就我个人而言，我发现上面的代码比SqlServer模块示例更容易理解和使用:</p>
+
+<pre><code class="language-powershell">try
+{
+    # This is a simple user/pass connection string. 
+    # Feel free to substitute "Integrated Security=True" for system logins.
+    $connString = "Data Source=YourInstance;Database=YourDB;User ID=YourUser;Password=YourPassword"
+
+    #Create a SQL connection object
+    $conn = New-Object System.Data.SqlClient.SqlConnection $connString
+
+    #Attempt to open the connection
+    $conn.Open()
+    if($conn.State -eq "Open")
+    {
+        # We have a successful connection here
+        # Notify of successful connection
+        Write-Host "Test connection successful"
+        $conn.Close()
+    }
+    # We could not connect here
+    # Notify connection was not in the "open" state
+}
+catch
+{
+    # We could not connect here
+    # Notify there was an error connecting to the database
+}
+</code></pre>
+
+<h3 id="login">创建SQL Server登录名</h3>
+
+<p>接下来，James创建了一个SQL Server登录名。dbatools中对应的cmdlet<a href="https://docs.dbatools.io/#New-DbaLogin" rel="nofollow">New-DbaLogin</a>非常类似。</p>
+
+<pre><code class="language-powershell"># To run in a non-interactive mode, such as through an Octopus deployment, you will most likely need to pass the new login credentials as a PSCredential object.
+$securePassword = ConvertTo-SecureString "Th!sI5Y0urP4ss" -AsPlainText -Force
+
+# Create the login using the New-DbaLogin cmdlet
+New-DbaLogin -SqlInstance localhost -Login MyLogin -SecurePassword $securePassword -PasswordPolicyEnforced -PasswordExpirationEnabled
+</code></pre>
+
+<h3 id="db">创建SQL Server数据库并分配所有者</h3>
+
+<p>使用SqlServer模块创建数据库非常困难。James不得不恢复运行定制的SQL脚本，或者使用SQL Server管理对象(SMOs)来“完成繁重的工作”。对我来说，这两种解决方案都复杂得令人恼火。</p>
+
+<p>接下来，James更改了数据库所有者，再次创建了一对smo。正如詹姆斯正确解释的那样，这是微软官方推荐的路线。然而，dbatools使得代码更容易阅读和维护。</p>
+
+<p>在下面的脚本中，我使用了<a href="https://docs.dbatools.io/#New-DbaDatabase" rel="nofollow"> New-DbaDatabase </a>和<a href="https://docs.dbatools.io/#Restore-DbaDatabase" rel="nofollow">Restore-DBA database</a>cmdlet来演示如何用一个命令创建一个新数据库或恢复一个新数据库。然后，我组合了<a href="https://docs.dbatools.io/#Get-DbaDatabase" rel="nofollow"> Get-DbaDatabase </a>和<a href="https://docs.dbatools.io/#Set-DbaDbOwner" rel="nofollow">Set-DBA dbowner</a>cmdlet来更改新数据库的数据库所有者。</p>
+
+<pre><code class="language-powershell"># Create a new empty database
+New-DbaDatabase -SqlInstance localhost -Name MyDatabase
+
+# Create a new database from a backup
+Restore-DbaDatabase -SqlInstance localhost -Path "\\Backups\MyDatabase.bak"
+
+# Assign a new owner to your database
+$db = Get-DbaDatabase -SqlInstance localhost -Database MyDatabase
+$db | Set-DbaDbOwner -TargetLogin MyLogin
+</code></pre>
+
+<h3 id="script">运行SQL脚本</h3>
+
+<p>James最后演示了如何使用SqlServer cmdlet Invoke-Sqlcmd来执行一些内联SQL或单独的。sql脚本。这段代码看起来足够简单，与dbatools的等价代码<a href="https://docs.dbatools.io/#Invoke-DbaQuery" rel="nofollow"> Invoke-DbaQuery </a>看起来和感觉上非常相似。但是，dbatools的等效功能旨在更方便地在管道中使用，并且与其他dbatools函数的行为更加一致。</p>
+
+<pre><code class="language-powershell"># Run a query from a script
+Invoke-DbaQuery -sqlinstance localhost -File "sql_script.sql" -MessagesToOutput
+
+# Run an in-line SQL command
+Invoke-DbaQuery -sqlinstance localhost -Query "PRINT 'hello world'" -MessagesToOutput
+</code></pre>
+
+<h2 id="power">更有力的例子</h2>
+
+<p>如上所述，dbatools包含数百个命令，所以不可能在本文中涵盖所有命令。到目前为止，我一直关注一些用于处理基本操作的更简单的命令。然而，真正的力量来自于一些更大的cmdlet，它们建立在更简单的cmdlet之上，使我们能够交付更大更复杂任务的最佳实践实现。</p>
+
+<h3 id="migrate">迁移SQL实例</h3>
+
+<p>Start-DBA migration cmdlet可能是dbatools的第一个主要特性。它是许多<strong>Copy</strong>cmdlet(例如<a href="https://docs.dbatools.io/#Copy-DbaDatabase" rel="nofollow"> Copy-DbaDatabase </a>、<a href="https://docs.dbatools.io/#Copy-DbaAgentJob" rel="nofollow"> Copy-DbaAgentJob </a>、<a href="https://docs.dbatools.io/#Copy-DbaLinkedServer" rel="nofollow"> Copy-DbaLinkedServer </a>等)的包装器。)允许我们将所有SQL Server对象从一个实例迁移到另一个实例，包括数据库、代理作业、链接服务器和一长串其他对象类型。</p>
+
+<p>试图使用SSMS GUI向导或者甚至普通的T-SQL脚本来实现这一点是一件痛苦的事情。用SqlServer模块做这件事并不容易。但是，使用dbatools，我们可以像您打开PowerShell窗口并键入以下命令一样快速地开始这项工作:</p>
+
+<pre><code class="language-powershell">Start-DbaMigration -Source sql01 -Destination sql02 -DetachAttach
+</code></pre>
+
+<p>听起来有点不可思议，对吧？这里有几个视频有更多的信息。这个有50秒长。<a href="https://www.youtube.com/watch?v=kQYUrSlb0wg" rel="nofollow">这部</a>，由克丽丝亲自拍摄，时长50分钟。</p>
+
+<h3 id="remove">安全删除数据库</h3>
+
+<p>大胡子，<a href="https://twitter.com/sqldbawithbeard" rel="nofollow"> Rob Sewell </a>，是dbatools最大的贡献者之一。他的第一个贡献是<a href="https://docs.dbatools.io/#Remove-DbaDatabaseSafely" rel="nofollow"> Remove-DbaDatabaseSafely </a>。受Grant Fritchey的三分钟备份演讲的启发，他整理了Grant的可靠备份的七个步骤，这样只需一个命令，你就可以放心地安全备份和删除数据库。</p>
+
+<pre><code class="language-powershell">Remove-DbaDatabaseSafely -SqlInstance localhost -Database MyDatabase -BackupFolder 'C:\Backups\Old databases - DO NOT DELETE'
+</code></pre>
+
+<p><a href="https://sqldbawithabeard.com/2016/07/20/remove-sqldatabasesafely-my-first-contribution-to-dbatools/" rel="nofollow">你可以在这里阅读更多相关内容</a>。</p>
+
+<h3 id="more">更多最佳实践材料</h3>
+
+<p>上面的两个例子演示了使用dbatools如何帮助您同时更有效地工作和标准化更好的实践。正如我提到的，dbatools有超过500个命令，并且还在增加。为了让您了解dbatools允许您用一个简单的命令完成的其他一些最佳实践，请查看这些博客帖子:</p>
+
+<ol>
+<li><a href="https://dbatools.io/new-best-practices-commands-now-available/" rel="nofollow">新的最佳实践命令现已推出</a></li>
+<li><a href="https://dbatools.io/new-batch-of-commands/" rel="nofollow">又一批新命令现已推出</a></li>
+</ol>
+
+<p>那些博客文章并不特别新，但我希望它们能激起你的兴趣。现在轮到您亲自动手练习使用这些命令了。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>我并不是说DBA角色已经死了。如果说有什么不同的话，那就是我们的数据问题变得越来越大，越来越复杂。数据库管理不再是一项可以外包给高度专业化的部门并从日常开发工作中抽象出来的功能。我们迫切需要懂得如何管理数据的人，我们需要他们密切参与我们数据结构的设计和开发。DBA需要加入工程团队的其他成员。</p>
+
+<p>DBA很忙，雇佣更多的DBA并不是一个实际的解决方案。如果我们的数据库管理员要在开发周期的更早阶段找到时间参与进来，同时支持更大更复杂的数据资产，那么他们必须采用自动化，以便在更短的时间内高效可靠地完成更多的管理工作。能够做好这一点的数据库管理员将会非常吃香。不会的机会会更少。</p>
+
+<p>从根本上说，DBA需要努力减少使用SSMS向导的时间，增加使用PowerShell脚本和源代码控制的时间。数据库管理没有消亡，但它在不断发展。</p>
+
+<p>dbatools是支持SQL Server的最好、发展最快的PowerShell模块。</p>
+
+<h2 id="cta">行动呼吁</h2>
+
+<p>由于500个cmdlets可能会令人望而生畏，您可能不知道从哪里开始。以下是一些建议:</p>
+
+<ol>
+<li>请查看Chrissy和Rob的“<a href="https://www.manning.com/books/learn-dbatools-in-a-month-of-lunches" rel="nofollow">在一个月的午餐中学习DBA tools</a>”。在写作的时候，它仍然是一个正在进行的工作，但是前八章已经可以使用了。这是个不错的开始。</li>
+<li>从你需要的开始。下一次当你有一个数据库任务需要完成时，问问你自己这是不是那种你可以编写脚本，测试，并坚持源代码控制的事情。在你写好脚本后，如果这是一个常规任务，你可以为它创建一个<a href="https://octopus.com/docs/operations-runbooks">章鱼手册</a>。然后，如果你需要重复它或者完成一个类似的任务，你已经有了一个现成的模板。</li>
+<li>加入SQL社区。我们中有一群人<a href="https://dbatools.io/dbatools-is-now-on-the-sql-server-communitys-slack/" rel="nofollow">在闲暇时间</a>闲逛。我们是一群傲慢友好的人，我们喜欢帮助事情进展。(如果您发现了改进dbatools的机会，<a href="https://github.com/sqlcollaborative/dbatools/blob/master/contributing.md" rel="nofollow">提交一个pull请求</a>！)</li>
+</ol>
+
+<p>加入我们吧。我们很高兴见到你！😊</p>
+
+<hr/>
+
+<p>自2010年以来，Alex Yates一直在帮助组织将DevOps原则应用于他们的数据。他最引以为豪的是帮助Skyscanner开发了一天95次部署的能力，并支持了联合国项目服务办公室的发布流程。亚历克斯与除南极洲以外的各大洲的客户都有过合作——所以他渴望见到任何研究企鹅的人。</p>
+
+<p>作为一名热心的社区成员，他共同组织了<a href="https://datarelay.co.uk/" rel="nofollow">数据接力</a>，是<a href="http://www.speakingmentors.com/" rel="nofollow">www.SpeakingMentors.com</a>的创始人，并自2017年以来被公认为<a href="https://mvp.microsoft.com/en-us/PublicProfile/5002655?fullName=Alex%20Yates" rel="nofollow">微软数据平台MVP </a>。</p>
+
+<p>亚历克斯是官方八达通部署合作伙伴<a href="https://dlmconsultants.com/" rel="nofollow"> DLM咨询公司</a>的创始人。他喜欢为那些希望通过改进IT和数据库交付实践来实现更好业务成果的客户提供指导、辅导、培训和咨询。</p>
+
+<p>如果你想和亚历克斯一起工作，请发电子邮件:【enquiries@dlmconsultants.com T2】</p>
+
+                    
+                    
+</body>
+</html>

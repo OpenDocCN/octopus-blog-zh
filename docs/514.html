@@ -1,0 +1,68 @@
+<html>
+<head>
+<title>Kubernetes deployments made easy - Octopus Deploy 2018.9 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Kubernetes部署变得简单- Octopus部署2018.9 - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2018.9#2021-07-07">https://octopus.com/blog/octopus-release-2018.9#2021-07-07</a></blockquote>
+                        <iframe src="https://www.youtube.com/embed/FZ8U5OuDyOw" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="kubernetes-deployments-made-easy">Kubernetes部署变得简单</h2>
+
+<p>Octopus Deploy很荣幸能够为Kubernetes deployments提供一流的支持。我们的目标是让Kubernetes易于团队采用并将其项目迁移到这个流行的平台上。</p>
+
+<p>Kubernetes(或K8s)是一个灵活、强大的平台，用于以可靠和可伸缩的方式运行应用程序和服务。伴随着这种能力而来的是巨大的复杂性，学习配置选项和部署YAML可能会非常困难。</p>
+
+<p>我们采取平衡功能和易用性的方法，为您提供两全其美的服务。这表现为对Kubernetes集群的基础设施支持和丰富的部署步骤，以简化您的部署过程。团队可以选择合适的平衡，从零YAML配置到完全控制<code>kubectl</code>和部署YAML。</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="infrastructure-for-kubernetes">Kubernetes的基础设施</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/octopus-release-2018.9/k8s-clusters.png" class="zoom" data-title=""><img src="../Images/791a59262724a4b1f326c2bc37f745e3.png" class="img-fluid center" alt="Kubernetes deployment targets" data-original-src="https://i.octopus.com/blog/2018-10/octopus-release-2018.9/k8s-clusters.png"/>T2】</a></p>
+
+<p>Octopus Deploy现在支持添加Kubernetes集群作为部署目标和相关的配置选项。我们还增加了对舵图馈送的支持。</p>
+
+<h2 id="deployment-processes-for-kubernetes">Kubernetes的部署流程</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/octopus-release-2018.9/k8s-steps.png" class="zoom" data-title=""><img src="../Images/ff64be728e3ca7d2b9b08693c977f7b1.png" class="img-fluid center" alt="Kubernetes deployment steps" data-original-src="https://i.octopus.com/blog/2018-10/octopus-release-2018.9/k8s-steps.png"/>T2】</a></p>
+
+<p>Octopus Deploy附带了许多新的部署步骤模板，使团队能够将Docker容器部署到Kubernetes，直接使用<code>kubectl</code>执行脚本，以及一个Helm更新步骤。</p>
+
+<h2 id="offline-drop-artifacts">离线拖放工件</h2>
+
+<p><a href="https://octopus.com/docs/infrastructure/offline-package-drop">离线包投递目标</a>现在可以配置为将包作为Octopus工件持久化。</p>
+
+<p>离线包丢弃目标以前只能将包持久化到文件系统目录中，这不适合Octopus Cloud实例。人工制品非常适合这一点；部署包作为一个zip文件持久存储在Octopus中。</p>
+
+<h2 id="updated-cloud-sdks">更新的云SDK</h2>
+
+<p>我们已经更新了Octopus附带的所有云依赖项:</p>
+
+<ul>
+<li>Azure PowerShell模块从<code>5.7.0</code>升级到<code>6.8.1</code>。此更新修复了Azure PowerShell的<code>5.7.0</code>版本的一些已知问题。</li>
+<li>Azure CLI从<code>2.0.42</code>升级到<code>2.0.45</code>。</li>
+<li>AWS PowerShell模块从<code>3.3.225.1</code>升级到<code>3.3.343.0</code>。</li>
+<li>AWS CLI从<code>1.16.6</code>升级到<code>1.16.15</code>。</li>
+<li>Terraform CLI从<code>0.11.5</code>升级到<code>0.11.81</code>。</li>
+<li>Terraform AzureRm插件版本<code>1.16.0</code>。</li>
+<li>Terraform AWS插件版本<code>1.39.0</code>。</li>
+</ul>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>该版本包括Azure PowerShell模块对<code>6.8.1</code>的重大改进，以修复先前<code>5.7.0</code>捆绑版本的<a href="https://github.com/OctopusDeploy/Issues/issues/4574" rel="nofollow">已知问题</a>。请参见<a href="https://docs.microsoft.com/en-us/powershell/azure/release-notes-azureps?view=azurermps-6.11.0" rel="nofollow"> Azure PowerShell发行说明</a>了解更多信息。</p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>升级Octopus Deploy的步骤照常适用。更多信息请参见<a href="https://octopus.com/downloads/compare?to=2018.9.0">发布说明</a>。自主托管的Octopus客户现在可以<a href="https://octopus.com/downloads/2018.9.0">下载</a>最新版本。对于章鱼云，你将在下周他们的维护窗口期间开始接收最新的bits。</p>
+
+<p>这个月到此为止。欢迎给我们留下评论，让我们知道你的想法！前进并展开！</p>
+
+                    
+                    
+</body>
+</html>

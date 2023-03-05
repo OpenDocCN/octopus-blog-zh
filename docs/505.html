@@ -1,0 +1,120 @@
+<html>
+<head>
+<title>Octopus January Release 2018.1 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通1月版2018.1 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2018.1#2021-07-07">https://octopus.com/blog/octopus-release-2018.1#2021-07-07</a></blockquote>
+                        <p>Octopus Deploy的一月份发布主要是由<a href="https://octopus.com/cloud"> Octopus Cloud </a>驱动的安全发布，也将使我们在内部运行Octopus Deploy的每个客户受益。我们强烈建议升级。</p>
+
+<p>您还会注意到我们新的版本控制策略:通常被称为章鱼的东西实际上是T1。阅读更多关于<a href="/blog/version-change-2018">为什么我们要改变</a>的信息。</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="octopus-cloud">章鱼云</h2>
+
+<p>我们今年的一大驱动力是将我们的托管章鱼产品推向市场，名为<strong> <a href="https://octopus.com/cloud">章鱼云</a> </strong>。我们将在接下来的几天里启动一个封闭的Alpha程序——感谢所有注册的人！</p>
+
+<p>下一次开始使用章鱼云的机会将是在2018年3月我们的开放测试计划期间。今天就可以<a href="https://octopus.com/cloud">注册你对章鱼云的兴趣</a>！</p>
+
+<p>在公开测试之后，我们将正式推出章鱼云，今年晚些时候，我们将推出我们的<a href="https://octopus.com/cloud">数据中心</a>版本。</p>
+
+<p>了解更多<a href="https://octopus.com/cloud">章鱼云</a>。</p>
+
+<h2 id="weve-changed-our-versioning-strategy">我们已经改变了我们的版本策略</h2>
+
+<p>阅读更多关于<a href="/blog/version-change-2018">我们为什么改变</a>的信息，这也是我们作为软件产品公司持续发展的一部分。</p>
+
+<h2 id="security-enhancements">安全增强措施</h2>
+
+<p>为了准备<a href="https://octopus.com/cloud">章鱼云</a>，我们已经进行了渗透测试和安全审计。没有发现大的问题，但是发现了一些我们想要修复的小问题。您可能已经在最近的补丁中看到了几个安全修复。这次发布的特性包含了所有的补丁，以及一些额外的增强功能，可以让你的Octopus服务器比以前更加安全。</p>
+
+<h3 id="new-built-in-roles-and-permissions">新的内置角色和权限</h3>
+
+<p>Octopus附带了几个内置的<a href="https://octopus.com/docs/administration/managing-users-and-teams">团队和用户角色</a>，其中之一是<code>Octopus Administrators</code>团队，其角色<code>System Administrator</code>授予在Octopus安装中做任何事情的权利。</p>
+
+<p>在Octopus <code>2018.1</code>中，我们有效地将<code>Octopus Administrators</code>团队和它的<code>System Administrator</code>用户角色分成了两部分:</p>
+
+<ul>
+<li>我们保留了现有的<code>Octopus Administrators</code>团队和<code>System Administrator</code>角色，它们的行为与今天完全相同</li>
+<li>我们添加了一个新的<code>Octopus Managers</code>团队和<code>System Manager</code>角色，他们可以做任何事情，除了为系统管理员保留的某些系统级功能</li>
+</ul>
+
+<p>这对<a href="https://octopus.com/cloud">章鱼云</a>来说很有意义:</p>
+
+<ul>
+<li>我们的团队需要配置如何托管您的Octopus服务器——我们将成为<code>Octopus Administrators</code>团队的成员。</li>
+<li>我们不希望你因为改变主机配置而无意中破坏了你的Octopus服务器——你将被添加到<code>Octopus Managers</code>团队中。</li>
+</ul>
+
+<p>这种新的划分对于Octopus的大型安装来说是有意义的，在这种情况下，你希望在团队和他们的职责之间有更清晰的区分。</p>
+
+<h4 id="new-permissions">新权限</h4>
+
+<p>这些变化的基础是一些新的权限，您可以在自己的Octopus安装中使用:</p>
+
+<ul>
+<li>添加<code>UserEdit</code>是为了填补我们现有的直接编辑用户的权限结构中的空白——这以前需要<code>AdministerSystem</code>权限</li>
+<li><code>ConfigureServer</code>用于配置认证、SMTP和HTTP安全头</li>
+</ul>
+
+<h4 id="upgrade-experience">升级体验</h4>
+
+<p>当你升级现有的八达通服务器，或开始全新安装八达通服务器时:</p>
+
+<ul>
+<li><code>System Administrator</code>用户角色将被自动授予新的权限(这与我们过去添加新权限时使用的过程相同)</li>
+<li>团队<code>Octopus Managers</code>和<code>System Manager</code>角色将被自动创建并被授予适当的权限</li>
+</ul>
+
+<h3 id="actively-preventing-escalation-of-privileges-cve-2018-5706">积极防止特权升级(CVE-2018-5706)</h3>
+
+<p><a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-5706" rel="nofollow"> CVE-2018-5706 </a></p>
+
+<p>内置用户角色对于大多数常见场景来说已经足够了。在Octopus的大规模安装中，人们倾向于定制这些用户角色，或者从头开始创建他们自己的用户角色。Octopus中的权限系统非常强大，但是强大的功能也带来了额外的复杂性...和巨大的责任。在Octopus的早期版本中，如果您错误地配置了这些角色，您可能会意外地授予一个团队提升他们自己权限的能力。</p>
+
+<p>Octopus <code>2018.1</code>有一个额外的安全层，可以主动防止任何用户提升自己或其他用户的权限，使其超出当前权限范围。</p>
+
+<p>进一步了解<a href="https://github.com/OctopusDeploy/Issues/issues/4167" rel="nofollow">本期</a>。</p>
+
+<h2 id="step-package-requirement">分步包装要求</h2>
+
+<p>默认情况下，Octopus在需要包的部署的第一步之前立即执行包获取。现在可以将步骤配置为在包获取之前或之后运行。步骤条件<code>Run this step</code>已被替换为<code>Package requirement</code>:</p>
+
+<p>上一篇:<a href="#" data-featherlight="https://i.octopus.com/blog/2018-01/step_condition-run_this_step.png" class="zoom" data-title=""> <img src="../Images/3550bd43c29de6002ef2e83e5c126f90.png" class="img-fluid center" alt="Step condition - Run this step" data-original-src="https://i.octopus.com/blog/2018-01/step_condition-run_this_step.png"/> </a></p>
+
+<p>新增:<a href="#" data-featherlight="https://i.octopus.com/blog/2018-01/step_condition-package_requirement.png" class="zoom" data-title=""> <img src="../Images/e51b057c3a066b92b74c6eeef86742e1.png" class="img-fluid center" alt="Step condition - Package requirement" data-original-src="https://i.octopus.com/blog/2018-01/step_condition-package_requirement.png"/> </a></p>
+
+<p>新的<code>Package requirement</code>允许更明确地配置关于包获取的步骤何时运行。有三个选项可供选择:</p>
+
+<ul>
+<li><code>Let Octopus Decide</code>(默认):可以在该步骤运行之前或之后获取包- Octopus将确定最佳时间</li>
+<li><code>After package acquisition</code>:该步骤运行前将获取包</li>
+<li><code>Before package acquisition</code>:该步骤运行后将获取包</li>
+</ul>
+
+<p>此选项在没有意义时隐藏，例如，当脚本步骤被配置为在包步骤之后运行时(此时必须获取包)。</p>
+
+<p>这些选项在配置复杂的并行部署过程时提供了更大的灵活性，以确保在期望的时间获得包。您现在可以配置一个生成包的并行步骤块，并使用选项<code>Before package acquisition</code>来确保这些包可以被后续的包步骤使用。</p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>我们对Octopus做了两个行为上的改变，这可能会影响某些客户。</p>
+
+
+
+<h2 id="upgrading">升级</h2>
+
+<p>像往常一样，升级Octopus Deploy的步骤<a href="https://octopus.com/docs/administration/upgrading">适用。更多信息请参见</a><a href="https://octopus.com/downloads/compare?to=2018.1.0">发行说明</a>。</p>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。我们希望你有一个美妙的节日，并找到有用的新功能。欢迎给我们留下评论，让我们知道你的想法！前进并展开！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,64 @@
+<html>
+<head>
+<title>Opsera integration with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Opsera与Octopus集成- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/opsera-integration-with-octopus-deploy#2022-08-31">https://octopus.com/blog/opsera-integration-with-octopus-deploy#2022-08-31</a></blockquote>
+                        <p>我们已经与Opsera合作，提供与Octopus Deploy的集成。您可以将Octopus与Opsera支持的95+平台集成，作为其无代码DevOps编排平台的一部分。</p>
+
+<p>自动化您的CI/CD渠道是一项挑战，尤其是当您使用不同的解决方案时。它需要技术知识和经验来编排开发团队所需的各种工具、管道和洞察力。这就是Opsera可以提供帮助的地方。</p>
+
+<p>Opsera提供自助服务平台，帮助您实现CI/CD渠道的自动化。您可以通过可视化界面来实现这一点，因此您可以创建具有统一洞察力的声明性管道。</p>
+
+<p>启用后，Opsera的集成通过其管道UI提供对Octopus Deploy中定义的资源的访问，如通道、环境、生命周期、项目、空间和租户。</p>
+
+<h2 id="getting-started">入门指南</h2>
+
+<p>Opsera和Octopus Deploy通过Octopus API进行通信。所以，第一步是在Octopus中创建一个API键。</p>
+
+<p>这个API键代表您对Octopus Deploy执行操作。查看我们的文档来<a href="https://octopus.com/docs/octopus-rest-api/how-to-create-an-api-key">了解如何创建API密匙</a>。</p>
+
+<p>下一步是通过工具注册表在Opsera中注册Octopus Deploy。该步骤的说明见Opsera文档中的<a href="https://opsera.atlassian.net/wiki/spaces/OE/pages/1367474335/Octopus+Deployment#Registering-the-Octopus-tool-in-Tool-Registry" rel="nofollow">节，在工具注册表</a>中注册Octopus工具。</p>
+
+<p>完成这一步后，您可以在Opsera的管道UI中使用Octopus Deploy集成。</p>
+
+<h2 id="an-overview-of-opsera-integration-with-octopus">Opsera与Octopus的整合概述</h2>
+
+<p>Opsera的一个强大功能是其可视化和编排管道工作流的能力:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/workflow.png" class="zoom" data-title=""><img src="../Images/1c544d308c3f4ca100c6f62187f59783.png" class="img-fluid center" alt="Workflow visualization in Opsera showing Java-based project" data-original-src="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/workflow.png"/>T2】</a></p>
+
+<p>这个工作流代表了一个基于Java的项目:通过命令行构建源代码→将工件推送到Nexus repository →通过Octopus Deploy部署到IIS。</p>
+
+<p>Opsera显示工作流程的每个步骤；每个步骤代表一个工具和一个要执行的操作。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/step-setup.png" class="zoom" data-title=""><img src="../Images/38b863a38695f186a2a68f2a684e2968.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/step-setup.png"/></a>T2】</p>
+
+<p>编辑配置使您能够自定义其步骤包含的属性和操作:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/octopus-integration-settings.png" class="zoom" data-title=""><img src="../Images/2d1b4143e06eae2b50671bed3c610a96.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/octopus-integration-settings.png"/>T2】</a></p>
+
+<p>这一步表示通过Octopus Deploy部署到IIS。Opsera UI公开了渠道、项目和角色等资源，提供了跨其支持的平台的一致体验。</p>
+
+<p>建立管道后，它可以基于一系列事件或作为计划任务运行:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/pipeline-logs.png" class="zoom" data-title=""><img src="../Images/2c5a81af7f3d9a21548bfd80cd4fa9ea.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-03/opsera-integration-with-octopus-deploy/pipeline-logs.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Opsera提供了一个自助服务平台，通过可视化界面帮助您自动化CI/CD，因此您可以创建具有统一洞察力的声明性管道。</p>
+
+<p>Octopus Deploy加入了Opsera支持的95+平台，作为其无代码DevOps编排平台的一部分。Opsera的强大之处在于它能够轻松地将其他系统与Octopus Deploy集成在一起。</p>
+
+<p>如果你是Opsera的客户，并且你对使用Octopus Deploy进行部署感兴趣，你可以<a href="https://octopus.com/start">注册免费试用</a>。使用上面的步骤，您可以通过Opsera快速将我们的部署功能作为编排的一部分。</p>
+
+<p>要了解更多信息，请观看关于Opsera和Octopus部署集成的免费网络研讨会<a href="https://www.opsera.io/events/opsera-and-octopus-integration" rel="nofollow">。</a></p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

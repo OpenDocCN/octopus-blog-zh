@@ -1,0 +1,22 @@
+<html>
+<head>
+<title>Halibut: a secure communication stack for .NET/Mono - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Halibut:一个安全的通信栈。网络/单章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/halibut#2015-09-17">https://octopus.com/blog/halibut#2015-09-17</a></blockquote>
+                        <p>我最近在CodeProject上写了一篇关于比目鱼的文章，比目鱼是WCF的一个开源、安全的替代品。大比目鱼是在我研究如何让章鱼触手代理服务在Mono下运行时出现的。</p>
+
+<blockquote>
+<p>作为一个自动化部署工具，Octopus需要能够将包和配置信息推送到可能在本地网络或云中的机器上。为了安全地做到这一点，八达通的用户建立了双向信任关系。<br/> <br/>在Octopus Deploy中，我们使用X.509证书和WCF的wsHttpBinding栈。建立连接后，每一方都要验证另一方提供的证书的指纹。如果公钥不是我们所期望的，我们拒绝连接。<br/> <br/>在未来的版本中，我们希望给Octopus增加Mono支持，这样我们就可以将包部署到Linux和其他类似Unix的操作系统上。但是有一个问题:<strong> WCF的<code>wsHttpBinding</code>在Mono上不被支持。</strong> <br/> <br/>面对这个问题，我们需要想出一个替代的通信栈。</p>
+</blockquote>
+
+<p>在Mono上运行触须会很棒。当然，有些事情需要有所不同。例如，我们可能会调用Shell脚本，将Octopus变量作为环境变量传递，而不是调用PowerShell脚本。但是，如果我们能取代WCF作为通讯栈，我们将会走得很好。</p>
+
+<p>切换通信栈有点棘手，尤其是因为Octopus需要使用旧协议来将现有代理升级到新协议。我希望我们能在未来的版本中透明地做到这一点，大概是在Octopus 2.0左右。</p>
+
+                    
+                    
+</body>
+</html>

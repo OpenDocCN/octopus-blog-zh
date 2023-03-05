@@ -1,0 +1,132 @@
+<html>
+<head>
+<title>Why use Octopus for Kubernetes deployments? - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>为什么在Kubernetes部署中使用Octopus？-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/why-kubernetes-and-octopus-deploy#2021-11-23">https://octopus.com/blog/why-kubernetes-and-octopus-deploy#2021-11-23</a></blockquote>
+                        <p>回到Octopus 2018.9，我们引入了一系列功能，为Octopus中的Kubernetes提供了核心支持。</p>
+
+<p>在本文中，我将介绍使用Octopus管理Kubernetes部署的一些好处。毕竟，Kubernetes已经为它的所有资源提供了一个丰富的声明性模型，一个全功能的命令行工具，以及更多的仪表盘。</p>
+
+<p>Octopus 2021 Q3包括对Kubernetes部署的更新支持，以及针对Google Cloud、AWS和Azure用户的runbooks。在我们的<a href="https://octopus.com/blog/octopus-release-2021-q3" class="alert-link">发布公告</a>中了解更多信息。</p>
+
+
+<h2 id="modeling-your-development-environments">建模您的开发环境</h2>
+
+<p>开发团队中的一个常见做法是在不同的环境中开发代码。虽然没有两个团队是相同的，但是我曾经合作过的每个团队都采用了一些<strong> <span class="path">开发➜测试➜生产</span> </strong>环境生命周期的变体。</p>
+
+<p>环境进展是Octopus的核心概念，这并非巧合。环境是Octopus中的核心实体，产品的每个部分都包含了对生产环境部署的管理。</p>
+
+<p>从生命周期到频道再到仪表盘，Octopus使你的团队如何工作的建模变得容易，并以一种可靠和可见的方式促进发布。</p>
+
+<p>以一个Octopus项目的概述为例。该表清楚地显示了在什么时间向什么环境发布了什么版本。只需点击几下鼠标，您就可以获得更详细的信息，例如谁执行了部署以及包含了哪些版本的包。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/dashboard.png" class="zoom" data-title=""><img src="../Images/0492063a1eb9902b5ec5e46545517413.png" class="img-fluid center" alt="Octopus Dashboard" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/dashboard.png"/>T2】</a></p>
+
+<p>另一方面，Kubernetes仪表板关注于显示关于Kubernetes资源的信息，比如pod、服务和部署。这是集群的低级视图，可用于调试和监控。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/k8sdashboard.png" class="zoom" data-title=""><img src="../Images/9005659ca2d00ff3c839b43998d0c9e1.png" class="img-fluid center" alt="Kubernetes Dashboard" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/k8sdashboard.png"/>T2】</a></p>
+
+<p>Octopus允许您对您的团队已经在使用的环境进行建模，而Kubernetes仪表板为调试和其他管理任务提供了一个低级别的资源视图。结合Octopus和Kubernetes，您可以从上到下查看您的基础设施。</p>
+
+<h2 id="managing-your-application-variables">管理应用程序变量</h2>
+
+<p>Helm提供了一种表达性模板语言，允许从多个来源提供变量，包括变量YAML文件或命令行。这个功能允许定义复杂的和可定制的部署，使得Helm成为事实上的Kubernetes包管理器。</p>
+
+<p>但是模板语言只是故事的一半。另一半是管理定义特定部署的变量。</p>
+
+<p>Octopus提供了一个具有全面变量管理功能的解决方案，包括秘密存储和范围规则。这些变量可以传递到Helm中，在Kubernetes步骤中使用，或者在自定义步骤中使用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/variables.png" class="zoom" data-title=""><img src="../Images/89f8a1b97dc4d64b9934a210b9dd1a19.png" class="img-fluid center" alt="Octopus variables" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/variables.png"/></a>T2】</p>
+
+<p>通过利用Octopus管理变量，复杂的Helm和Kubernetes部署可以轻松地跨多个环境和集群进行协调。</p>
+
+<h2 id="versioning-your-docker-containers">版本化您的Docker容器</h2>
+
+<p>部署流程创建后，通常不会有太大变化。不同部署之间会发生变化的是容器版本。</p>
+
+<p>Octopus将构建部署的设计时过程与选择包版本的部署时过程分开。这意味着当您推出容器的新版本时，Octopus会在部署期间选择这些版本，并将它们合并到生成的YAML文件中。</p>
+
+<p>正如您在下面的截图中看到的，在设计Kubernetes部署时，您指定了容器ID，但没有指定版本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/octopuscontainer.png" class="zoom" data-title=""><img src="../Images/8b2cf6174e87753bc7fa8d1418ae3c81.png" class="img-fluid center" alt="Adding an container" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/octopuscontainer.png"/>T2】</a></p>
+
+<p>然后在部署过程中，您可以选择一个特定的容器版本，或者简单地让Octopus为您选择最新的版本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/octopusdeployment.png" class="zoom" data-title=""><img src="../Images/f1d45f32c2802b3dab64133e18e086ae.png" class="img-fluid center" alt="Octopus deployment" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/octopusdeployment.png"/>T2】</a></p>
+
+<p>Octopus通过分离设计和部署时间问题，使管理可重复部署变得容易，这意味着您只需要在推出新部署时担心您希望部署哪个版本的容器。</p>
+
+<h2 id="iterate-individually-or-progress-collectively">单独迭代或集体进步</h2>
+
+<p>微服务是一种越来越受欢迎的开发策略，它允许专注的团队在更大的生态系统中快速交付小的变化。</p>
+
+<p>然而，将一组已知版本的单个微服务升级到下一个环境并不是不常见的需求。虽然微服务架构不鼓励这种依赖性，但公司测试或外部法规可能要求您的环境在任何时间点都处于众所周知的状态。</p>
+
+<p>Octopus可以对这些开发策略进行建模，无论你的团队是通过环境独立推广单个微服务，还是多组微服务一起推广。</p>
+
+<p>对于独立推广自己个人微服务的团队，可以使用个人Octopus部署项目。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/individual.png" class="zoom" data-title=""><img src="../Images/82781ec87623db92232beebdf9bd43af.png" class="img-fluid center" alt="Project dashboard" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/individual.png"/></a>T2】</p>
+
+<p>为了以可预测的顺序提升一组已知版本的微服务，项目可以使用<a href="https://octopus.com/blog/deploy-release-step/deploy-release-step">部署发布步骤</a>。通过将其他项目的部署视为可部署的资源，<strong>部署发布</strong>步骤允许团队在给定的时间点捕获环境的状态，并将该状态部署到下一个环境。</p>
+
+<p>在下面的截图中，你可以看到一个Octopus项目的例子，其中包括一系列的<strong>部署发布</strong>步骤。这些步骤的顺序确保了微服务以固定的顺序部署，一组<strong>部署发布</strong>步骤代表了一个完整的微服务生态系统，它作为一个单元部署到新环境中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/deployarelease.png" class="zoom" data-title=""><img src="../Images/9ef2881038ff5a5a2780e50855cb2148.png" class="img-fluid center" alt="The coordinated release of microservices" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/deployarelease.png"/>T2】</a></p>
+
+<p>使用Octopus来管理Kubernetes部署可以让您在开发过程中自由地快速迭代，同时以可预测的方式在环境之间进行升级。</p>
+
+<h2 id="managing-the-cloud-and-migrating-from-on-premises">管理云和从内部迁移</h2>
+
+<p>Kubernetes是您工具箱中的一个优秀工具，但它不太可能是您将使用的唯一工具。Kubernetes真的是托管静态文件的最佳选择，还是S3或Azure存储更合适？您还需要使用本地数据库吗？RDS是不是比容器化数据库更好的选择？</p>
+
+<p>增量迁移、遗留系统和强大的PaaS产品通常意味着您的部署策略不会局限于您的Kubernetes集群。因为Octopus已经支持广泛的云和本地平台，所以您可以跨Kubernetes和现有服务无缝集成部署流程。</p>
+
+<p>如果您的部署确实跨越多个技术堆栈，您可以放心，上述所有优势同样适用于您的内部部署和云部署，以创建一个统一的部署流程。</p>
+
+<h2 id="model-kubernetes-deployments-with-best-practices">使用最佳实践对Kubernetes部署进行建模</h2>
+
+<p>互联网安全中心就如何保护您的Kubernetes基础设施提供指导。特别是，有两个建议与您的部署策略特别相关:</p>
+
+<ul>
+<li>1.6.1确保仅在需要时使用群集管理角色。</li>
+<li>1.6.2使用名称空间在资源之间创建管理边界。</li>
+</ul>
+
+<p>Octopus鼓励通过目标使用具有有限权限的凭证部署到单独的名称空间。Octopus中的Kubernetes目标捕获集群URL、帐户和名称空间，并且作用于角色和环境。</p>
+
+<p>通常，Kubernetes目标对于每个环境和角色都有一个惟一的名称空间。建议关联帐户仅拥有在该命名空间内部署所需的权限。结果是Kubernetes目标代表了集群中的权限边界。遵循这种模式可以确保您的部署不依赖于单个管理员帐户，并在名称空间内隔离资源。</p>
+
+<p>【T2 <img src="../Images/888ec2aea2b6f22bc125a9873a2afd10.png" class="img-fluid center" alt="Kubernetes targets" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/targets.png"/></p>
+
+<p>通过使用目标，Octopus鼓励您以安全和可管理的方式对Kubernetes部署建模。</p>
+
+<h2 id="centralized-and-audited-kubernetes-cluster-administration">集中式审计Kubernetes集群管理</h2>
+
+<p>你曾经通过电子邮件或Slack发送过配置文件吗？您是否曾被要求报告一次生产中断，但却不知道发生了什么变化，因为从人们的桌面上进行了未记录的修改？</p>
+
+<p>不幸的是，这些情况非常普遍。随着您的Kubernetes集群变得越来越复杂，管理凭证和了解变化的影响会变得越来越困难。</p>
+
+<p>Octopus通过<strong>脚本控制台</strong>提供解决方案。通过使用<strong>脚本控制台</strong>，开发人员和管理员可以与Kubernetes集群进行交互，而无需共享凭证。可以对一个或多个Kubernetes目标运行特殊命令，运行的命令、运行它的人以及结果都保存在审计日志中，以后可以查看。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/scriptconsole.png" class="zoom" data-title=""><img src="../Images/89aebfca92554c7b4cffbc07d55b96fa.png" class="img-fluid center" alt="The Script Console" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/scriptconsole.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/tasklog.png" class="zoom" data-title=""><img src="../Images/c2396bc650865c1116130b088fa829b8.png" class="img-fluid center" alt="The task log" data-original-src="https://i.octopus.com/blog/2021-09/why-kubernetes-and-octopus-deploy/tasklog.png"/>T2】</a></p>
+
+<p>通过<strong>脚本控制台</strong>，Octopus让团队能够调试和管理他们的Kubernetes集群，而不需要分发凭证，并且有一个审计日志来记录每个更改。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Octopus在交付可重复且可靠的部署方面有着悠久的历史，并且已经发展到支持数千个开发团队中的部署模式。</p>
+
+<p>通过使用Octopus来管理您的Kubernetes部署，您可以获得快速成为管理高密度基础架构的标准平台的所有好处，并将经过实战检验的部署策略融入Octopus中。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

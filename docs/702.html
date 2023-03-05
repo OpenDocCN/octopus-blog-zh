@@ -1,0 +1,185 @@
+<html>
+<head>
+<title>Shaping Configuration as Code - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>代码- Octopus部署时的形状配置</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/shaping-config-as-code#2022-05-06">https://octopus.com/blog/shaping-config-as-code#2022-05-06</a></blockquote>
+                        <p>我们最近一直忙于为Octopus Deploy构建配置代码(Config as Code)支持。在本帖中，我们来看看形成这一特征的一些因素:</p>
+
+<ul>
+<li>为什么我们将配置构建为代码</li>
+<li>我们想要避免的反模式</li>
+<li>设计决策</li>
+</ul>
+
+<p>然而，首先我们应该定义我们所说的“配置为代码”是什么意思。我们指的是Octopus项目的版本控制(Git)文本表示。今天，当您在Octopus中配置一个项目时，配置被存储为关系数据库中的记录。该特性获取一些数据，并将其作为文件保存在Git存储库中，而不是数据库中。</p>
+
+<h2 id="why-config-as-code">为什么配置为代码？</h2>
+
+<p>在过去的几年里，版本控制Octopus配置一直是我们最需要的特性。我们明白为什么。这些优势极具吸引力，包括:</p>
+
+<ul>
+<li>历史 : Git是代码的时间机器。能够在应用程序代码旁边查看Octopus配置的内容、时间和人员无疑是有用的。</li>
+<li><strong>分支</strong>:现在，部署流程只有一个实例。这使得测试变更变得困难，因为当一个版本被创建时，它将使用当前的部署过程。Git分支使得部署过程可以有任意多的版本。这允许在不影响稳定性的情况下迭代变更。</li>
+<li><strong>单一事实来源</strong>:让应用程序代码、构建脚本和部署配置生活在一起，让每个人都感到温暖和模糊。</li>
+<li><strong>克隆</strong>:想象一下能够将一个<code>.octopus</code>文件夹复制到一个新的Git存储库(可能改变一些变量)并使用它作为Octopus项目的启动程序。</li>
+</ul>
+
+<p>有两个投票率很高的用户声音建议(<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/15698781-version-control-configuration" rel="nofollow"> 1 </a>、<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/35362726-allow-variables-to-be-version-controlled" rel="nofollow"> 2 </a>)，但更有说服力的是许多客户对话。</p>
+
+<p>最后，我们想要这个！我们使用Octopus Deploy来交付Octopus Deploy，对一个特性的第一个试金石是我们是否对此感到兴奋。我们是。</p>
+
+<h2 id="anti-patterns">反模式</h2>
+
+<p>我们当然不是第一个实现这一功能的产品。我们生态系统中的许多工具都集成了Git。这让我们有机会尝试各种不同的实现，并感觉到是什么让一个愉快的体验和不那么愉快的体验有所不同。</p>
+
+<p>很明显，有一些模式是我们想要避免的。</p>
+
+<h3 id="anti-pattern-1-git-db">反模式#1: Git DB</h3>
+
+<p>人们很容易把Git想象成“另一个数据库”，简单地把一个持久层换成另一个。因此，更改被保存在Git存储库中，但是Git的真正功能却没有发挥出来。不支持分支，不能提供提交消息，文本记录不可读，等等。</p>
+
+<p>在这种情况下，Git的唯一好处是历史记录，这当然不是什么都没有，但即使这样也是有危害的。</p>
+
+<p>用<code>gitRepo.Push()</code>替换<code>dbTransaction.Commit()</code>可能是最快的方法，但作为用户，这相当令人失望。</p>
+
+<h3 id="anti-pattern-2-baby-with-the-bathwater">反模式2:婴儿洗澡水</h3>
+
+<p>在这种反模式中，用户可以选择加入Git集成，但前提是他们愿意放弃其他特性。</p>
+
+<p>花了几个月的时间构建这个特性，很容易看出这是如何发生的，有时这是不可避免的。</p>
+
+<p>对于构建在关系数据库上的应用程序来说，当大量应用程序数据不再存储在数据库中并且不再有单一版本时，很难确保所有不同的功能仍然起作用。</p>
+
+<p>简单地禁用它们并说服自己这是用户的选择是很有诱惑力的。老实说，在这个特性的早期版本中，我们会禁用一些功能，但是只要有可能，我们会努力确保启用Git的决定带来尽可能少的妥协。</p>
+
+<h3 id="anti-pattern-3-obfuscation-via-abstraction">反模式#3:通过抽象混淆</h3>
+
+<p>在这种模式中，Git概念在应用程序中被抽象出来。一个例子可能是，分支暴露为一个“草稿”隐喻。</p>
+
+<p>这没什么不好，如果做对了，它会非常强大。但是对于像Octopus这样的应用程序来说，这是有风险的，因为用户可能对Git概念有所了解。</p>
+
+<p>在可能的情况下，我们使用Git术语和概念，而不是试图将它们隐藏在抽象之下。</p>
+
+<h3 id="anti-pattern-4-yamsonxml-hell">反模式#4: YAMSONXML地狱</h3>
+
+<p>我们坚信想要Git集成并不意味着想要放弃所有的UI帮助。我们很早就决定不强迫在Git集成和良好的UX之间做出选择。</p>
+
+<p>让您的配置具有人类可读的文本表示，您可以查看历史、分支、比较和合并，这是一种授权。盯着空文本文件中闪烁的光标可不是。</p>
+
+<p>Octopus不仅仅是一个<em>自动化</em>工具，它还是一个<em>协作</em>工具。将编辑文本文件作为进行更改的唯一方式将许多人拒之门外。</p>
+
+<p>感觉像是倒退了一步。</p>
+
+<h2 id="design-decisions">设计决策</h2>
+
+<p>我们决定要两全其美:Git的超级能力和Octopus的可用性。让我们来看看一些具体的设计决策:</p>
+
+<h3 id="branches-as-a-core-concept">作为核心概念的分支</h3>
+
+<p>分支是Git的超能力，我们希望尽可能充分地利用它们。我们在Octopus UI中展示了切换分支的能力:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/shaping-config-as-code/branch-switcher.png" class="zoom" data-title=""><img src="../Images/a0325d5ce7e7a13eefcf00037f11ac79.png" class="img-fluid center" alt="Switching branches" data-original-src="https://i.octopus.com/blog/2022-03/shaping-config-as-code/branch-switcher.png"/>T2】</a></p>
+
+<p>这允许轻松地切换到新的分支，以便对部署过程进行更改，而不会影响主分支。查看特定步骤时，它允许在分支之间快速切换。</p>
+
+<h3 id="commit-messages-when-saving">保存时提交消息</h3>
+
+<p>遵循<em>公开Git概念</em>的原则，当为项目启用配置为代码时，我们将<code>Save</code>按钮重新标记为<code>Commit</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/shaping-config-as-code/commit-button.png" class="zoom" data-title=""><img src="../Images/dd84415cb584cc8eb65df27f565225be.png" class="img-fluid center" alt="Commit button" data-original-src="https://i.octopus.com/blog/2022-03/shaping-config-as-code/commit-button.png"/>T2】</a></p>
+
+<p>我们还观察到有两种类型的变化。这些例子有:</p>
+
+<ol>
+<li>对现有部署流程进行大规模更改</li>
+<li>对你在过去三个小时里一直努力工作的流程进行第四十九次调整</li>
+</ol>
+
+<p>在第一种情况下，我们认为您可能想要输入一个有意义的提交消息。</p>
+
+<p>在情况#2中，被提示<em>另一个</em>提交消息不太可能导致有意义的描述(或者至少一个安全的工作)。</p>
+
+<p>我们想迎合这两种情况，所以我们引入了一个分割按钮，当点击它时会使用默认消息而不提示，但是<code>...</code>提供了输入提交消息的能力。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/shaping-config-as-code/commit-dialog.png" class="zoom" data-title=""><img src="../Images/d3b3a7168fb8b28c1f5bcd9ed5c28b79.png" class="img-fluid center" alt="Commit dialog" data-original-src="https://i.octopus.com/blog/2022-03/shaping-config-as-code/commit-dialog.png"/>T2】</a></p>
+
+<h3 id="releases-and-git-a-perfect-match">Releases和Git:完美的匹配</h3>
+
+<p>Config as Code完全符合Octopus中<a href="https://octopus.com/docs/releases">版本</a>的概念。</p>
+
+<p>今天，当您创建一个版本时，它会对当前的部署过程、变量和其他一些东西进行快照。</p>
+
+<p>启用Config as Code后，当创建一个发布时，它将允许选择包含部署过程的Git分支(很快会选择commit或tag ):</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-03/shaping-config-as-code/create-release.png" class="zoom" data-title=""><img src="../Images/ae46052a137a6a53ff28a53f9f717583.png" class="img-fluid center" alt="Creating release from branch" data-original-src="https://i.octopus.com/blog/2022-03/shaping-config-as-code/create-release.png"/>T2】</a></p>
+
+<p>从这一点上来说，您的版本不会随着项目生命周期中的环境的进展而改变，就像今天一样。</p>
+
+<h3 id="not-yaml-not-json-not-xml">不是YAML，不是JSON，不是XML</h3>
+
+<p>一个明显的问题是<em>我们将使用哪种配置语言</em>？YAML，JSON，XML？在过去的几年里，我们询问了许多人的意见。我们的结论是，大家都讨厌他们所有人。感觉就像在问<em>你更喜欢喝哪种清洁产品</em>？也许这是因为每个人做出的权衡是如此明显。我们承认没有任何选择接近多数人的接受。</p>
+
+<p>对于我们的配置语言，我们使用基于<a href="https://github.com/hashicorp/hcl" rel="nofollow">哈希公司的HCL </a>的语言。</p>
+
+<pre><code class="language-ruby">step "Greetings World" {
+    script_action {
+        channels = ["Release", "Beta"]
+        environments = ["Production"]
+        worker_pool = "Ubuntu 2018.4"
+        syntax = "Bash"
+        body = &lt;&lt;EOT
+            echo "#{Greeting} World!"
+        EOT
+    }
+}
+step "Test Status Page" {
+    http_test_url_action {
+        url = "https://#{Domain}/status"
+        expected_code = 200
+        timeout_seconds = 60
+    }
+}
+</code></pre>
+
+<p>我们的主要考虑是:</p>
+
+<ul>
+<li>人类可读性:在Git中存储配置的全部目的是让人类能够阅读和比较它。</li>
+<li><strong>复杂文档</strong>:部署流程不是琐碎的文档。它们通常有几十个步骤(或者更多)，并且可以嵌套得很深。我们不设想人们从头开始创作这些，但我们相信人们会编辑它们，复制粘贴步骤，添加环境范围等。我们希望尽可能地支持这些类型的编辑。</li>
+</ul>
+
+<p>其他明显的竞争者是YAML、JSON和XML。</p>
+
+<ul>
+<li>我们排除了JSON，因为它是为表示序列化对象而设计的，并且不是特别友好(引用太多了！).</li>
+<li>我们排除了XML尽管逆水行舟很有趣，但是XML太冗长了(有太多的尖括号！).</li>
+<li>YAML勾选了人类可读框，但是编辑复杂文档很痛苦，我们觉得更适合简单的文档(太多空白了！).</li>
+</ul>
+
+<p>我们喜欢盐酸。我们认为它是这项工作的合适工具。尽管我们已经公开使用HCL作为起点，但我们将我们的实现称为<strong>章鱼配置语言(OCL) </strong>。</p>
+
+<p>我们已经构建了自己的<a href="https://github.com/OctopusDeploy/Ocl" rel="nofollow">解析器/串行化器</a>，我们没有义务遵循Hashicorp对HCL的任何指示，也没有任何东西阻止我们做出改变。</p>
+
+<p>老实说，我们觉得配置语言的选择远不是最重要的部分。不管我们选择哪一种，好处都是相似的。</p>
+
+<h2 id="whats-next">下一步是什么？</h2>
+
+<p>下一步是把这个交到你手里。我们在2021年推出了Config as Code的早期访问预览版。它将退出早期访问，并很快可用于生产。</p>
+
+<h2 id="watch-our-webinar-introducing-config-as-code-in-octopus">观看我们的网络研讨会:在Octopus中将配置作为代码引入</h2>
+
+<p>德里克·坎贝尔和皮特·加拉格尔将带你了解在Octopus中配置为代码的入门知识，以及在大规模使用配置为代码时的最佳实践。</p>
+
+<iframe src="https://www.youtube.com/embed/Z4DgiJ630FU" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>我们定期举办网络研讨会。请参见<a href="https://octopus.com/events">网络研讨会第</a>页，了解有关即将举行的活动和实时流媒体录制的详细信息。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,227 @@
+<html>
+<head>
+<title>CI/CD with Next.js, GitHub Actions, and Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>带有Next.js、GitHub操作和Octopus Deploy - Octopus Deploy的CI/CD</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/nextjs-github-actions-and-octopus-deploy#2022-12-14">https://octopus.com/blog/nextjs-github-actions-and-octopus-deploy#2022-12-14</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/blogimage-automating-next-js-with-github-actions-2021.png" class="zoom" data-title=""><img src="../Images/9bb1be323a3a692ad68a3869a7f7513b.png" class="img-fluid center" alt="CI/CD with Next.js, GitHub Actions, and Octopus Deploy" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/blogimage-automating-next-js-with-github-actions-2021.png"/>T2】</a></p>
+
+<p>像<a href="https://nextjs.org/" rel="nofollow"> Next.js </a>和<a href="https://github.com/facebook/create-react-app" rel="nofollow">这样的流行框架创建了React App </a>支持将你站点的资产捆绑到文件中的特性，但是将这些资产部署到web服务器的某个地方取决于你。在这篇文章中，我将使用<a href="https://github.com/features/actions" rel="nofollow"> GitHub Actions </a>捆绑一个Next.js博客，并使用Octopus Deploy将其部署到<a href="https://aws.amazon.com/s3/" rel="nofollow"> AWS S3 </a>。</p>
+
+<p>我们项目的源代码可以在我们的<a href="https://github.com/OctopusSamples/nextjs-blog" rel="nofollow"> Octopus Sample GitHub repo </a>中找到。</p>
+
+<h2 id="build-and-package">构建和打包</h2>
+
+<p>在我们可以使用Octopus部署我们的博客之前，我们需要打包站点并将其推送到一个包存储库中。打包我们的站点是<a href="https://octopus.com/devops/continuous-delivery/what-is-a-deployment-pipeline/">构建部署管道</a>的一部分，你可以在文章<a href="https://octopus.com/blog/deploying-nodejs">打包Node.js应用</a>中读到更多关于它为什么重要的信息。</p>
+
+<p>为了简单起见，我们将使用Octopus的内置存储库中的<a href="https://octopus.com/docs/packaging-applications/package-repositories/built-in-repository">。由于我们的项目已经托管在GitHub上，让我们设置一个GitHub动作来帮助我们创建我们的包。我们的工作流应该是这样的:</a></p>
+
+<p>对于我们的<code>main</code>分支的每次推送，我们将:</p>
+
+<ul>
+<li>检查源代码。</li>
+<li>运行<code>npm ci</code>来获取我们的<code>node_modules</code>依赖项(这一步隐含的是在我们的Actions环境中设置node.js)。</li>
+<li>用新的版本号标记我们的提交。</li>
+<li>使用<code>next export</code>来生成我们的静态资产文件。</li>
+<li>将这些资产打包到我们的产品包中。</li>
+<li>最后，将我们的包推送到Octopus内置的存储库中。</li>
+</ul>
+
+<p>让我们从GitHub动作模板开始，它检查我们的源代码，运行<code>npm ci</code>，并生成我们的资产:</p>
+
+<pre><code class="language-yaml">// main.yml - https://github.com/OctopusSamples/nextjs-blog/blob/main/.github/workflows/main.yml
+on:
+  push:
+    branches:
+      - main
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        run: |
+          npm ci
+          npm run export
+</code></pre>
+
+<p><code>npm run export</code>在我们的package.json文件中运行下面的<a href="https://docs.npmjs.com/cli/v6/using-npm/scripts" rel="nofollow"> npm脚本</a>:</p>
+
+<pre><code class="language-json">"scripts": {
+  "build": "next build",
+  "export": "next build &amp;&amp; next export"
+},
+</code></pre>
+
+<p>有关<code>next export</code>的更多信息，请参见<a href="https://nextjs.org/docs/advanced-features/static-html-export" rel="nofollow"> next.js文档</a>。</p>
+
+<p>这是一个好的开始，但是现在我们需要一些方法来为我们的包创建新的版本号。</p>
+
+<h3 id="tagging-with-semantic-release">语义发布标签</h3>
+
+<p>Octopus内置提要中的每个包都需要一个<strong> ID </strong>和一个<strong>版本</strong>号，因此文件名使用这种格式<code>ID.version.ext</code>。例如:<code>nextjs-blog.0.1.0.zip</code>。版本号必须是有效的<a href="https://octopus.com/docs/packaging-applications/create-packages/versioning#semver">语义版本</a>。您可以在每次想要发布时手动标记您的发布，但是这很耗时并且需要人工。如果您想要自动化这个过程，那么用自制的解决方案构建逻辑来生成新的、有效的语义版本是具有挑战性的。幸运的是，有一个叫做<a href="https://semantic-release.gitbook.io/" rel="nofollow">语义发布</a>的优秀开源项目可以做到这一点。</p>
+
+<p>语义发布基于一些预定义的约定评估我们的提交消息。根据我们最近提交消息的格式，在找到最新版本并相应地更新主要版本、次要版本或补丁版本后，库将生成下一个适当的语义版本。这个库的细节超出了本文的范围，但是如果您以前从未使用过它，一定要看看这个项目。</p>
+
+<p>甚至有一个社区为语义发布贡献了GitHub行动。让我们使用这个项目来自动生成我们的新版本，并标记我们的提交:</p>
+
+<pre><code class="language-yaml">...
+  - name: Tag and Create Release
+    id: semantic
+    uses: cycjimmy/semantic-release-action@v2
+    env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+</code></pre>
+
+<p>因为我们的主git分支被命名为<code>main</code>，我们需要在我们的<code>package.json</code>中进行一小段配置来告诉语义发布只评估对<code>main</code>分支的提交:</p>
+
+<pre><code class="language-json">"release": {
+  "branches": [
+    "main"
+  ]
+}
+</code></pre>
+
+<p>现在我们已经构建并标记了我们的新版本，是时候创建我们的包并将其发布到Octopus了。</p>
+
+<h3 id="pack-and-publish-with-octopackjs">用octopackjs打包并发布</h3>
+
+<p>如果您曾经尝试过用普通的ol' npm创建包，这可能会非常令人沮丧。</p>
+
+<ul>
+<li><code>npm pack</code> <a href="https://docs.npmjs.com/cli/v6/commands/npm-pack" rel="nofollow">命令</a>暴露的CLI参数非常少。</li>
+<li>您不能显式定义生成的包的名称。</li>
+<li>包的版本必须来自<code>package.json</code>中的<code>version</code>键，并且不能被CLI参数覆盖。</li>
+<li>你的包根<em>必须</em>包含<code>package.json</code>文件。</li>
+<li>您不能轻易地定义最终出现在您的包中的目录结构。</li>
+</ul>
+
+<p>这看起来好像npm是专门为打包您的包而设计的，以供其他npm项目使用——而不是为部署。</p>
+
+<p><a href="https://github.com/OctopusDeploy/octopackjs" rel="nofollow"> octopackjs </a>是一个由Octopus维护的开源项目，旨在将你的包打包并推送到Octopus服务器。运行<code>npm run export</code>之后，Next.js将我们的静态资产文件放在一个名为<code>out</code>的目录中。让我们使用octopackjs编写一个小节点脚本来打包该目录并将其推送到我们的Octopus服务器:</p>
+
+<pre><code class="language-js">// publish.js - https://github.com/OctopusSamples/nextjs-blog/blob/main/publish.js
+const octo = require('@octopusdeploy/octopackjs');
+const octopusUrl = 'https://samples.octopus.app';
+octo.pack()
+    .appendSubDir('out', true)
+    .toFile('.', (err, data) =&gt; {
+        console.log('Package Saved: ' + data.name);
+        octo.push(data.name, {
+            host: octopusUrl,
+            apikey: 'MY-API-KEY',
+            spaceId: 'Spaces-604',
+            replace: true
+        },
+        err =&gt; err ? console.error(err.body) : console.log('Package Pushed to ' + octopusUrl));
+    });
+</code></pre>
+
+<p>参见我们的文档，了解如何创建API键用于Octopus Deploy。有安全意识的读者可能会马上注意到，我的API键似乎是直接硬编码到我们的脚本中的，这是一个很大的错误！让我们在这里使用一个环境变量:</p>
+
+<pre><code class="language-js">octo.push(data.name, {
+    ...
+    apikey: process.env.OCTOPUS_APIKEY,
+    ...
+</code></pre>
+
+<p>我们可以在GitHub Actions 中使用<a href="https://docs.github.com/en/actions/reference/encrypted-secrets" rel="nofollow">加密的秘密注入这个环境变量。首先，我们将把我们的<code>OCTOPUS_APIKEY</code>秘密添加到我们的存储库中(按照动作文档中的说明):</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/actions-secret.png" class="zoom" data-title=""><img src="../Images/0278555c2c31109c6c329349d861e781.png" class="img-fluid center" alt="Encrypted Secret in GitHub repository screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/actions-secret.png"/>T2】</a></p>
+
+<p>接下来，我们将在<code>main.yml</code> GitHub动作模板中引用我们的秘密:</p>
+
+<pre><code class="language-yaml">...
+- if: steps.semantic.outputs.new_release_published == 'true'
+name: Publish Package
+env:
+    OCTOPUS_APIKEY: ${{ secrets.OCTOPUS_APIKEY }}
+run: |
+    npm ci
+    npm run export
+    OCTOPUS_APIKEY="$OCTOPUS_APIKEY" node publish.js
+</code></pre>
+
+<p>既然我们已经建立了我们的行动，让我们提交，推动，看着它去！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/github-action-screenshot.png" class="zoom" data-title=""><img src="../Images/54aaee22363e6d9c9ed112854d4aed14.png" class="img-fluid center" alt="GitHub Action screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/github-action-screenshot.png"/>T2】</a></p>
+
+<p>在这个例子中，我们从GitHub Actions向https://samples.octopus.app的Octopus Cloud实例推送包。如果你正在运行一个不能从github.com公开访问的Octopus服务器，你可能会考虑推送到一个第三方的包存储库(例如Artifactory，Nexus ),并通过将它设置为一个<a href="https://octopus.com/docs/packaging-applications/package-repositories" class="alert-link">外部feed </a>或使用一个本地GitHub Actions runner(如本文<a href="https://octopus.com/blog/gitub-actions-local-runner" class="alert-link">帖子</a>中所解释的),让你的Octopus服务器从该存储库中拉出。</p>
+
+
+<h2 id="deploy">部署</h2>
+
+<p>既然我们已经建立了持续集成流程，那么是时候部署我们的网站了。我们将使用Octopus Deploy将我们的包上传到AWS S3。方便的是，它已经有一个为此设计的<a href="https://octopus.com/docs/deployment-examples/aws-deployments/s3">内置步进模板</a>。对于像我们在这里建立的这样的静态内容网站，S3桶是一个很好的选择，因为它们需要很少的配置(不需要安装和配置web服务器)，价格便宜，当然你也可以从AWS云平台的可靠性中受益。</p>
+
+<h3 id="aws-s3">AWS S3</h3>
+
+<p>设置一个S3桶是非常简单的，有很多教程可以帮助你，所以我不会在这里一步一步地讲解。我强烈建议遵循AWS文档，特别是针对使用亚马逊S3 托管静态网站的<a href="https://docs.aws.amazon.com/AmazonS3/latest/dev/WebsiteHosting.html" rel="nofollow">。</a></p>
+
+<p>Octopus需要一个<a href="https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys" rel="nofollow"> AWS访问密钥</a>来上传包到你的S3桶。建立一个单独的<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html" rel="nofollow"> IAM用户</a>对您的新bucket拥有明确的权限是一个好主意(尽管不是强制性的)。有关管理IAM用户访问密钥的帮助，请参见本页。</p>
+
+<p>将您的访问密钥ID和密钥秘密保存在安全且可访问的地方。我们需要这两个值来在Octopus Deploy中设置我们的AWS帐户</p>
+
+
+<h3 id="octopus-deploy">章鱼部署</h3>
+
+<p>在Octopus Accounts部分，创建一个新的<a href="https://octopus.com/docs/infrastructure/deployment-targets/aws"> AWS帐户</a>。我希望我的帐户名称匹配或引用AWS IAM用户的名称:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/new-aws-account-screenshot.png" class="zoom" data-title=""><img src="../Images/8e9201dfbc43a04dc5c41af4b9a7d71a.png" class="img-fluid center" alt="New Octopus AWS Account screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/new-aws-account-screenshot.png"/>T2】</a></p>
+
+<p>接下来，让我们创建一个名为<code>nextjs-blog</code>的新Octopus项目:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/new-octopus-project-screenshot.png" class="zoom" data-title=""><img src="../Images/1da8ad340cd0394c691e979ef06b7485.png" class="img-fluid center" alt="New Octopus Project nextjs-blog screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/new-octopus-project-screenshot.png"/>T2】</a></p>
+
+<p>为了在我们的<code>nextjs-blog</code>项目中使用我们的AWS帐户，我们需要在我们项目的variables部分创建一个AWS帐户变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/aws-account-variable.png" class="zoom" data-title=""><img src="../Images/29bd135b794b55528d3634d91950bac1.png" class="img-fluid center" alt="AWS Account variable screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/aws-account-variable.png"/>T2】</a></p>
+
+
+
+<p>最后，让我们通过将<strong>上传包添加到AWS S3存储桶</strong>步骤来创建项目中的唯一步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/upload-to-s3-step-template-screenshot.png" class="zoom" data-title=""><img src="../Images/af2abbdd57e30fe627348427b7ff174f.png" class="img-fluid center" alt="Upload to S3 bucket step template screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/upload-to-s3-step-template-screenshot.png"/>T2】</a></p>
+
+<p>配置这一步很简单。您可以跟随我们的文档，其中<a href="https://octopus.com/docs/deployment-examples/aws-deployments/s3">解释了步骤模板选项</a>和更多信息的链接。</p>
+
+<p>注意<strong>包目标</strong>选项。默认情况下，该步骤设置为部署整个包文件，而不提取它。我们的资产文件就在包里，我们需要把它们提取出来，放在水桶的根部，让S3为它们服务。为此，请按照下列步骤操作:</p>
+
+<ol>
+<li>在包选项中选择<strong>特定文件。</strong></li>
+<li>点击<strong>添加文件选择</strong>。</li>
+<li>选择<strong>多档</strong>(相对于<strong>单档</strong>)。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/multiple-file-selection-screenshot.png" class="zoom" data-title=""><img src="../Images/afbe2dbab162cf9cb33c74f509f4477d.png" class="img-fluid center" alt="Select Multiple Files option screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/multiple-file-selection-screenshot.png"/>T2】</a></p>
+
+<p>默认文件模式<code>**/*</code>将选择我们包中的所有文件和目录，这正是我们想要的。</p>
+
+<ol start="4">
+<li>接下来，输入一个<code>Canned Acl</code>。在这里阅读更多关于这些<a href="https://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl" rel="nofollow">的内容</a>。对于我的设置，我使用了<code>bucket-owner-full-control</code></li>
+</ol>
+
+<p>最后，创建一个发布，交叉手指，然后部署！</p>
+
+<p>如果一切顺利，我们会在这里看到我们的网站:<a href="http://octopus-nextjs-sample.s3-website-us-west-2.amazonaws.com/" rel="nofollow">http://octopus-nextjs-sample . S3-website-us-west-2 . Amazon AWS . com/</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/nextjs-blog.png" class="zoom" data-title=""><img src="../Images/b3e81b5031ccf6f98f5ac2f483ae8935.png" class="img-fluid center" alt="Next.js blog screenshot" data-original-src="https://i.octopus.com/blog/2021-03/nextjs-github-actions-and-octopus-deploy/nextjs-blog.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在<a href="https://github.com/OctopusSamples/nextjs-blog" rel="nofollow"> GitHub </a>上查看该项目的源代码，您还可以在我们的<a href="https://samples.octopus.app/app#/Spaces-604/projects/nextjs-blog" rel="nofollow"> Octopus部署示例空间</a>中查看部署项目。</p>
+
+<p>如果你想使用SSL证书为你的网站提供服务，请查看<a href="https://docs.aws.amazon.com/AmazonS3/latest/dev/website-hosting-cloudfront-walkthrough.html" rel="nofollow"> AWS CDN产品CloudFront </a>。</p>
+
+<p>如果你有一个大得多的Next.js站点，并且生成静态资产不切实际，Next.js还支持用Node.js 的<a href="https://nextjs.org/docs/deployment#nodejs-server" rel="nofollow">动态后端为你的应用服务。参见这个</a><a href="https://www.digitalocean.com/community/tutorials/how-to-deploy-a-next-js-app-to-app-platform" rel="nofollow">伟大的数字海洋教程</a>为你的Next.js应用程序设置这种部署。</p>
+
+<p>感谢您的阅读，祝您部署愉快！</p>
+
+                    
+                    
+</body>
+</html>

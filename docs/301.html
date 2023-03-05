@@ -1,0 +1,36 @@
+<html>
+<head>
+<title>Hashing API keys to improve security - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>哈希API密钥以提高安全性- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/hashing-api-keys#2021-02-09">https://octopus.com/blog/hashing-api-keys#2021-02-09</a></blockquote>
+                        <p>在Octopus Deploy中，当使用用户名/密码认证时，我们总是小心翼翼地用盐来散列密码，并且我们从不存储纯文本。在早期版本中，我们使用SHA1散列，去年三月我们改用<a href="https://en.wikipedia.org/wiki/PBKDF2"> PBKDF2 </a>。</p>
+
+<p>然而，当使用我们的HTTP API 时，您也可以使用API密钥进行认证。像大多数应用程序一样，我们将API密钥存储为一个纯文本字符串(尽管<a href="http://docs.octopusdeploy.com/display/OD/Security+and+encryption">Octopus数据库本身是加密的</a>)。</p>
+
+<p><img src="../Images/c56ce9be48d2392836aa6a04959924e9.png" alt="Getting your API key" data-original-src="https://i.octopus.com/blog/migrated/2014-02-21_10_21_07-My_profile_-_Octopus_Deploy_v6qfu4.png"/></p>
+
+<p>许多基于网络的应用程序都是这样工作的——登录后，你会发现一个纯文本的API密匙。这意味着密钥可能以纯文本的形式存储在数据库中，或者可以被解密。这意味着，如果有人能够以某种方式从数据库中读取内容，他们就有可能获取您的API密钥并使用它来冒充您。</p>
+
+<p>亚马逊网络服务最近<a href="http://blogs.aws.amazon.com/security/post/Tx1R9KDN9ISZ0HF/Where-s-my-secret-access-key">做了一个改变</a>。过去，您可以在需要时随时返回AWS门户获取API密钥。现在，当你要一个API密匙的时候，他们会给你一次，你应该自己保存它。我不知道他们是否计划开始存储散列的密钥，但这可能是有意义的。</p>
+
+<p>在Octopus Deploy 2.2中，我们将做一些类似的事情。我们将使用PBKDF2存储经过散列和加盐的API密钥，就像我们存储密码一样。<strong>您将无法再从门户网站</strong>获取您的API密钥，因为就像密码存储一样，它是不可逆的。我们还将使保留多个API密钥成为可能，并在其中一个密钥泄露、意外共享或不再需要时停用它们。</p>
+
+<p><img src="../Images/8f1b12204796067eba95f2cb5c15028f.png" alt="List of API keys" data-original-src="https://i.octopus.com/blog/migrated/2014-02-21_11_13_29-My_profile_-_Octopus_Deploy_lj3xsh.png"/></p>
+
+<p>当您请求一个API密钥时，您可以给它一个名称。我们假设您将立即使用API键进行特定的集成。</p>
+
+<p><img src="../Images/5b82a6b08ac9f4a881a3649f3169959f.png" alt="Generating an API key" data-original-src="https://i.octopus.com/blog/migrated/2014-02-21_11_09_09-My_profile_-_Octopus_Deploy_esesza.png"/></p>
+
+<p>生成密钥后，您只能看到密钥一次，我们只存储散列版本。如果你需要再次使用它，把它放在一个安全的地方，比如一个密码管理工具。</p>
+
+<p><img src="../Images/7aa4edbcc7b0f3b2dd901a257126a9f1.png" alt="Your API key" data-original-src="https://i.octopus.com/blog/migrated/2014-02-21_11_09_25-My_profile_-_Octopus_Deploy_qfvwtp.png"/></p>
+
+<p>为了改进审计，我们还将添加在您对任何审计事件使用API密钥时使用的身份验证方法。这样，如果一个API键被破坏并被用来做一些淘气的事情，你就知道该停用哪个API键。</p>
+
+                    
+                    
+</body>
+</html>

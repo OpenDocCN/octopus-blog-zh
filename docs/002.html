@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>Octopus 1.2 with Retention Policies - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通1.2及保留政策-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/1.2-with-retention-policies#2015-09-25">https://octopus.com/blog/1.2-with-retention-policies#2015-09-25</a></blockquote>
+                        <p>今天，我发布了<a href="http://octopusdeploy.com/downloads">Octopus Deploy 1.2</a>，其中包括<a href="http://octopusdeploy.com/blog/retention-policies-rfc">我上个月在博客上发布的保留策略功能</a>，这也是我们<a href="https://trello.com/board/octopus/4e907de70880ba000079b75c">Trello板</a>上投票最高的功能。在这篇文章中，我想演示该功能是如何工作的。</p>
+
+<p>安装1.2之后，您将在<em>配置</em>区域下找到一个新选项卡，您可以在其中定义保留策略。</p>
+
+<p><img src="../Images/02044b05b05423914c5fab7238502f32.png" alt="Retention policies" data-original-src="https://i.octopus.com/blog/migrated/12.1/retention-1.png"/></p>
+
+<p>保留策略是在项目组级别设置的，这是Octopus 1.1中引入的功能。您可以在项目组设置对话框中选择项目组使用的保留策略：</p>
+
+<p><img src="../Images/896b4fd90c55f580d3b335705d035e36.png" alt="Setting the retention policy" data-original-src="https://i.octopus.com/blog/migrated/12.1/retention-2.png"/></p>
+
+<p>请注意，有一个名为“永远保留所有内容”的默认保留策略。如果删除保留策略，项目组将恢复为此“保留所有内容”策略。</p>
+
+<p>保留策略有三个不同的部分：</p>
+
+<p><img src="../Images/2230e3bbc7818c4b8fb3c3e93a55360b.png" alt="Editing retention policies" data-original-src="https://i.octopus.com/blog/migrated/12.1/retention-3.png"/></p>
+
+<p>当您部署到环境时，Tentacle选项将生效。在本例中，一旦我将一个包部署到给定的机器上4次，该包（.nupkg及其提取到的目录）也将被删除。</p>
+
+<p><img src="../Images/36d66c44821bd9375f3ec88f5dd3db2c.png" alt="Retention policies on Tentacle" data-original-src="https://i.octopus.com/blog/migrated/12.1/retention-4.png"/></p>
+
+<p>八达通选项按计划运行，很像自动健康检查任务。您可以在“任务”页面上看到输出：</p>
+
+<p><img src="../Images/2f05af60769336bb0b18cd57028e3801.png" alt="Tasks page" data-original-src="https://i.octopus.com/blog/migrated/12.1/retention-5.png"/></p>
+
+<p>任务的输出会告诉您由于保留策略而删除了哪些发布：</p>
+
+<p><img src="../Images/b9d45cf360b579225725be93b3c0e803.png" alt="Retention policy output" data-original-src="https://i.octopus.com/blog/migrated/12.1/retention-6.png"/></p>
+
+<p>当保留策略任务自动运行时，您也可以从保留策略页面手动运行它。您可能会发现，当您第一次升级到1.2时，您必须多次运行该任务，因为索引不会完全更新。</p>
+
+<p>我希望你会发现这个新添加有用。</p>
+
+                    
+                    
+</body>
+</html>

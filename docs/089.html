@@ -1,0 +1,46 @@
+<html>
+<head>
+<title>Octopus 2.0: Bound fields UX - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>章鱼2.0:绑定领域UX -章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/bound-fields-ux#2015-09-25">https://octopus.com/blog/bound-fields-ux#2015-09-25</a></blockquote>
+                        <p>现在，Octopus已经支持在定义步骤属性时引用变量的能力。例如，当定义一个FTP步骤时，我们会询问您应该将文件上传到哪个根目录。</p>
+
+<p><img src="../Images/d4334caba1b000dc6264b960c89f8ef2.png" alt="Binding the FTP root directory" data-original-src="http://i.octopusdeploy.com/doc/ftp/04-ftp-root-parameterized.png"/></p>
+
+<p>您可以键入原始值:</p>
+
+<pre><code>/websites/foo
+</code></pre>
+
+<p>或者您可以引用一个变量:</p>
+
+<pre><code>/website/#{path}
+</code></pre>
+
+<p>这是一个强大的特性，因为您引用的变量可以在不同的环境中使用<em>范围</em>。这样，您可以在每个环境中使用不同的根目录路径。</p>
+
+<p>然而这个特性的一个限制是<strong>它只适用于显示为文本框</strong>的值。对于通常显示为复选框、单选按钮或选择框的值，我们没有办法让您将这些字段“绑定”到表达式。对于八达通2.0，我想改变这一点。</p>
+
+<p>这是我目前掌握的情况。默认情况下，我们仍将这些字段显示为复选框:</p>
+
+<p><img src="../Images/5c0cb566dee0f936ad647331c2ab5976.png" alt="Checkboxes" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2013-09-10_at_4_27_21_PM_xi41cy.png"/></p>
+
+<p>但是如果你需要做一些更高级的事情，你可以点击右边的“绑定灯”按钮，并将其绑定到一个自定义表达式:</p>
+
+<p><img src="../Images/d681f2e15df55413ebe0024d8c289d97.png" alt="Bound fields" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2013-09-10_at_4_31_16_PM_wp79bm.png"/></p>
+
+<p>下面是嵌入的JSFiddle:</p>
+
+
+
+<p>几乎所有的步骤属性都可以像这样绑定。复选框、选择框、自动完成、单选按钮组和其他任何东西都有一个绑定灯，允许您输入自定义表达式。</p>
+
+<p>UX还能改进吗？请在下面的框中留下您的评论。</p>
+
+                    
+                    
+</body>
+</html>

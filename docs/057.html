@@ -1,0 +1,39 @@
+<html>
+<head>
+<title>Automatically provisioning Amazon EC2 instances with Tentacle installed - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>自动提供安装了触手的Amazon EC2实例——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/auto-provision-ec2-instances-with-tentacle-installed#2015-09-25">https://octopus.com/blog/auto-provision-ec2-instances-with-tentacle-installed#2015-09-25</a></blockquote>
+                        <p>Octopus用来自动化部署的触手代理长期以来一直支持通过命令行进行配置。可以自动下载MSI，安装它，配置触手实例，甚至向Octopus服务器注册它，所有这些都通过命令行完成。</p>
+
+<p>当通过Amazon EC2配置Windows服务器时，您可以将PowerShell脚本作为用户数据传递。这将在EC2实例第一次启动时执行:</p>
+
+<p><img src="../Images/d9989e9b1c8d307a02386c2893b17269.png" alt="Provisioning the EC2 instance" data-original-src="https://i.octopus.com/blog/migrated/ec2-scripts_vlz9wg.png"/></p>
+
+<p>我已经根据我们在<a href="http://docs.octopusdeploy.com/display/OD/Automating+Tentacle+installation">自动化触手安装</a>上的说明整理了一个示例脚本。你可以在下面找到这个脚本。将它粘贴到<code>&lt;powershell&gt;</code> XML元素之间，然后等待机器启动。当它最终启动时，机器将注册到您的八达通服务器:</p>
+
+<p><img src="../Images/aedc794065d224d4652e15964b157828.png" alt="It's alive!" data-original-src="https://i.octopus.com/blog/migrated/ec2-works_kbbvkm.png"/></p>
+
+<p>如果遇到任何问题，请远程访问机器并查看以下两个文件:</p>
+
+<ul>
+<li><code>C:\TentacleInstallLog.txt</code></li>
+<li><code>C:\Program Files\Amazon\Ec2ConfigService\Logs\Ec2ConfigLog.txt</code></li>
+</ul>
+
+<p>以下是PowerShell脚本:</p>
+
+
+
+<p>当您设置EC2实例并为其分配安全组时，请确保您指定的触手监听端口(默认为10933)允许TCP流量。该脚本会自动将例外添加到Windows防火墙，但是您需要对AWS防火墙执行相同的操作。</p>
+
+<p>有关EC2实例预配和用户数据的更多信息，请参见:</p>
+
+
+
+                    
+                    
+</body>
+</html>

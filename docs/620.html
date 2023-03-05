@@ -1,0 +1,202 @@
+<html>
+<head>
+<title>Request for Comments - ECS integration with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>征求意见- ECS与Octopus集成- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-ecs-integration-with-octopus#2021-08-12">https://octopus.com/blog/rfc-ecs-integration-with-octopus#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-feedback_2021_01.png" class="zoom" data-title=""><img src="../Images/31f27380d49b4bea39ec456244f8b9e5.png" class="img-fluid center" alt="Octopus salesperson at laptop with headset and icons representing customer feedback" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-feedback_2021_01.png"/>T2】</a></p>
+
+<p>Octopus是实现世界级部署的工具。我们一直拥有业界领先的功能来部署到您的内部基础架构，并且我们多年来一直支持Azure应用程序部署。</p>
+
+<p>最近，我们扩展到其他主要的云服务提供商，允许您使用Kubernetes和Terraform等工具部署到Azure和AWS。但是我们可以做得更多——仍然有Octopus没有提供一流集成的云原生服务。</p>
+
+<p>我们希望Octopus成为您的首选，无论您是部署在本地、云还是两者的混合。这意味着为更多云原生服务产品提供一流的支持，从而简化复杂的部署。</p>
+
+<p>为了实现这一目标，Octopus建立了一个团队，致力于将Octopus与最受欢迎的云原生服务相集成。经过几个月的开发框架，使这些集成能够快速交付，我们现在可以与我们的客户，合作伙伴和其他内部八达通部门分享我们的目标和计划。</p>
+
+<p>我们希望这个博客是许多征求意见(RFC)帖子中的第一个，在那里我们讨论提议的功能并提供反馈的机会。</p>
+
+<p>我们被反复要求支持的一项云服务是AWS ECS，这篇文章概述了我们目前正在讨论的一些新步骤和目标。</p>
+
+<h2 id="how-we-propose-to-deliver-first-class-ecs-support">我们建议如何提供一流的ECS支持</h2>
+
+<p><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html" rel="nofollow">亚马逊将弹性容器服务(ECS)描述为</a>:</p>
+
+<blockquote class="blockquote">
+<p>一种高度可伸缩的快速容器管理服务，可以轻松运行、停止和管理集群上的容器。您的容器在任务定义中定义，用于运行单个任务或服务中的任务。</p>
+</blockquote>
+
+<p>Octopus已经提供了许多功能来协调容器部署，包括通过feeds(包括ECR feeds)使用Docker图像的能力，以及通过帐户安全存储AWS凭证的能力。通过针对AWS CLI编写脚本，即使不方便，现在也有可能<em>部署到ECS。但是我们可以做得更好。</em></p>
+
+<h3 id="a-new-ecs-target">一个新的ECS目标</h3>
+
+<p>提议的ECS支持从一个代表ECS集群的新目标开始。该目标引用用于访问ECS集群的AWS凭据、AWS区域和集群名称:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/ecs-target.png" class="zoom" data-title=""><img src="../Images/49aadb92f7a5edac908b0a4ec1131da2.png" class="img-fluid center" alt="An ECS target mockup" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/ecs-target.png"/></a>T2】</p>
+
+<p><em>ECS目标实体模型。</em></p>
+
+<h3 id="a-new-service-deployment-step">新的服务部署步骤</h3>
+
+<p>概括地说，将应用程序部署到ECS集群需要三个组件。</p>
+
+<p>首先你需要一个Docker图片。我们设想您的持续集成(CI)服务器将继续构建、标记和部署这些映像到Docker注册表。</p>
+
+<p>然后一个<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definitions.html" rel="nofollow">任务定义</a>引用一个特定的图像标签，并为生成的容器定义许多设置，比如内存和CPU需求、环境变量、公开的端口等等。任务定义是不可变的，每个新的图像标签必须由任务定义的新版本捕获。</p>
+
+<p>然后一个<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_definition_parameters.html" rel="nofollow">服务</a>引用一个任务定义，以及额外的运行时细节，比如运行多少个实例，实例如何在集群中分布，在哪个VPC中运行，负载平衡器和伸缩需求。</p>
+
+<p>我们提议的步骤提供了一个自以为是的部署工作流，它将一个<a href="https://aws.amazon.com/fargate/" rel="nofollow"> Fargate </a>任务定义和服务合并到一个步骤中。</p>
+
+<p>您将从定义贡献给任务定义的值开始。值得注意的是，与AWS控制台不同，在此步骤中定义的Docker映像不包括标记，因为映像标记的选择将推迟到创建发布之后:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/drawer.png" class="zoom" data-title=""><img src="../Images/e1de2f9a78cf0a82df80a7ef8e74fbfe.png" class="img-fluid center" alt="Step mockup showing Docker image selection" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/drawer.png"/>T2】</a></p>
+
+<p><em>显示Docker图像选择的步骤实体模型。</em></p>
+
+<p>同一步骤定义了服务属性的值:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/ecs-step.png" class="zoom" data-title=""><img src="../Images/ce9de064f4bfd1319d490ebf038effa4.png" class="img-fluid center" alt="Step mockup showing service properties and the task definition containers." data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/ecs-step.png"/></a>T2】</p>
+
+<p><em>显示服务属性和任务定义容器的步骤模型。</em></p>
+
+<p>然后，ECS部署将执行以下流程:</p>
+
+<ol>
+<li>创建发布时，选择要在任务定义中定义的Docker图像标签。</li>
+<li>使用特定于部署到给定环境的详细信息创建新的任务定义。</li>
+<li>使用步骤2中的任务定义配置服务。</li>
+</ol>
+
+<h2 id="benefits-of-the-proposed-approach">拟议方法的好处</h2>
+
+<p>上述目标和步骤旨在帮助那些协调ECS部署的人落入成功的陷阱，我们将其总结为<a href="https://octopus.com/blog/ten-pillars-of-pragmatic-deployments">务实部署的十大支柱</a>。</p>
+
+<p>在这第一个里程碑中，我们特别关注基础，包括实现:</p>
+
+
+
+<p>所有这些特性的核心思想是，部署将通过一系列<a href="https://octopus.com/docs/infrastructure/environments">环境</a>进行，规范环境集包括开发、测试和生产环境。</p>
+
+<p>尽管ECS没有环境的概念，因此为了实现<a href="https://octopus.com/blog/ten-pillars-of-pragmatic-deployments#repeatable-deployments">可重复部署</a>，我们必须对新的步骤和目标进行建模，以促进环境进展，同时考虑到诸如<a href="https://octopus.com/docs/projects/variables#scoping-variables">环境范围变量</a>和<a href="https://octopus.com/docs/octopus-rest-api/examples/releases/update-release-variable-snapshot">更新发布快照的能力</a>等因素。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-environments.png" class="zoom" data-title=""><img src="../Images/1aa9312aab2180ca8c872c68f1324a8a.png" class="img-fluid center" alt="diagram with arrows between development test and production blocks" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-environments.png"/>T2】</a></p>
+
+<h3 id="why-use-targets">为什么使用目标？</h3>
+
+<p>通过将ECS集群的详细信息捕获为一个<a href="https://octopus.com/docs/infrastructure/deployment-targets">目标</a>，它被限定在一个环境的范围内，并由一个<a href="https://octopus.com/docs/infrastructure/deployment-targets#target-roles">角色</a>公开，将在哪里进行部署的具体细节被从步骤中提取出来。一个步骤简单地定义它部署到的目标角色，Octopus将确保部署发生在当前环境的正确范围的目标上。</p>
+
+<p>我们认为，如果您希望采用AWS推荐的关于使用多个帐户的一些<a href="https://aws.amazon.com/blogs/mt/best-practices-for-organizational-units-with-aws-organizations/" rel="nofollow">最佳实践</a>，这将是非常有益的:</p>
+
+<blockquote class="blockquote">
+<p>AWS帐户为您的AWS资源提供了自然的安全性、访问和计费边界，并使您能够实现资源独立性和隔离。</p>
+</blockquote>
+
+<p>对于ECS目标，无论是将多个逻辑环境部署到一个共享的ECS集群，为每个环境部署一个专用集群，还是将多个环境划分到多个AWS帐户，都没有什么区别。只需将每个ECS目标指向适当的群集，您的部署就可以跨您使用的任何环境分区进行扩展:</p>
+
+<p>【T2 <img src="../Images/5c388c4dd3aff822247f6c01a9ccb969.png" class="img-fluid center" alt="test account showing dev, test and production targets" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-targets.png"/></p>
+
+<h3 id="abstracting-away-task-definition-versions">抽象出任务定义版本</h3>
+
+<p>如果您曾经部署过一个新的Docker映像，首先创建一个新的任务定义版本，然后更新服务以引用它，那么您就会理解手动ECS部署是多么乏味。</p>
+
+<p>我们的目标是让新的ECS部署只涉及创建一个Octopus版本和选择要包含的新Docker图像标签。通过为每个部署创建一个新的任务定义，我们消除了部署到ECS的人员考虑任务定义的需要。</p>
+
+<p>无论您的任务定义是否包含特定于环境的值，或者每个环境是否由新AWS帐户中的一个集群表示，都没有关系，因为Octopus将代表您创建必要的任务定义。这简化了您的工作流程，以便:</p>
+
+<ul>
+<li>创建新的Docker图像</li>
+<li>用这些Docker图像创建一个Octopus版本</li>
+<li>在您的环境中推广您的版本</li>
+</ul>
+
+<p>它还确保您可以<a href="https://octopus.com/blog/ten-pillars-of-pragmatic-deployments#recoverable-deployments">通过重新部署旧版本从失败的部署</a>中恢复。</p>
+
+<h3 id="advanced-deployments-with-tenants-and-channels">租户和渠道的高级部署</h3>
+
+<p>提议的步骤和目标还集成了高级Octopus特性，如<a href="https://octopus.com/docs/deployments/patterns/multi-tenant-deployments">租户</a>、<a href="https://octopus.com/docs/releases/channels">通道</a>和<a href="https://octopus.com/docs/releases/lifecycles">生命周期</a>。</p>
+
+<p>新的ECS目标可以针对租户，再次从步骤中抽象出部署位置的细节，并将其封装在目标中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-tenants.png" class="zoom" data-title=""><img src="../Images/1066a520d33613d873c3656871429464.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-tenants.png"/></a>T2】</p>
+
+<p>同时，渠道规则可应用于Docker图像标签，通过生命周期促进部署模式，如热修复，允许直接部署到生产环境:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-lifecyles.png" class="zoom" data-title=""><img src="../Images/7a6f82d0e1908bb1355040c31d50bbf4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/blogimage-lifecyles.png"/>T2】</a></p>
+
+<h3 id="fall-back-to-cloudformation">退回到云层结构</h3>
+
+<p>在幕后，新的步骤将生成CloudFormation模板，然后为您执行。这确保了所有资源都可以用现有的云生成工具进行审计和跟踪。</p>
+
+<p>然而，任何固执己见的步骤最终都会遇到它不支持的用例。对于那些有特殊需求的人，或者对于那些不适应建议步骤的人，我们将提供将固执己见的步骤转换成原始CloudFormation模板的能力。</p>
+
+<p>只需在溢出菜单中选择<strong> Convert </strong>选项，该步骤将被转换为CloudFormation部署步骤，让您完全控制您的ECS部署，而无需从头开始重新创建它们:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/overflow-menu-v2.png" class="zoom" data-title=""><img src="../Images/5a8425c714486a75c9ac3b1a41a1e460.png" class="img-fluid center" alt="Step mockup showing conversion from opinionated step to raw CloudFormation template" data-original-src="https://i.octopus.com/blog/2021-06/rfc-ecs-integration-with-octopus/overflow-menu-v2.png"/>T2】</a></p>
+
+<p><em>步骤模型，显示从固执己见的步骤到原始CloudFormation模板的转换。</em></p>
+
+<p>为了允许部署具有Docker图像引用的CloudFormation模板(这是一个常见的场景，其中有<a href="https://aws.amazon.com/eks/" rel="nofollow"> EKS </a>、<a href="https://aws.amazon.com/ecs/" rel="nofollow"> ECS </a>、<a href="https://aws.amazon.com/lightsail/" rel="nofollow"> Lightsail </a>、<a href="https://aws.amazon.com/lambda/" rel="nofollow"> Lambdas </a>和<a href="https://aws.amazon.com/apprunner/" rel="nofollow"> AppRunner </a>))，<strong>部署AWS CloudFormation模板</strong>步骤将被更新以支持<a href="https://octopus.com/blog/script-step-packages">附加包引用</a>。这允许在CloudFormation模板中定义和引用Docker图像，同时将图像标签选择推迟到发布创建时间。</p>
+
+<h2 id="what-is-the-scope-of-the-first-ecs-milestone">第一个ECS里程碑的范围是什么？</h2>
+
+<p>我们的目标是增量发布ECS集成，让客户更快地获得该特性，并收集早期采用者的反馈。</p>
+
+<p>上面建议的步骤是我们对这一新功能发展方向的高层次审视，但第一个里程碑可能会有以下限制:</p>
+
+<ul>
+<li>将步骤限制为仅部署到Fargate。</li>
+<li>仅支持滚动部署，不支持集成CodeDeploy蓝/绿部署。</li>
+<li>不提供构建新负载平衡器的能力。</li>
+<li>排除自动缩放设置。</li>
+<li>排除应用网格和FireLens设置。</li>
+<li>排除服务自动发现设置。</li>
+<li>仅创建服务，不支持任务或计划任务。</li>
+</ul>
+
+<p>这些特性可能会包含在后续的里程碑中，所以请关注新的RFC帖子。</p>
+
+<h2 id="when-will-this-be-released">这个什么时候发布？</h2>
+
+<p>我们仍处于早期规划阶段，ECS支持目前还不是一个确定的功能，所以我们不能提供发布日期。请关注<a href="https://octopus.com/blog/">博客</a>以获取进一步的公告。</p>
+
+<h2 id="we-want-your-feedback">我们需要您的反馈</h2>
+
+<p>ECS支持仍处于规划阶段，因此现在正是利用您的反馈来帮助塑造这一新功能的大好时机。我们创建了一个<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/1" rel="nofollow"> GitHub问题来捕捉讨论</a>。</p>
+
+<p>具体来说，我们想知道:</p>
+
+<ul>
+<li>建议的步骤和目标是否适用于您的ECS部署？</li>
+<li>你的ECS架构是什么样子的？</li>
+<li>你有多个集群吗？</li>
+<li>你有多个AWS账户吗？</li>
+<li>您正在部署哪些类型的应用程序？</li>
+<li>您希望Octopus能为您解决哪些ECS部署挑战？</li>
+</ul>
+
+<p>这些反馈将有助于我们提供最佳解决方案。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>总之，我们提议的ECS支持的第一个里程碑包括:</p>
+
+<ul>
+<li>模拟环境和租赁部署的新目标。</li>
+<li>将任务定义的创建/更新与服务的创建/更新相结合的新步骤。</li>
+<li>将固执己见的步骤转换成原始云形成模板的能力。</li>
+<li>跨环境的简化部署工作流，支持特定于环境的变量、渠道和生命周期。</li>
+</ul>
+
+<p>感谢你阅读这篇文章。我们希望您和我们一样对建议的新ECS功能感到兴奋。</p>
+
+<p>非常感谢您的任何反馈。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,100 @@
+<html>
+<head>
+<title>Octopus Deploy 4.0 - Deploy Release Page Redesign - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通部署4.0 -部署发布页面重新设计-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-v4-create-deployments#2021-08-12">https://octopus.com/blog/octopus-v4-create-deployments#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/4.0deployments_blogimage.png" class="zoom" data-title=""><img src="../Images/6e6defbe23fb71624d5996c83069ec06.png" class="img-fluid center" alt="Octopus 4.0 new create release page" data-original-src="https://i.octopus.com/blog/2017-11/4.0deployments_blogimage.png"/>T2】</a></p>
+
+<p>这篇文章是我们章鱼4.0博客系列的一部分。在我们的<a href="https://octopus.com/blog">博客</a>或我们的<a href="https://twitter.com/octopusdeploy" rel="nofollow">推特</a>上关注它。</p>
+
+<p><strong> Octopus Deploy 4.0已经发货！今天就阅读<a href="/blog/octopus-release-4-0">博文</a>和<a href="https://octopus.com/downloads">下载</a>吧！</strong></p>
+
+<hr/>
+
+<p>在为Octopus 4.0进行UI刷新时，许多页面实际上是新外观的直接接口。但是有几次我们抓住机会重新思考了设计。</p>
+
+<p>其中之一是部署一个版本的页面。</p>
+
+<p>最初创建现有页面是为了将一个版本部署到单个环境中。后来，它被扩展到允许部署到多个环境中。然后多租户特性出现了，我们增加了为一个或多个租户创建部署的能力。</p>
+
+<p>老实说，早就该重新设计了。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-v3.png" class="zoom" data-title=""><img src="../Images/d024de4287dc15f1e698674a737c9d3e.png" class="img-fluid center" alt="Create Deployment Page - v3 design" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-v3.png"/>T2】</a></p>
+
+<h2 id="introducing-the-new-deploy-release-page">介绍新的部署发布页面</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-basic.png" class="zoom" data-title=""><img src="../Images/1e2eca85ee0aed32f8070411bd603070.png" class="img-fluid center" alt="Create Deployment Page - Basic" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-basic.png"/>T2】</a></p>
+
+<p>将一个版本部署到多个环境或租户时，可以看到最显著的变化。</p>
+
+<p>我们在概念上将页面分成两个部分:北边的<strong>和南边的<strong/>(好吧，也许我们中的一些人当时看了太多的《权力的游戏》)。</strong></p>
+
+<p>在下图中，<em>预览和自定义</em>分隔符形成赤道。</p>
+
+<ul>
+<li><p>北部是您选择<em>的地方，在那里</em>发布将被部署(环境和租户)。它还允许您配置一些选项，这些选项适用于将被创建的<em>所有</em>部署。</p>
+</li>
+<li><p>南部显示将要创建的部署，并提供额外的<em>每部署</em>配置的能力。</p>
+</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-north-south.png" class="zoom" data-title=""><img src="../Images/df6bbd0ab34e45ceb0899a02f1ec1aef.png" class="img-fluid center" alt="Create Deployment Page - North and South" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-north-south.png"/></a>T2】</p>
+
+<h3 id="north">北</h3>
+
+<p>在北部，您选择希望部署到的环境和租户(如果是多租户项目)。</p>
+
+<p><em>显示高级</em>按钮显示附加选项，例如:</p>
+
+<ul>
+<li>为将来的时间安排部署</li>
+<li>从部署中排除步骤</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-advanced.png" class="zoom" data-title=""><img src="../Images/8715ba872741845bd7a51ba2525901ac.png" class="img-fluid center" alt="Create Deployment Page - Advanced" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-advanced.png"/>T2】</a></p>
+
+<h3 id="south">南方</h3>
+
+<p>南部部分有望清楚地显示将要创建的部署。这是现有设计没有有效传达的内容。</p>
+
+<p>当在北方使用复杂的租户标签表达式时，这变得特别重要。在这种情况下，South将评估标记表达式，并准确显示将创建哪些租赁部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-tenant-tags.png" class="zoom" data-title=""><img src="../Images/8e853515f203dce0f47ee6802d4b78e0.png" class="img-fluid center" alt="Create Deployment Page - Tenant Tags" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-tenant-tags.png"/>T2】</a></p>
+
+<p>展开部署允许您预览将在哪些目标上执行哪些部署步骤。</p>
+
+<p>您还可以在此包括\排除特定的部署目标。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-south-expanded.png" class="zoom" data-title=""><img src="../Images/93dcba7f2478093c2d203bf5fcbd3595.png" class="img-fluid center" alt="Create Deployment Page - Preview and Configure" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-south-expanded.png"/>T2】</a></p>
+
+<h3 id="when-its-not-rainbows-and-lollipops">当不是彩虹和棒棒糖的时候</h3>
+
+<p>有时创建部署会失败。<br/>您可能在环境中没有任何匹配的目标，或者您可能缺少一个必需的变量。</p>
+
+<h4 id="the-old">老人</h4>
+
+<p>当部署到许多环境或租户时，一些部署成功创建，而另一些部署失败，这使用户处于不利地位。解决错误后，需要重新配置部署选项，以确保成功创建的部署不会被重新部署。</p>
+
+<h4 id="the-new">新的</h4>
+
+<p>在新版本中，我们提供了一个<em>重试失败</em>按钮。</p>
+
+<p>例如，在下图中，无法创建对英特尔租户<em>的部署。点击<em>重试不成功</em>将仅对该租户进行重试(还有一个<em>部署所有</em>按钮)。</em></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-tenant-with-error.png" class="zoom" data-title=""><img src="../Images/b379f7c2804d50a8f59cf12a53b03b2d.png" class="img-fluid center" alt="Create Deployment Page - Tenant with Error" data-original-src="https://i.octopus.com/blog/2017-11/octopus-v4-create-deployment-tenant-with-error.png"/>T2】</a></p>
+
+<h2 id="tell-us-what-you-think">告诉我们你的想法</h2>
+
+<p>我们总是喜欢您的反馈。</p>
+
+<p>请告诉我们你对新设计的看法。如果您对之前的版本有任何问题，我们特别希望您能留下评论。我们解决了吗？</p>
+
+<p>愉快的部署！<br/> <em>(希望通过Octopus v4创建)</em></p>
+
+                    
+                    
+</body>
+</html>

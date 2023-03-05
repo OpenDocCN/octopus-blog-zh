@@ -1,0 +1,38 @@
+<html>
+<head>
+<title>Variable Substitutions in Octopus 1.2.2 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 1.2.2中的变量替换- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/variable-substitutions#2015-09-25">https://octopus.com/blog/variable-substitutions#2015-09-25</a></blockquote>
+                        <p>Octopus 1.2.2支持<a href="https://trello.com/card/variable-substitutions/4e907de70880ba000079b75c/12">变量替换</a>，允许一个变量的一部分引用另一个变量。</p>
+
+<p>例如，在Octopus 1.2.2之前，我定义了这个变量:</p>
+
+<p><img src="../Images/1e02d1fb12544b2ed1b4178eef8a471e.png" alt="Old variables" data-original-src="https://i.octopus.com/blog/migrated/13/oldvars.png"/></p>
+
+<p>升级到1.2.2后，我现在可以使用引用预定义变量之一<a href="http://octopusdeploy.com/documentation/features/variables">的单个变量。</a></p>
+
+<p><img src="../Images/b9b0c6d71e6af2f3164ef371e467f5a0.png" alt="New variables" data-original-src="https://i.octopus.com/blog/migrated/13/newvars.png"/></p>
+
+<h2>解决</h2>
+
+<p>变量可以引用其他变量，其他变量可以引用其他变量，依此类推。在部署过程中，Octopus服务器将选择“范围内”的变量(基于部署到的环境等)。)并把它们推到触手处。然后触手会设置一些额外的特殊变量(比如<code>OctopusOriginalPackageDirectoryPath</code>)，然后它会通过应用任何替换来解析所有变量的值。在此过程中，它将检查循环依赖关系，如果检测到循环，将抛出异常。</p>
+
+<h2>自定义替换的工作方式</h2>
+
+<p>如果一个变量引用另一个未定义的变量，默认行为是抛出。您可以通过将特殊变量<code>OctopusIgnoreMissingVariableTokens</code>设置为<code>true</code>来进行定制，从而忽略该表达式。</p>
+
+<p>如果您想完全退出该功能，请将<code>OctopusNoVariableTokenReplacement</code>设置为<code>true</code>。</p>
+
+<p>默认情况下，Octopus期望变量采用<code>#{Name}</code>的形式。如果该语法不适合您，您可以通过在变量<code>OctopusVariableTokenRegex</code>中设置一个自定义正则表达式来定制它。默认使用的正则表达式是<code>\#\{(?&lt;variable&gt;.+?)\}</code>。</p>
+
+<p>如果您需要检查您的变量是否被正确替换，将两个特殊变量<code>PrintVariables</code>和<code>PrintEvaluatedVariables</code>设置为<code>true</code>，以打印解析前/后的值。</p>
+
+<p>希望这个特性能让定义变量变得更加容易。</p>
+
+                    
+                    
+</body>
+</html>

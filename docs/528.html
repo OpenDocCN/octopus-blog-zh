@@ -1,0 +1,152 @@
+<html>
+<head>
+<title>Octopus 2020.5: Solid improvements and Config as Code update - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通2020.5:坚实的改进和配置作为代码更新-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2020-5#2022-02-22">https://octopus.com/blog/octopus-release-2020-5#2022-02-22</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/release-2020.5.png" class="zoom" data-title=""><img src="../Images/f2a0695347903d7531021b3d66d78438.png" class="img-fluid center" alt="Octopus 2020.5" data-original-src="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/release-2020.5.png"/>T2】</a></p>
+
+<p>我很高兴地告诉大家，八达通2020.5现已推出。这个版本有一些坚实的改进；然而，这是一个更安静的版本，因为我们正在为我们的Config as Code特性做大量的幕后工作。</p>
+
+<p>Octopus 2020.5是2020年六个版本中的<a href="/blog/releases-and-lts">第五个，它包括六个月的长期支持。下表显示了我们长期支持的当前版本:</a></p>
+
+<table class="table">
+<thead>
+<tr>
+<th>释放；排放；发布</th>
+<th>长期支持</th>
+<th>LTS结束日期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>章鱼2020.5</td>
+<td>是</td>
+<td>2021-05-30</td>
+</tr>
+<tr>
+<td>八达通2020.4</td>
+<td>是</td>
+<td>2021-03-21</td>
+</tr>
+<tr>
+<td>八达通2020.3</td>
+<td>是</td>
+<td>2021-01-20</td>
+</tr>
+<tr>
+<td>章鱼2020.2</td>
+<td>期满</td>
+<td>2020-09-30</td>
+</tr>
+<tr>
+<td>八达通2020.1</td>
+<td>期满</td>
+<td>2020-08-24</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="create-self-signed-certificates-in-the-certificate-library">在证书库中创建自签名证书</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/self-signed-certificates.png" class="zoom" data-title=""><img src="../Images/2b70b42d3aab193c866dd340986178c2.png" class="img-fluid center" alt="Create self-signed certificates in the certificate library " data-original-src="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/self-signed-certificates.png"/>T2】</a></p>
+
+<p>创建用于开发和测试目的的自签名证书并不复杂，但是Octopus现在让这变得快速而简单。现在，您可以在证书库(<strong> <span class="path">库➜证书</span> </strong>)中创建自签名证书，并在您的自动化流程中利用它。此更新使得测试涉及证书的新的或更新的部署和操作手册的执行更加方便。如果您需要将证书用于命令行界面(CLI)、桌面应用程序或其他任务，也可以下载证书。</p>
+
+<p><a href="https://octopus.com/docs/deployment-examples/certificates">了解更多信息</a></p>
+
+<h2 id="github-container-registry-support">GitHub容器注册支持</h2>
+
+<p>Octopus现在支持<a href="https://docs.github.com/en/free-pro-team@latest/packages/getting-started-with-github-container-registry/about-github-container-registry" rel="nofollow">GitHub container registry(GHCR)</a>作为自动化部署和runbook流程的包源。我们在技术上已经支持GHCR，但是，GitHub没有实现Docker目录API来允许搜索产生混淆错误的存储库。我们现在更加优雅地处理这些不一致，因此您可以毫无问题地利用GHCR源。</p>
+
+<p><a href="https://github.com/octopusdeploy/issues/issues/6567" rel="nofollow">了解更多信息</a></p>
+
+<h2 id="kubernetes-updates">Kubernetes更新</h2>
+
+<p>这个版本包括两个小的更新，以改善我们的Kubernetes支持驱动的客户反馈。</p>
+
+<p><strong>在部署Kubernetes容器步骤中公开envFrom字段</strong></p>
+
+<p>Kubernetes 1.16公开了<code>envFrom</code>属性，允许将secret或configmap的内容创建为环境变量。Octopus现在支持<code>envFrom</code>字段，为部署中包含多个值提供了一种方式。</p>
+
+<p><a href="/blog/k8s-envfrom">了解更多信息</a></p>
+
+<p><strong>允许创建和部署DaemonSets和stateful set</strong></p>
+
+<p>部署Kubernetes容器步骤允许Octopus在集群中创建Kubernetes部署。我们已经在Octopus门户网站中更新了这一步骤，以支持<code>DaemonSets</code>和<code>StatefulSets</code>，使其更加有用。</p>
+
+<p><a href="https://github.com/octopusdeploy/issues/issues/6551" rel="nofollow">了解更多信息</a></p>
+
+<h2 id="terraform-update">Terraform更新</h2>
+
+<p>Octopus现在支持HCL2和Terraform 0.12+的内联脚本。这次更新意味着你可以在Octopus门户网站中获得丰富的现代Terraform脚本语法高亮显示。</p>
+
+<p><a href="https://github.com/octopusdeploy/issues/issues/6562" rel="nofollow">了解更多信息</a></p>
+
+<h2 id="add-markdown-notes-to-automation-steps">向自动化步骤添加标记注释</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/automation-step-notes.png" class="zoom" data-title=""><img src="../Images/9853f8005ef97c990ef1f0a927f3778c.png" class="img-fluid center" alt="Add markdown notes to automation steps" data-original-src="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/automation-step-notes.png"/>T2】</a></p>
+
+<p>现在，您可以使用markdown注释来注释您的DevOps自动化流程。向任何部署或操作手册步骤添加基于文本的注释，并提供markdown格式支持，流程摘要将显示该注释。</p>
+
+<p>这种改变有助于您的未来自己和其他团队成员快速理解复杂的自动化过程。</p>
+
+<p><a href="https://github.com/octopusdeploy/issues/issues/6608" rel="nofollow">了解更多信息</a></p>
+
+<h2 id="config-as-code-update">配置为代码更新</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/branch-switcher.png" class="zoom" data-title=""><img src="../Images/4c34e09fc320521bba86034f4656c926.png" class="img-fluid center" alt="Config as Code Update" data-original-src="https://i.octopus.com/blog/2020-11/octopus-release-2020-5/branch-switcher.png"/>T2】</a></p>
+
+<p>我们想在2020年11月分享我们的Config as Code功能的预览，但它还没有准备好。我们低估了一些核心组件需要多长时间来构建，而且这个特性是一个非常棘手的增量发布特性。</p>
+
+<p>幸运的是，我们正在取得出色的进展，我们已经完成了整体特性的一些重要部分。</p>
+
+<ul>
+<li>配置项目以使用git存储库。</li>
+<li>在Octopus门户网站中切换分支，查看和编辑不同分支上的部署流程。</li>
+<li>可以提交更改，包括添加提交消息。</li>
+<li>生成的配置以基于HCL的格式存储在git中。</li>
+<li>可以在创建发布时指定分支，选择要使用的部署过程的版本。这将最终支持选择标签或提交。</li>
+</ul>
+
+<p>有什么突出的？简短的回答是很多小事。从数据库中移走一大块Octopus，它有单一版本、索引、外键等。，到一个带有文本文件和无限分支的git存储库，留下了许多遗留问题。</p>
+
+<p>单击下面的“了解更多”链接，了解更多关于设计和构建我们的config as代码支持的因素。我们明确地指出了几个我们有意避免的反模式。</p>
+
+<p><a href="https://octopus.com/blog/shaping-config-as-code">了解更多</a></p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>这个版本包括两个突破性的变化。</p>
+
+<ul>
+<li>导入带有文件包引用的操作模板现在将验证提要Id。这一变化意味着需要<a href="https://github.com/OctopusDeploy/issues/issues/6582" rel="nofollow"> Feed查看权限</a>才能导入带有包引用的操作模板。</li>
+<li>Octopus Cloud增加了记录一些指标的能力，这样我们就可以进行性能调优。这项功能已经不再使用，我们已经删除了这一支持。我们已经更新了<a href="https://github.com/OctopusDeploy/OctopusDSC/pull/266" rel="nofollow"> Octopus DSC </a>，不再使用<code>LogTaskMetrics</code>和<code>LogRequestMetrics</code>属性来反映这一点。</li>
+</ul>
+
+<h2 id="upgrading">升级</h2>
+
+<p>章鱼云用户已经在运行这个版本，自托管章鱼客户现在就可以<a href="https://octopus.com/downloads/2020.5.0">下载</a>最新版本。</p>
+
+<p>像往常一样，升级Octopus Deploy 的<a href="https://octopus.com/docs/administration/upgrading">步骤适用。更多信息请参见</a><a href="https://octopus.com/downloads/compare?to=2020.5.0">发行说明</a>。</p>
+
+<h2 id="whats-coming-in-octopus-2020.6">章鱼2020.6里会有什么？</h2>
+
+<p>查看我们的<a href="https://octopus.com/roadmap">公共路线图</a>以了解接下来的内容并注册更新。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Octopus 2020.5现已正式推出，它包括一系列支持自签名证书的改进、Terraform更新、Kubernetes更新、自动化步骤注释，以及大量支持我们即将推出的Config as Code功能的幕后更改。</p>
+
+<p>欢迎发表评论，让我们知道你的想法！愉快的部署！</p>
+
+<h2 id="related-posts">相关职位</h2>
+
+
+
+                    
+                    
+</body>
+</html>

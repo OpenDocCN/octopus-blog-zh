@@ -1,0 +1,180 @@
+<html>
+<head>
+<title>Managing all consumers of your JavaScript library as tenants - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>作为租户管理JavaScript库的所有消费者——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/javacript-library-users-as-tenants#2021-12-20">https://octopus.com/blog/javacript-library-users-as-tenants#2021-12-20</a></blockquote>
+                        <p>在我的<a href="https://octopus.com/blog/deploying-javascript-library-project-with-octopus">上一篇文章</a>中，您学习了如何使用Octopus将一个散列命名的JavaScript库包部署到云存储中。在云存储中，它通过一个自动更新的<a href="https://octopus.com/docs/projects/variables/library-variable-sets">库变量集</a>中的变量被其他项目引用。</p>
+
+<p>这是在Octopus中管理可重用前端代码的良好开端。当发布发生时，它让你的包的每个消费者保持你的库的最新版本。使用最新版本可能正是您需要的行为，尤其是如果您只有几个引用中小型JavaScript库的内部项目。然而，如果随着组织规模的扩大而继续这种模式，某些场景可能会造成困境。</p>
+
+<h2 id="motivating-examples">激励示例</h2>
+
+<h3 id="a-back-end-release-needs-the-old-js-library">后端版本需要旧的JS库</h3>
+
+<p>当需要修补程序时，可能会发生这种情况。随着前端库的增长，您不会为了一个不相关的修复而急于升级。您可以在项目级别覆盖库变量。如果这种情况偶尔发生，这将是一个合理的解决方案，但如果这是正常的开发流程，并且多个团队引用您的脚本并希望在方便的时候升级，清楚地了解谁在哪个版本的库是有帮助的。您还希望能够回滚一个破坏了一个消费者的更改，或者升级一个由于旧版本库中的已知错误而失败的不同网站。在这些情况下，您不仅要向特定的环境发布JavaScript，还要向特定的消费者发布。</p>
+
+<h3 id="the-consumer-isnt-internal">消费者不是内部的</h3>
+
+<p>也许您创建了一个小部件，用户可以通过复制粘贴您网站上的代码片段将其添加到自己的网站上。或者，一个库开始时是一个内部项目，但后来被证明是通用的，足以让你的公司通过CDN向全世界提供它。</p>
+
+<p>在这些情况下，您将无法修改脚本的HTML引用。您必须将发布JavaScript的概念与发布使用它的代码分开，并且您必须以新的方式解决缓存破坏问题。</p>
+
+<h2 id="tenants-to-the-rescue">房客们来救援了</h2>
+
+<p>租户是代表JavaScript库消费者的一个很好的概念。租户通常用来代表应用程序的客户。在这种情况下，您的客户可能是内部客户，但在Octopus，扩大我们的工程团队表明，将其他团队视为内部客户是有帮助的。</p>
+
+<p>您正在更新不同网站上的脚本依赖关系，而不是将软件部署到不同客户的基础架构中，但是在Octopus中如何管理它的所有要求都是一样的，就好像您正在为不同的客户部署适当版本的服务器端应用程序一样。</p>
+
+<p>这里有一个按照本文中的说明操作后你最终得到的仪表板的例子。在这个例子中，假设您正在将您的共享脚本部署到一个公司WordPress博客、一个外部客户和您公司的主网站。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/bundle-tenants.gif" class="zoom" data-title=""><img src="../Images/35775aed6e0d3f24fc000e5f768462a2.png" class="img-fluid center" alt="bundle tenants overview" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/bundle-tenants.gif"/>T2】</a></p>
+
+<p>其中的每一个都被表示为一个租户，您将使用一个<a href="https://octopus.com/docs/tenants/tenant-variables#common-variables">公共变量</a>为其分配一个惟一的标识符，因为这些都不是按照环境来划分范围的。</p>
+
+<h2 id="setup-your-consumer-key-variable">设置您的消费者密钥变量</h2>
+
+<p>在Octopus门户网站中，导航至<strong>库</strong>选项卡，然后导航至<strong>变量集</strong>部分。然后点击<strong>添加新变量集</strong>，填写如下对话框:</p>
+
+<ul>
+<li><strong>新变量集名称</strong> - <code>Consumer</code></li>
+<li><strong>变量集描述</strong> - <code>Key string used to identify a consumer of our JavaScript library</code></li>
+</ul>
+
+<p>点击<strong>保存</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/consumer_variable.png" class="zoom" data-title=""><img src="../Images/bdcd849765c4428b2cacbf9ba8f18ef0.png" class="img-fluid center" alt="create consumer variable" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/consumer_variable.png"/>T2】</a></p>
+
+<p>选择您新创建的变量集，然后点击<strong>变量模板</strong>，然后点击<strong>添加模板</strong>按钮。按如下方式填写详细信息:</p>
+
+<ul>
+<li><strong>变量名</strong> - <code>BundleConsumerKey</code></li>
+<li><strong>标签</strong> - <code>Bundle Consumer Key</code></li>
+<li><strong>帮助文字</strong> - <code>This key will be used by the consumer in a data attribute in the script tag, so the script can look up the URL of the bundle to download</code></li>
+<li><strong>控制类型</strong> - <code>Single-line text box</code></li>
+<li><strong>要显示的控件类型</strong> - <code>Default value</code></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/consumer_template.png" class="zoom" data-title=""><img src="../Images/eefe89a68d1234de1de10dda26235910.png" class="img-fluid center" alt="create consumer variable_template" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/consumer_template.png"/>T2】</a></p>
+
+<h2 id="create-a-consumer-for-each-tenant">为每个租户创建一个消费者</h2>
+
+<p>导航到<strong>租户</strong>选项卡，单击<strong>添加租户</strong>按钮，并创建一个名为<code>Blog</code>的租户。</p>
+
+<p>单击您新创建的租户，导航到其<strong>变量</strong>部分，然后单击<strong>公共变量</strong>。</p>
+
+<p>将<code>Bundle Consumer Key</code>的变量设置为值<code>Blog</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/tenant_variable.gif" class="zoom" data-title=""><img src="../Images/342d8b513e7156d4f2fa3d1b1fa8f073.png" class="img-fluid center" alt="setting the tenant variable" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/tenant_variable.gif"/>T2】</a></p>
+
+<p>重复这个过程，创建<code>Bundle Consumer Key</code>值为<code>Customer</code>的<code>External customer</code>租户，以及<code>Bundle Consumer Key</code>值为<code>Mainsite</code>的<code>Main Website</code>租户。</p>
+
+<p>现在你需要一个项目来与这些租户互动。</p>
+
+<h2 id="setup-your-project">设置您的项目</h2>
+
+<p>您可以使用以下过程部署到您的租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/bundle-tenants-process.gif" class="zoom" data-title=""><img src="../Images/947c7d5627c894bee1daaf085dcab37e.png" class="img-fluid center" alt="process" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/bundle-tenants-process.gif"/>T2】</a></p>
+
+<p>你基本上使用了与前一篇文章相同的过程。但是在更新变量集中的包URL之前，您会停下来，因为这个租用部署过程的最后一步是不同的。</p>
+
+<p>根据上一篇文章，在Octopus Deploy中创建一个流程，包括以下步骤:</p>
+
+<ol>
+<li><a href="https://octopus.com/blog/deploying-javascript-library-project-with-octopus#creating-an-s3-bucket-if-it-doesnt-exist">如果S3存储桶不存在，则创建一个</a></li>
+<li><a href="https://octopus.com/blog/deploying-javascript-library-project-with-octopus#setting-s3-cors-policy">制定S3的CORS政策</a></li>
+<li><a href="https://octopus.com/blog/deploying-javascript-library-project-with-octopus#uploading-bundle-to-s3">将捆绑包上传到S3 </a></li>
+</ol>
+
+<p>现在您已经有了上传JavaScript包的项目的基础，您需要进行修改以启用租用部署。</p>
+
+<h3 id="require-tenants-for-all-deployments-of-your-project">要求项目的所有部署都有租户</h3>
+
+<p>导航到项目的<strong>设置</strong>，并选择要求所有部署都有租户的选项。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/require_tenants.gif" class="zoom" data-title=""><img src="../Images/898611d37776daa15dabd0cfffb4d70c.png" class="img-fluid center" alt="require tenants" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/require_tenants.gif"/>T2】</a></p>
+
+<h3 id="connect-all-consumer-tenants-to-your-project">将所有消费者租户连接到您的项目</h3>
+
+<p>对于您的每个租户，单击<strong>连接项目</strong>按钮，将您的JavaScript项目连接到<code>test</code>和<code>production</code>环境的租户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/connect_to_project.gif" class="zoom" data-title=""><img src="../Images/66978c8b003a57f61e38238c8b9f52d0.png" class="img-fluid center" alt="connect tenant to project" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/connect_to_project.gif"/>T2】</a></p>
+
+<h3 id="allow-all-tenants-to-use-your-amazon-s3-account">允许所有租户使用您的亚马逊S3帐户</h3>
+
+<p>如果您正在使用一个account变量，您会发现有一个额外的步骤允许使用它向您的任何租户释放。将帐户限制为租户的能力对于帮助防止错误的客户使用错误的帐户非常重要，但是为了简单起见，假设您正在向所有消费者引用的一个S3存储桶发布帐户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/account_restrictions.png" class="zoom" data-title=""><img src="../Images/1e51afd77340c6f1ae0d1af6c985e9a7.png" class="img-fluid center" alt="account restrictions" data-original-src="https://i.octopus.com/blog/2021-12/javacript-library-users-as-tenants/account_restrictions.png"/>T2】</a></p>
+
+<h3 id="a-new-deployment-step-to-update-bundle-urls">更新捆绑包URL的新部署步骤</h3>
+
+<p>为了控制每个租户引用的包URL，您的新流程为租户和环境的每个组合上传一个小的JSON文件到您的S3 bucket的根目录。该文件的名称格式为<code>consumerkey.enivornment.json</code>。这里有一个<code>Customer.production.json</code>的例子:</p>
+
+<pre><code class="language-json">{
+  "url": "https://bundle-s3.s3.ap-southeast-2.amazonaws.com/release_0.0.112/js/app.69e902e8.js"
+}
+</code></pre>
+
+<p>要在部署过程的最后一步生成这些JSON文件，请添加一个<strong>运行AWS CLI脚本</strong>步骤，该步骤引用您的包，并配置为使用您的S3帐户。</p>
+
+<p>现在添加以下PowerShell脚本:</p>
+
+<pre><code class="language-ps">$bundle = Get-ChildItem -Path MyBundle/js/*.js | Select-Object -First 1
+$releaseId = $OctopusParameters["Octopus.Release.Number"]
+$bundleUrl = $bucketUrl + 'release_' + $releaseId + '/js/' + $bundle.Name
+$env = $OctopusParameters["Octopus.Environment.Name"];
+echo "{""url"":""$bundleUrl""}" | aws s3 cp - "s3://#{s3-bucket-name}/#{BundleConsumerKey}.$env.json" --acl public-read
+aws s3 cp MyBundle/bundle-loader.js s3://#{s3-bucket-name}/bundle-loader.js --acl public-read
+</code></pre>
+
+<p>这还不能成功运行，因为您必须将<code>bundle-loader.js</code>添加到您的包中的代码中。</p>
+
+<h3 id="dynamic-cache-busting">动态缓存破坏</h3>
+
+<p>你希望<code>bundle-loader.js</code>位于你的包的根部。为了在Vue JS中实现这一点，在Vue项目中的<code>public</code>文件夹的根目录下创建文件。</p>
+
+<p>下面是<code>bundle-loader.js</code>的来源:</p>
+
+<pre><code class="language-js">(async () =&gt; {
+       const { consumerKey, environment } = document.currentScript.dataset;
+      const redirectFileUrl = `${document.currentScript.src.substring(0, document.currentScript.src.lastIndexOf('/'))}/${consumerKey}.${environment}.json`;
+      const response = await fetch(redirectFileUrl, { cache: "no-store" });
+      const bundleInfo = await response.json();
+      var script = document.createElement('script');
+      script.src = bundleInfo.url
+      document.head.appendChild(script);
+   }
+)();
+</code></pre>
+
+<p>消费者现在引用<code>bundle-loader.js</code>而不是直接引用捆绑包。它将在不缓存的情况下获取小的JSON文件，然后动态添加一个新的<code>script</code>标记来引用租户和环境的正确版本。这些在引用<code>bundle-loader.js</code>的<code>script</code>标签的数据属性中指定。</p>
+
+<p>下面是一个在ASP.NET核心MVC中实现的消费者页面的例子:</p>
+
+<pre><code class="language-razor">@page
+
+@inject BundleSettings bundleSettings
+
+&lt;script src="@bundleSettings.BaseUrl/bundle-loader.js" data-consumer-key="@bundleSettings.ConsumerKey" data-environment="@bundleSettings.EnvironmentName"&gt;&lt;/script&gt;
+&lt;div id="app"&gt;&lt;/div&gt;
+</code></pre>
+
+<p>现在，当您发布新版本的库时，不需要对消费者进行任何修改来更新他们的JavaScript引用。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>租户是Octopus的一个强大而通用的特性。在这篇文章中，我展示了它们非常适合为共享JavaScript库的消费者建模。</p>
+
+<p>租户变量的灵活性为高级场景打开了大门，例如发布NPM包或为不同的消费者发布JavaScript库的定制版本。这种方法确实增加了一点复杂性，如果您只想让所有用户使用不经常改变的JavaScript依赖项的最新版本，那么多租户部署可能是多余的。</p>
+
+<p>我已经证明，当您需要时，采用一个更简单的部署流程来实现多租户并不困难。从一个简单的JavaScript库部署过程开始是很好的，但是如果您需要完全控制谁使用哪个版本的库，租户可以满足您的需求。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

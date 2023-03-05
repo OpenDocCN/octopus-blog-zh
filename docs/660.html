@@ -1,0 +1,313 @@
+<html>
+<head>
+<title>Selenium series: headless browsers - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Selenium系列:无头浏览器- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/selenium/10-headless-browsers/headless-browsers#2021-07-07">https://octopus.com/blog/selenium/10-headless-browsers/headless-browsers#2021-07-07</a></blockquote>
+                        <p>这篇文章是关于<a href="/blog/selenium/0-toc/webdriver-toc">创建Selenium WebDriver测试框架</a>的系列文章的一部分。</p>
+
+<p>你现在应该已经注意到，用WebDriver运行测试会打开一个浏览器窗口，加载网页并与之进行交互，就好像通过某种看不见的鼠标指针一样。虽然在浏览器中观察测试的进展是很有用的，但有时还是希望测试在屏幕外完成。例如，作为连续部署过程的一部分运行测试，不需要任何人在测试执行时监视浏览器。事实上，有时甚至没有一个监视器连接到运行测试的系统上；这就是所谓的无头环境。那么我们如何在这样的无头环境中运行测试呢？</p>
+
+<p>像<a href="http://phantomjs.org/" rel="nofollow"> PhantomJS </a>这样的项目就是为了解决这个问题而创建的。PhantomJS是一个基于WebKit的web浏览器，WebKit是支持Apple Safari等浏览器的库。然而与传统浏览器不同的是，PhantomJS没有GUI，它被设计为由WebDriver等技术控制。因为它没有GUI，所以PhantomJS可以在持续集成服务器上运行，而这些服务器传统上是在无头服务器上托管的。这意味着您可以在中央服务器上运行WebDriver测试来响应应用程序的更改，而不必在桌面环境中启动浏览器窗口。</p>
+
+<p>最近，像Firefox和Chrome这样的浏览器增加了对无头浏览的本地支持。这对任何编写WebDriver测试的人来说都是一个很大的好处，因为这意味着测试可以在最终用户已经安装的浏览器上运行，同时仍然允许测试在一个无头服务器上运行。</p>
+
+<p>如今幻想曲的发展已经停滞。项目的一个维护者<a href="https://groups.google.com/forum/#!topic/phantomjs/9aI5d-LDuNE" rel="nofollow">已经下台</a>，PhantomJS最新发布已经2年多了。但好消息是，配置Chrome和Firefox在无头环境中运行测试非常容易。</p>
+
+<p>在我们开始配置无头浏览器之前，我们需要为配置驱动程序类添加一些额外的支持。</p>
+
+<p>WebDriver使用一个名为<code>DesiredCapabilities</code>的类作为浏览器驱动设置的通用容器。<code>DesiredCapabilities</code>类本质上是一个键/值对的容器，带有一些配置常用设置的方便方法。</p>
+
+<p>首先，我们将方法<code>getDesiredCapabilities()</code>添加到<code>AutomatedBrowser</code>接口:</p>
+
+<pre><code class="language-java">public interface AutomatedBrowser {
+  // ...
+  DesiredCapabilities getDesiredCapabilities();
+  // ...
+}
+</code></pre>
+
+<p>然后我们在<code>AutomatedBrowserBase</code>类中添加一个默认方法。</p>
+
+<p>该方法与典型的默认装饰方法实现略有不同，如果没有父<code>AutomatedBrowser</code>实例返回<code>DesiredCapabilities</code>类的实例，我们返回一个新的<code>DesiredCapabilities</code>实例，而不是<code>null</code>。这确保了如果没有装饰者提供任何<code>DesiredCapabilities</code>，我们总是可以依赖返回的默认实例:</p>
+
+<pre><code class="language-java">@Override
+public DesiredCapabilities getDesiredCapabilities() {
+  if (getAutomatedBrowser() != null) {
+    return getAutomatedBrowser().getDesiredCapabilities();
+  }
+
+  return new DesiredCapabilities();
+}
+</code></pre>
+
+<p><code>DesiredCapabilities</code>类用于所有浏览器通用的配置设置。每个驱动程序都有一个相应的“选项”类，用于配置浏览器的特定设置。这两个对象合并在一起以构建完整的配置设置集。</p>
+
+<p>下面是为支持这两个配置类而更新的<code>ChromeDecorator</code>类的代码。我们创建了一个<code>ChromeOptions</code>类的实例，<code>merge()</code>用<code>getDesiredCapabilities()</code>返回的公共设置，并将合并的结果传递给<code>ChromeDriver()</code>构造函数。</p>
+
+<p>这段代码还没有配置任何额外的设置，但是它演示了如何将<code>DesiredCapabilities</code>类与浏览器特定的选项类结合使用:</p>
+
+<pre><code class="language-java">package com.octopus.decorators;
+
+import com.octopus.AutomatedBrowser;
+import com.octopus.decoratorbase.AutomatedBrowserBase;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+
+public class ChromeDecorator extends AutomatedBrowserBase {
+
+    public ChromeDecorator(final AutomatedBrowser automatedBrowser) {
+        super(automatedBrowser);
+    }
+
+    @Override
+    public void init() {
+        final ChromeOptions options = new ChromeOptions();
+        options.merge(getDesiredCapabilities());
+        final WebDriver webDriver = new ChromeDriver(options);
+        getAutomatedBrowser().setWebDriver(webDriver);
+        getAutomatedBrowser().init();
+    }
+}
+</code></pre>
+
+<p>我们对<code>FirefoxDecorator</code>类采用相同的模式，将<code>FirefoxDriver</code>类与<code>DesiredCapabilities</code>类合并:</p>
+
+<pre><code class="language-java">package com.octopus.decorators;
+
+import com.octopus.AutomatedBrowser;
+import com.octopus.decoratorbase.AutomatedBrowserBase;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
+
+public class FirefoxDecorator extends AutomatedBrowserBase {
+  public FirefoxDecorator(final AutomatedBrowser automatedBrowser) {
+    super(automatedBrowser);
+  }
+
+  @Override
+  public void init() {
+    final FirefoxOptions options = new FirefoxOptions();
+    options.merge(getDesiredCapabilities());
+    final WebDriver webDriver = new FirefoxDriver(options);
+    getAutomatedBrowser().setWebDriver(webDriver);
+    getAutomatedBrowser().init();
+  }
+}
+</code></pre>
+
+<p>通过配置<code>ChromeOptions</code>或<code>FirefoxOptions</code>实例，可以在无头模式下启动浏览器。</p>
+
+<p>为了在无头模式下启动Chrome，我们将一些参数传递给<code>chrome</code>可执行文件。<code>ChromeOptions</code>类通过方法<code>setHeadless()</code>提供了配置这些参数的简单方法。</p>
+
+<p>让我们来看看允许我们在无头模式下运行Chrome的<code>ChromeDecorator</code>类的代码:</p>
+
+<pre><code class="language-java">package com.octopus.decorators;
+
+import com.octopus.AutomatedBrowser;
+import com.octopus.decoratorbase.AutomatedBrowserBase;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+
+public class ChromeDecorator extends AutomatedBrowserBase {
+
+  final boolean headless;
+
+  public ChromeDecorator(final AutomatedBrowser automatedBrowser) {
+    super(automatedBrowser);
+    this.headless = false;
+  }
+
+  public ChromeDecorator(final boolean headless, final AutomatedBrowser automatedBrowser) {
+    super(automatedBrowser);
+    this.headless = headless;
+  }
+
+  @Override
+  public void init() {
+    final ChromeOptions options = new ChromeOptions();
+    options.setHeadless(headless);
+    options.merge(getDesiredCapabilities());
+    final WebDriver webDriver = new ChromeDriver(options);
+    getAutomatedBrowser().setWebDriver(webDriver);
+    getAutomatedBrowser().init();
+
+  }
+}
+</code></pre>
+
+<p>首先，我们提供一个名为<code>headless</code>的实例变量来跟踪Chrome浏览器的这个实例是否应该以无头模式运行。为了设置这个变量，我们重载构造函数:</p>
+
+<pre><code class="language-java">final boolean headless;
+
+public ChromeDecorator(final AutomatedBrowser automatedBrowser) {
+  super(automatedBrowser);
+  this.headless = false;
+}
+
+public ChromeDecorator(final boolean headless, final AutomatedBrowser automatedBrowser) {
+  super(automatedBrowser);
+  this.headless = headless;
+}
+</code></pre>
+
+<p>在<code>init()</code>方法中，我们调用<code>setHeadless()</code>来启用或禁用无头模式(尽管默认情况下给定的无头模式是禁用的，调用<code>setHeadless(false)</code>不会改变任何事情):</p>
+
+<pre><code class="language-java">options.setHeadless(headless);
+</code></pre>
+
+<p>看一下<code>ChomeOptions.setHeadless()</code>方法，我们可以看到通过将<code>--headless</code>和<code>--disable-gpu</code>参数传递给Chrome来启用无头模式:</p>
+
+<pre><code class="language-java">public ChromeOptions setHeadless(boolean headless) {
+
+  args.remove("--headless");
+  if (headless) {
+    args.add("--headless");
+    args.add("--disable-gpu");
+  }
+
+  return this;
+}
+</code></pre>
+
+<p>然后，我们用一个参数来更新<code>AutomatedBrowserFactory getChromeBrowser()</code>方法，以定义Chrome浏览器是否应该是无头的:</p>
+
+<pre><code class="language-java">private AutomatedBrowser getChromeBrowser(final boolean headless) {
+  return new ChromeDecorator(headless,
+    new ImplicitWaitDecorator(10,
+      new WebDriverDecorator()
+    )
+  );
+}
+</code></pre>
+
+<p>最后，我们更新了<code>getAutomatedBrowser()</code>方法，允许创建一个Chrome的无头实例:</p>
+
+<pre><code class="language-java">public AutomatedBrowser getAutomatedBrowser(String browser) {
+  if ("Chrome".equalsIgnoreCase(browser)) {
+    return getChromeBrowser(false);
+  }
+
+  if ("ChromeHeadless".equalsIgnoreCase(browser)) {
+    return getChromeBrowser(true);
+  }
+
+  // ...
+}
+</code></pre>
+
+<p>有了这些变化，我们就可以更新测试，在Chrome的一个无头实例上运行它们。</p>
+
+<p>当测试运行时，您将看不到浏览器窗口。但是测试将在后台执行，并像以前一样通过:</p>
+
+<pre><code class="language-java">@Test
+public void formTestByIDHeadless() throws URISyntaxException {
+  final AutomatedBrowser automatedBrowser =
+    AUTOMATED_BROWSER_FACTORY.getAutomatedBrowser("ChromeHeadless");
+
+  // ...
+}
+</code></pre>
+
+<p>创建Firefox的无头实例的过程与Chrome几乎完全相同。</p>
+
+<p>首先用一个设置<code>headless</code>实例变量的构造函数来更新<code>FirefoxDecorator</code>类，并且调用options类中的<code>setHeadless()</code>来配置驱动程序上的无头模式:</p>
+
+<pre><code class="language-java">package com.octopus.decorators;
+
+import com.octopus.AutomatedBrowser;
+import com.octopus.decoratorbase.AutomatedBrowserBase;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
+
+public class FirefoxDecorator extends AutomatedBrowserBase {
+
+  final boolean headless;
+
+  public FirefoxDecorator(final AutomatedBrowser automatedBrowser) {
+    super(automatedBrowser);
+    this.headless = false;
+  }
+
+  public FirefoxDecorator(final boolean headless, final AutomatedBrowser automatedBrowser) {
+    super(automatedBrowser);
+    this.headless = headless;
+  }
+
+  @Override
+  public void init() {
+    final FirefoxOptions options = new FirefoxOptions();
+    options.setHeadless(headless);
+    options.merge(getDesiredCapabilities());
+    final WebDriver webDriver = new FirefoxDriver(options);
+    getAutomatedBrowser().setWebDriver(webDriver);
+    getAutomatedBrowser().init();
+  }
+}
+</code></pre>
+
+<p>查看<code>FirefoxOptions.setHeadless()</code>方法，我们可以看到通过将<code>-headless</code>参数传递给Firefox来启用无头模式:</p>
+
+<pre><code class="language-java">public FirefoxOptions setHeadless(boolean headless) {
+  args.remove("-headless");
+  if (headless) {
+    args.add("-headless");
+  }
+  return this;
+}
+</code></pre>
+
+<p>然后更新<code>AutomatedBrowserFactory getFirefoxBrowser()</code>方法以支持设置无头模式:</p>
+
+<pre><code class="language-java">private AutomatedBrowser getFirefoxBrowser(final boolean headless) {
+  return new FirefoxDecorator(headless,
+    new ImplicitWaitDecorator(10,
+      new WebDriverDecorator()
+    )
+  );
+}
+</code></pre>
+
+<p>并且更新了<code>getAutomatedBrowser()</code>方法以支持创建Firefox的headless实例:</p>
+
+<pre><code class="language-java">public AutomatedBrowser getAutomatedBrowser(String browser) {
+  //...
+  if ("Firefox".equalsIgnoreCase(browser)) {
+    return getFirefoxBrowser(false);
+  }
+
+  if ("FirefoxHeadless".equalsIgnoreCase(browser)) {
+    return getFirefoxBrowser(true);
+  }
+
+  //...
+}
+</code></pre>
+
+<p>然后，就像Chrome浏览器一样，测试可以更新为使用Firefox的headless版本:</p>
+
+<pre><code class="language-java">@Test
+public void formTestByIDHeadlessFirefox() throws URISyntaxException {
+  final AutomatedBrowser automatedBrowser =
+    AUTOMATED_BROWSER_FACTORY.getAutomatedBrowser("FirefoxHeadless");
+
+  // ...
+}
+</code></pre>
+
+<p>在像PhantomJS这样行为不太像真正的浏览器的专用浏览器上运行测试曾经是测试人员的一个痛点，但却是一个不可避免的祸害。通过支持无头浏览，Chrome和Firefox等浏览器为测试人员在无头服务器上的自动化测试中使用最终用户使用的相同浏览器铺平了道路。当我们与Travis CI和AWS Lambda等平台集成时，我们将在以后的帖子中利用这些无头浏览器。</p>
+
+<p>此外，通过暴露通过<code>DesiredCapabilities</code>类配置浏览器的能力，我们提供了一个钩子，我们可以利用新的decorators来添加功能，如自定义代理，这正是我们将在下一篇文章中做的。</p>
+
+<p>这篇文章是关于<a href="/blog/selenium/0-toc/webdriver-toc">创建Selenium WebDriver测试框架</a>的系列文章的一部分。</p>
+
+                    
+                    
+</body>
+</html>

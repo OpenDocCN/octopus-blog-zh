@@ -1,0 +1,108 @@
+<html>
+<head>
+<title>Linting your Kubernetes cluster with Clusterlint and runbooks - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>林挺您的Kubernetes集群与Clusterlint和runbooks - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/clusterlint-with-runbooks#2022-07-04">https://octopus.com/blog/clusterlint-with-runbooks#2022-07-04</a></blockquote>
+                        <p>Octopus中的操作手册将Ops置于DevOps中。这篇文章是一系列文章的一部分:</p>
+
+
+
+<hr/>
+
+<p>Octopus 2021 Q3包括对Kubernetes部署的更新支持，以及针对Google Cloud、AWS和Azure用户的runbooks。在我们的<a href="https://octopus.com/blog/octopus-release-2021-q3" class="alert-link">发布公告</a>中了解更多信息。</p>
+
+
+<p>Kubernetes让简单的事情变得困难，让困难的事情变得可能。这是一个贴切的说法。你只需要看看Kubernetes和周围生态系统的最佳实践指南的数量，就可以理解，即使是一个单独的pod <em>正确运行</em>也是一项艰巨的任务。</p>
+
+<p>这就是林挺工具可以帮忙的地方。通过将最佳实践封装到对集群的自动检查中，林挺工具可以突出您可能没有意识到的改进，并为改进基础架构创建反馈循环。</p>
+
+<p>一个这样的林挺工具是<a href="https://github.com/digitalocean/clusterlint" rel="nofollow"> Clusterlint </a>。它由DigitalOcean开发，并集成到其托管的Kubernetes产品中，通过在集群更新等操作之前识别问题来减少支持负载。但是，大多数检查通常适用于任何集群。</p>
+
+<h2 id="a-lint-feedback-loop">lint反馈回路</h2>
+
+<p>在实现林挺工具时要问的一个问题是，它是应该以一个子集为目标，例如，仅仅是一个部署，还是整个集群。如果您的目标是单个部署的结果，那么将lint检查作为部署过程的一部分是有意义的。</p>
+
+<p>然而，我要告诫不要过早地将林挺推入部署过程。作为一名开发人员，我见过全球代码林挺的实现每次都失败，因为它们产生了太多的误报，有着不被开发团队分享的观点，并且最终被忽略或者以一种特别的方式实现，因为它们碍事。</p>
+
+<p>更好的解决方案是在部署工作流之外实现林挺，至少在最初是这样。这提供了生成具有最大价值的集中lint规则集的能力，并识别出没有人可能触及的配置问题，以及仅针对活动部署运行的检查所遗漏的问题。</p>
+
+<p>那么，如何使用Octopus实现部署之外的工作流呢？直到最近，Octopus中的每个自动化流程都被认为是一次部署。现在，随着Operations Runbooks的推出，Octopus内置了对无需部署即可运行管理和维护任务的支持。</p>
+
+<h2 id="a-linting-runbook-example">林挺运行手册示例</h2>
+
+<p>在下面的截图中，你可以看到一个调用<code>clusterlint</code>可执行文件的runbook。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/clusterlint-runbook.png" class="zoom" data-title=""><img src="../Images/e0cc81521fb25c18dc9379631be390b9.png" class="img-fluid center" alt="Octopus dashboard open on Projects tab and Operations Runbooks page showing ClusterLint Step Editor" data-original-src="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/clusterlint-runbook.png"/>T2】</a></p>
+
+<p>这个runbook例子值得注意的是它有多简单。只需一行代码就可以自动检查您的Kubernetes集群。</p>
+
+<p>runbook很简单，因为它利用了Octopus中对Kubernetes的现有支持。<strong>运行一个kubectl脚本</strong>步骤用于使用从Kubernetes目标生成的<code>kubectl</code>配置文件执行<code>clusterlint</code>。如果您使用Octopus执行Kubernetes部署，那么这些目标已经配置好了。</p>
+
+<h2 id="scaling-beyond-a-proof-of-concept">超越概念验证的扩展</h2>
+
+<p>Runbooks的真正好处是它们为超越概念验证的工作流提供了基础。</p>
+
+<p>林挺应该自动按固定时间表运行。Runbooks通过自定义触发器支持这一点:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/runbook-schedule.png" class="zoom" data-title=""><img src="../Images/5276b53385c49540ed26792e781c0a5f.png" class="img-fluid center" alt="Octopus dashboard open on Projects tab and Operations Triggers page showing Daily check" data-original-src="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/runbook-schedule.png"/>T2】</a></p>
+
+<p>Lint结果没有任何意义，除非它们被共享和执行。通过一些脚本，我们可以生成一个总结报告，并将其捕获到一个名为<code>Report</code>的Octopus变量中:</p>
+
+
+ 
+ 
+  
+<pre><code class="language-ps">$emailReport = clusterlint run -g basic -o json |
+  ConvertFrom-Json |
+  Select -ExpandProperty Diagnostics |
+  Group-Object -Property Check -NoElement |
+  % {$report="Clusterlint report`n----"} {$report += "`n$($_.Name): $($_.Count)"} {$report}
+
+Write-Host $emailReport
+
+Set-OctopusVariable -name "Report" -value $emailReport
+</code></pre>
+  
+  
+<pre><code class="language-bash">
+emailReport=`clusterlint run -g basic -o json | jq -r '.Diagnostics | group_by(.Property)[]| group_by(.Check)      | map({Check: .[0].Check, count: length}) | "Clusterlint Report", "---------", ( .[] | "\(.Check):\(.count)" )'`
+
+echo "$emailReport"
+
+set_octopusvariable "Report" "$emailReport"
+</code></pre>
+  
+ 
+
+
+<p>Octopus提供了通过电子邮件、Slack、HipChat和团队等渠道发送报告的步骤。在这里，我配置了一个发送包含报告摘要的电子邮件的步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/email.png" class="zoom" data-title=""><img src="../Images/dc97b96e981fb80d79449e7f50fdb489.png" class="img-fluid center" alt="Octopus dashboard open on Projects tab and Operations Runbooks page showing Email report" data-original-src="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/email.png"/>T2】</a></p>
+
+<p>当您的lint规则集被锁定时，如果有任何规则被破坏，您可以使runbook失败。然后，审计日志将为您提供集群状态的历史记录:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/audit.png" class="zoom" data-title=""><img src="../Images/6c173279f6a7e86b7eb90c9519892db6.png" class="img-fluid center" alt="Octopus dashboard open on Tasks tab showing audit log" data-original-src="https://i.octopus.com/blog/2022-q2/clusterlint-with-runbooks/audit.png"/>T2】</a></p>
+
+<p>而这些例子只是冰山一角。您可以使用:</p>
+
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>从概念上讲，runbooks是一个简单的想法。它们允许您运行支持部署的相同自动化流程，而不需要部署。</p>
+
+<p>但是可重复部署比部署软件的实际行为要多得多，runbooks继承了所有这些跨领域的功能。借助runbook automation，您可以获得内置的安全性、日志记录、审计、报告、仪表板和计划。</p>
+
+<p>正如我们在这篇文章中看到的，即使是最简单的一行脚本也可以利用这些特性来扩展为一个健壮的、生产就绪的解决方案。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/Runbooks%20Series"> Runbooks系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

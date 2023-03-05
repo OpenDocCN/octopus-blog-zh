@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>How GitHub Actions is different to traditional build servers - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>GitHub的操作与传统的构建服务器不同——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/githubactions-different-build-servers#2023-02-14">https://octopus.com/blog/githubactions-different-build-servers#2023-02-14</a></blockquote>
+                        <p>GitHub Actions对于自动化和持续集成(CI)领域来说相对较新。GitHub Actions提供“CI即服务”,与传统的竞争平台有许多不同之处。</p>
+
+<p>在这篇文章中，我们将探讨GitHub动作和传统构建服务器之间的区别。我们还要看看GitHub Actions是否是构建和测试代码的合适选择。</p>
+
+<h2 id="github-actions-is-ci-already-built-into-github">GitHub Actions CI已经内置在GitHub中</h2>
+
+<p>GitHub Actions相对于传统CI平台的最大优势之一就是它的交付。GitHub Actions是“CI即服务”，已经包含在所有客户的每个存储库中(稍后将详细介绍定价)。</p>
+
+<p>简单来说:如果你有一个GitHub的账户，你可以使用GitHub的动作。</p>
+
+<p>如果你喜欢把所有的工作都放在一个地方，不用担心太多的移动部件，这就很有吸引力。</p>
+
+<h2 id="actions-isnt-an-option-if-you-dont-use-github">如果你不使用GitHub，动作不是一个选项</h2>
+
+<p>您使用GitHub动作的能力取决于您或您的公司使用GitHub。如果您使用其他代码库，或者您在本地托管您的代码，GitHub Actions不是一个选项。</p>
+
+<p>然而，值得一提的是，其他代码库服务，如GitLab和BitBucket，也发布了自己的CI服务。如果其他服务更合你的口味，你可能还有其他选择。</p>
+
+<h2 id="no-hardware-needed-for-ci-unless-you-want-to">CI不需要硬件(除非您愿意)</h2>
+
+<p>默认情况下，动作使用“跑步者”来完成工作流的作业。运行者是GitHub托管的虚拟机，使用Windows、Linux和MacOS。这意味着您不需要维护自己的基础架构来执行CI。不需要容纳硬件，不需要维护操作系统，不需要安装、更新或修补。GitHub会为您处理这一切。</p>
+
+<p>如果你需要CI的特定设置，而GitHub的跑步者不能胜任这项任务，或者你想要更多的控制，你也可以<a href="https://docs.github.com/en/actions/hosting-your-own-runners" rel="nofollow">自己主持你自己的跑步者</a>。</p>
+
+<h2 id="licensing-and-pricing">许可和定价</h2>
+
+<p>传统的构建服务器通常是开源的，或者根据用户或实例的数量根据您的需求进行扩展。然而，CI即服务意味着提供商可以在定价模式上有所创新。</p>
+
+<p>例如，GitHub Actions<a href="https://docs.github.com/en/billing/managing-billing-for-github-actions/about-billing-for-github-actions" rel="nofollow">采用现收现付的方式</a>，以运行时间来衡量所有工作。</p>
+
+<p>所有用户每月都可以获得免费的工作分钟数和存储空间，其数量随您的计划而定。如果你超过了你的免费分钟数，你将被按分钟计费，并根据跑步者工作所需的操作系统进行加权。</p>
+
+<p>GitHub Actions对那些拥有公共回购或使用自己托管的跑步者完全免费。</p>
+
+<h2 id="how-github-actions-automates-with-events-and-workflows">github操作如何与事件和工作流自动化</h2>
+
+<p>GitHub Actions使用您的GitHub repo中的活动(或外部事件，如果您使用'<a href="https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#repository_dispatch" rel="nofollow">repository dispatch event</a>' web hook)来触发工作流。您可以选择用单个或多个事件启动工作流，使用计划，或手动启动它们。</p>
+
+<p>工作流的结构如下:</p>
+
+<ul>
+<li>每个工作流都包含作业</li>
+<li>每个作业都有在自己的运行器上执行的步骤</li>
+<li>步骤是每个作业中的单个操作</li>
+</ul>
+
+<p>例如，您可以创建一个工作流:</p>
+
+<ol>
+<li>每当有人创建拉请求时，测试您的代码</li>
+<li>成功测试后打包代码，并将其推送到您的部署工具</li>
+</ol>
+
+<p>在这种情况下，工作流将有2个单独的作业。如果对作业1的测试成功，将触发作业2。这两项工作都有自己的步骤，并在单独、干净的滑道上运行。</p>
+
+<p>感谢<a href="https://github.com/marketplace" rel="nofollow"> GitHub Marketplace </a>，你可能根本不需要创建工作流。虽然不是GitHub Actions独有的，但是有数以千计的社区制作的动作和工作流可以用来实现您的需求。</p>
+
+<p>Octopus还创建了一个<a href="https://githubactionworkflows.com/" rel="nofollow">工具来帮助你构建GitHub Actions工作流程</a>。如果您不确定从哪里开始，请尝试一下。</p>
+
+<p>有关GitHub操作中工作流的更多信息，请查看:</p>
+
+
+
+<h2 id="how-you-install-actions">如何安装操作</h2>
+
+<p>与您在大多数其他CI平台中添加和管理插件的方式相比，安装操作也有所不同。</p>
+
+<p>例如，在Jenkins，它们几乎是模块化的迷你应用程序。使用安装。hpi包，一个Jenkins插件可以极大地影响外观、感觉和你在Jenkins实例中看到的选项。</p>
+
+<p>在GitHub中安装动作包括从动作的marketplace页面复制代码，并将其粘贴到您的存储库中。yml文件。动作不提供可见的变化，而是只提供新的功能，由动作自身的repo中的事件触发。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这篇文章讨论了GitHub Actions(以及CI即服务的概念)和传统CI平台之间的主要区别。</p>
+
+<p>GitHub Actions是一个理想的解决方案，如果你:</p>
+
+<ul>
+<li>是CI概念的新成员</li>
+<li>不想花时间设置和维护专用的构建服务器</li>
+<li>不想或不需要在本地托管您的硬件或数据</li>
+<li>像你所有的工具一样放在一个地方</li>
+<li>已经使用GitHub</li>
+</ul>
+
+<p>您还可以了解更多关于使用GitHub构建<a href="https://octopus.com/github">和使用Octopus </a>部署的信息，并在GitHub Marketplace 中使用我们的<a href="https://github.com/marketplace?query=octopus&amp;type=actions&amp;verification=verified_creator" rel="nofollow">验证操作。</a></p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

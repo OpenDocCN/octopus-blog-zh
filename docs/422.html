@@ -1,0 +1,38 @@
+<html>
+<head>
+<title>RFC: Monitoring and Service Management - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC:监控和服务管理- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/monitoring-and-ops-rfc#2015-09-25">https://octopus.com/blog/monitoring-and-ops-rfc#2015-09-25</a></blockquote>
+                        <p>作为一个自动化部署工具，Octopus正好位于DevOps连续体的中间。构建服务器知道您正在构建的应用程序，但不知道它们部署在哪里。监控服务可能知道您已经部署的端点，但不知道它们在逻辑上如何联系在一起。章鱼对这两者都很了解。假设你在使用内置的约定和触须，Octopus已经知道:</p>
+
+<ul>
+<li>你有什么样的环境</li>
+<li>您的应用程序由哪些Windows服务和IIS网站组成</li>
+<li>您在哪些机器上部署了这些服务和IIS应用程序</li>
+</ul>
+
+<p>此外，它在每台机器上都有一个智能代理服务，能够做许多有趣的事情。</p>
+
+<p>鉴于我们拥有所有这些信息，难道我们不应该更多地利用它们吗？Octopus仪表板显示您的最后一次生产部署是否成功。如果它还向您显示您部署的内容是否仍在运行，那会怎么样？</p>
+
+<p>这里有一个大概的说明:</p>
+
+<p><img src="../Images/b400a2876ffa1e9ac011ad40c341e3ee.png" alt="Mockup of monitoring in Octopus" data-original-src="https://i.octopus.com/blog/migrated/Monitoring_cti1gc.png"/></p>
+
+<p>在本例中，我们部署了一个系统，该系统由一个IIS web应用程序(运行在两个服务器上)和一个Windows服务(运行在四个服务上)组成。</p>
+
+<p>如果启用了监控，触手代理将会密切关注它在部署过程中配置的任何服务或网站。如果状态发生变化，它会将此信息发送回Octopus。</p>
+
+<p>不过，它不仅仅局限于监视状态:您还可以启动/停止这些服务。您昨天部署到30台机器上的Windows服务在其中7台机器上突然崩溃了吗？没问题，只需点击按钮，选择你想重启的7，点击执行按钮。肯定胜过使用远程桌面！另外，会有很好的审计记录。</p>
+
+<p>请注意，我们并不想成为一个<a href="https://www.pingdom.com/"> Pingdom </a>或<a href="http://www.nagios.org/"> Nagios </a>。但是，如果您正在部署十几个小型NServiceBus Windows服务，并且没有很多监控或操作系统，这可能是一个方便的小工具。</p>
+
+<p>这只是我们在2014年考虑的众多重要功能之一，我甚至不知道我们是否会实际构建它。<strong>我希望得到您的反馈</strong>。这样的功能对您或您的运营团队有用吗？你还会用它来监视什么？会有什么帮助？</p>
+
+                    
+                    
+</body>
+</html>

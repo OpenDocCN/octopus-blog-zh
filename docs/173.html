@@ -1,0 +1,25 @@
+<html>
+<head>
+<title>Deleting Releases via the Command Line - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>通过命令行删除发布- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deleting-releases-via-command-line#2015-09-17">https://octopus.com/blog/deleting-releases-via-command-line#2015-09-17</a></blockquote>
+                        <p>我们的待办事项中有一项是能够<a href="https://trello.com/card/auto-purge-tentacles/4e907de70880ba000079b75c/20">为项目设置一个保留策略</a>，它可以自动清理旧的部署应用程序、缓存的NuGet包，以及来自Octopus UI的发布/部署。</p>
+
+<p>这一项还没有完成，但与此同时，如果你需要删除发布/部署，你现在可以使用最新版本的Octo.exe和运行1.0.31或更高版本的T2章鱼服务器来完成。</p>
+
+<p>在命令行中，语法是:</p>
+
+<pre><code>octo delete-releases --project=MyProject --minversion=1.0.0 --maxversion=2.0.0 --apikey=ABCDEF... --server=http://&lt;your-octopus&gt;
+</code></pre>
+
+<p>版本号包含在内，可以部分指定，例如<code>2.0.0</code>或<code>2.0.1982.12981</code>。<a href="http://semver.org/">比较版本号时使用SemVer </a>规则。</p>
+
+<p>正如我所说的，这还不足以成为一个完整的保留策略特性，但是如果您由于构建/部署脚本中的循环依赖而意外地创建了几百个版本，这可能是有用的:)</p>
+
+                    
+                    
+</body>
+</html>

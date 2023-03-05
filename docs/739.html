@@ -1,0 +1,148 @@
+<html>
+<head>
+<title>Testing PowerShell code with Pester - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用perste-Octopus Deploy测试PowerShell代码</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/testing-powershell-code-with-pester#2021-08-12">https://octopus.com/blog/testing-powershell-code-with-pester#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/powershell-testing-with-pester.png" class="zoom" data-title=""><img src="../Images/bca76775b79b06dc9ac3a3b43da06fc7.png" class="img-fluid center" alt="Testing PowerShell code with Pester" data-original-src="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/powershell-testing-with-pester.png"/>T2】</a></p>
+
+<p>当你使用任何代码时，无论是自动化代码还是软件代码，都应该以同样的方式对待。毕竟函数还是函数，变量还是变量。与构建应用程序代码相比，在自动化过程中，有很多事情不经常出现，其中之一就是测试。</p>
+
+<p>单元测试和模拟测试在脚本和自动化中非常重要。</p>
+
+<p>想一想这个场景:<em>我在本地测试了PowerShell功能，它工作了！它做了我需要它做的事情，现在我要把它存储在GitHub中，以便以后使用。</em></p>
+
+<p>它是在本地测试的，这很好，但是您运行的测试现在已经是过去的事情了，可能会发生一些事情:</p>
+
+<ul>
+<li>可以创建新版本的代码。</li>
+<li>修改代码可能会引入错误。</li>
+<li>可以添加新功能。</li>
+<li>代码用于不同的系统或操作系统。</li>
+<li>您正在使用的PowerShell模块被更新或更改。</li>
+<li>PowerShell模块正在进行的API调用发生了变化。</li>
+</ul>
+
+<p>鉴于以上几点，您在本地运行的测试不再有效。</p>
+
+<p>在这篇博客文章中，您将学习如何使用PowerShell最流行的测试框架<a href="https://github.com/pester/Pester" rel="nofollow"> Pester </a>。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进这篇博文，您需要具备以下条件:</p>
+
+
+
+<h2 id="install-pester">安装纠缠</h2>
+
+<p>如果这是你第一次运行Pester框架，根据你的操作系统，你很可能必须安装它。安装过程是通过<code>Install-Module</code> cmdlet完成的，它是所有操作系统的PowerShell自带的。</p>
+
+<p>若要安装Pester，请运行以下cmdlet:</p>
+
+<pre><code class="language-powershell">Install-Module -Name Pester
+</code></pre>
+
+<p>运行cmdlet后，您应该会看到与下面的屏幕截图类似的输出。接受所有模块，将安装Pester。若要确认安装，请运行以下cmdlet:</p>
+
+<pre><code class="language-powershell">Get-InstalledModule -Name Pester
+</code></pre>
+
+<h2 id="take-a-look-at-the-powershell-code-to-test">看一看要测试的PowerShell代码</h2>
+
+<p>在运行任何类型的纠缠测试之前，您需要让纠缠测试使用的代码。首先来看一下“纠缠”,这个测试并不复杂。它可以是由几行代码组成的简单PowerShell函数。在这一节中，您将会看到用于测试的代码。</p>
+
+<p>打开VS代码，为PowerShell函数创建一个新文件。</p>
+
+<p>下面的PowerShell函数执行以下操作:</p>
+
+<ul>
+<li>创建名为<code>Create-Dir</code>的新函数</li>
+<li>设置一个<code>cmdletbinding()[]</code>将功能转换为高级功能。高级功能使您能够使用Verbose、ErrorAction等。</li>
+<li>param块设置了两个参数，即创建新目录的路径和新目录名。</li>
+<li>用于创建路径的cmdlet是<code>New-Item</code>。</li>
+</ul>
+
+<p>如果您运行下面的代码并指定一个目录名和路径，您将看到一个新目录已经创建:</p>
+
+<pre><code class="language-powershell">function Create-Dir {
+    [cmdletbinding()]
+    param(
+        [string]$path,
+        [string]$dirName
+    )
+
+    New-Item -Name $dirName -Path $path
+}
+</code></pre>
+
+<p>下面的截图显示了在<strong>/Users/michaelevan/</strong>目录中创建一个名为<strong> TestPath </strong>的目录的示例:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/images/2.png" class="zoom" data-title=""><img src="../Images/3b9767ef1b7e8efdf8fd07a7b2fc00dd.png" class="img-fluid center" alt="Terminal output of a directory being created" data-original-src="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/images/2.png"/>T2】</a></p>
+
+<h2 id="write-the-first-test">编写第一个测试</h2>
+
+<p>现在您已经有了代码，您可以弄清楚您希望测试是什么样子的了。纠缠测试不仅基于长度，还基于功能。在这一节中，您将看一看一个基本的Pester测试来开始。</p>
+
+<p>有一种软件开发实践叫做<a href="https://www.agilealliance.org/glossary/tdd/" rel="nofollow">测试驱动开发(TTD) </a>，你首先定义测试，然后基于这些测试编写代码。这篇博客文章并没有遵循这种方法，但它确实是一个有趣的话题。</p>
+
+<ol>
+<li>在VS代码中，打开一个新文件，命名为<code>Tests.ps1</code>。<code>Tests</code>关键字让PowerShell知道您正在运行测试，VS代码将提供一些额外的功能，比如能够从IDE中运行测试。</li>
+<li>在<code>Tests.ps1</code>文件中，粘贴以下代码，这是测试本身:</li>
+</ol>
+
+<pre><code class="language-powershell">Describe "Directory Creation" {
+    Context 'Path' {
+        It 'should contain: path_that_you_used_for_the_function'
+        $path = 'path_that_you_used_for_the_function'
+        $path | Should -Exist
+    }
+
+    Context "New Directory" {
+        It 'Should create a new directory called TestDir'
+        $dir = 'TestDir'
+        $dir | Should -Be 'TestDir'
+    }
+}
+</code></pre>
+
+<p>在您运行测试之前，让我们先检查一遍。</p>
+
+<ul>
+<li>你从<code>Describe</code>块开始。Describe块定义了一组PowerShell测试。所有的纠缠文件必须包含至少一个描述块。</li>
+<li>你会看到的第二个方块是<code>Context</code>。上下文块在描述块中定义了子组测试。上下文很方便，因为它允许您编写多个测试块。</li>
+<li>在上下文块中，您会看到一个名为<code>It</code>的关键字。<code>It</code>用于定义单个测试用例。<code>It</code>真的很棒，因为你可以让代码听起来像自然语言的句子。例如，一个<code>It</code>测试可以说<strong>它“应该包含:/Users/Michael levan”</strong>。</li>
+<li>在您定义测试的地方，您会看到<code>Should</code>。<code>Should</code>命令用于定义断言，也就是您希望测试用您给它的信息做什么。</li>
+</ul>
+
+<p>一旦测试在<code>Tests.ps1</code>文件中，您将看到一些运行测试的选项，如下面的截图所示。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/images/4.png" class="zoom" data-title=""><img src="../Images/a68fae319ebe557d6e4d9699e0c010ac.png" class="img-fluid center" alt="Options to run the test" data-original-src="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/images/4.png"/>T2】</a></p>
+
+<h2 id="run-a-unit-test">运行单元测试</h2>
+
+<p>在前面的部分中，您确切地定义了测试应该是什么样子。测试应该有两个单独的测试；一个测试路径，另一个测试新目录是否叫做<strong> TestDir </strong>。</p>
+
+<p>在这一节中，您将学习如何运行测试以及输出应该是什么样子。</p>
+
+<p>在<code>Tests.ps1</code>文件中，点击<strong>运行测试</strong>按钮运行测试。运行测试后，您应该会看到类似下面截图的输出。</p>
+
+<p>如您所见，测试找到了目录，并确认正在创建的新目录是<strong> TestDir </strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/images/6.png" class="zoom" data-title=""><img src="../Images/f00d491c52add59755518cd01cc737a1.png" class="img-fluid center" alt="Test result" data-original-src="https://i.octopus.com/blog/2020-08/testing-powershell-code-with-pester/images/6.png"/>T2】</a></p>
+
+<p>恭喜你。您已经使用PowerShell测试框架Pester正式创建并运行了一个测试。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>当您编写任何类型的代码时，您都知道它看起来像什么，如何工作，但是一天、一周、一个月或一年后，代码可能会发生变化，如果发生这种情况，就有可能出现功能差异，甚至引入错误。当你将测试融入到任何代码中时，这些事情发生的风险就会降低。</p>
+
+<p>在这篇博客文章中，你学到了什么是纠缠，为什么你应该使用它，以及如何使用它。如果你想深入研究《纠缠》，我推荐亚当·伯特伦的这本书:<a href="https://leanpub.com/pesterbook" rel="nofollow">纠缠书</a>。</p>
+
+<p>如果你想找到这篇博文中使用的代码，请查看<a href="https://github.com/AdminTurnedDevOps/Octopus-Deploy-Code/tree/master/PesterBlog" rel="nofollow"> GitHub repo </a>。</p>
+
+                    
+                    
+</body>
+</html>

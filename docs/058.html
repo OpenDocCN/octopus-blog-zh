@@ -1,0 +1,638 @@
+<html>
+<head>
+<title>Creating EC2 instance in AWS with CloudFormation - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用CloudFormation - Octopus Deploy在AWS中创建EC2实例</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/aws-cloudformation-ec2-examples#2022-09-08">https://octopus.com/blog/aws-cloudformation-ec2-examples#2022-09-08</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/aws-cloudformation-ec2-examples/aws-cloudformation-ec2.png" class="zoom" data-title=""><img src="../Images/b66d7be44dd37270081714d2b99b0b14.png" class="img-fluid center" alt="Creating EC2 instance in AWS with CloudFormation" data-original-src="https://i.octopus.com/blog/2020-08/aws-cloudformation-ec2-examples/aws-cloudformation-ec2.png"/>T2】</a></p>
+
+<p>云平台为开发人员和运营人员带来了一些非常有用的工作流。启动用于测试的临时基础架构的能力消除了维护本地虚拟机的负担，并意味着您可以扩展测试，以包括许多不同容量的机器，安全地知道您不会用洪水般的流量淹没企业网络。</p>
+
+<p>在过去的美好时光中，“经典”AWS在单一的共享网络空间中创建EC2虚拟机。这使得创建虚拟机变得非常容易，因为几乎不需要网络配置。</p>
+
+<p>如今，最佳实践要求即使一台虚拟机也需要VPC、互联网网关、安全组、子网和路由表。</p>
+
+<p>在这篇博客文章中，我们将研究两个CloudFormation模板，以在它们自己的VPC中创建Windows和Linux EC2实例。</p>
+
+<p>免费试用Octopus，自动化您的AWS部署。</p>
+
+<h2 id="the-windows-cloudformation-template">Windows CloudFormation模板</h2>
+
+<p>此示例CloudFormation模板在VPC中创建了一个Windows EC2实例:</p>
+
+<pre><code class="language-YAML">AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t3a.medium
+    Description: Enter instance size. Default is t3a.medium.
+  WorkstationIp:
+    Type: String
+    Description: The IP address of the workstation that can RDP into the instance.
+  AMI:
+    Type: String
+    Default: ami-05bb2dae0b1de90b3
+    Description: The Windows AMI to use.
+  Key:
+    Type: String
+    Description: The key used to access the instance.
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Windows Target VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Octopus Target Group"
+      GroupDescription: "Tentacle traffic in from hosted static ips, and RDP in from a personal workstation"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.156/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.42/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.31.180/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.132/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.94/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.173/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.171/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.7/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.147/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.240/32
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp:  !Sub ${WorkstationIp}/32
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Windows
+  Windows:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 250
+      UserData:
+        Fn::Base64: !Sub |
+          &lt;powershell&gt;
+          Write-Host "Hello World!"
+          &lt;/powershell&gt;
+      Tags:
+        -
+          Key: Appplication
+          Value:  Windows Server
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value:  Windows Server Worker
+        -
+          Key: OS
+          Value: Windows
+        -
+          Key: OwnerContact
+          Value: "@matthewcasperson"
+        -
+          Key: Purpose
+          Value: MattC Test Worker
+        -
+          Key: Source
+          Value: CloudFormation Script in Octopus Deploy
+Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+        - Windows
+        - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>让我们来分解这个代码。</p>
+
+<p><a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html" rel="nofollow">模板版本</a>定义为:</p>
+
+<pre><code class="language-YAML">AWSTemplateFormatVersion: 2010-09-09
+</code></pre>
+
+<p>最终用户可能定制的任何值都被定义为参数。这里我们公开了四个参数:</p>
+
+<ul>
+<li><a href="https://aws.amazon.com/ec2/instance-types/" rel="nofollow">实例类型</a>，它定义了与我们的VM相关联的硬件。</li>
+<li>可以通过远程桌面连接到实例的工作站的IP地址。拥有这个IP意味着我们可以只限制一个工作站的访问，而不是整个互联网。</li>
+<li>用于创建虚拟机的AMI。ami可以在<a href="https://aws.amazon.com/marketplace/search/?filters=VendorId&amp;VendorId=e6a5002c-6dd0-4d1e-8196-0a1d1857229b" rel="nofollow"> AWS市场</a>找到。</li>
+<li>用于保护实例的<a href="https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/ec2-key-pairs.html" rel="nofollow">密钥对</a>。我们希望在帐户中已经创建了一个密钥对:</li>
+</ul>
+
+<pre><code class="language-YAML">Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t3a.medium
+    Description: Enter instance size. Default is t3a.medium.
+  WorkstationIp:
+    Type: String
+    Description: The IP address of the workstation that can RDP into the instance.
+  AMI:
+    Type: String
+    Default: ami-05bb2dae0b1de90b3
+    Description: The Windows AMI to use.
+  Key:
+    Type: String
+    Description: The key used to access the instance.
+</code></pre>
+
+<p>模板的下一部分定义了要创建的资源。</p>
+
+<p>我们从一个<a href="https://aws.amazon.com/vpc/" rel="nofollow"> VPC </a>开始，它本质上是一个保存我们资源的隔离网段。该VPC将保存<code>10.0.0.0/16</code>范围内的私有IP地址:</p>
+
+<pre><code class="language-YAML">Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Windows Target VPC
+</code></pre>
+
+<p>为了让我们的EC2访问互联网，我们需要一个<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html" rel="nofollow">互联网网关</a>:</p>
+
+<pre><code class="language-YAML">  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+</code></pre>
+
+<p>然后将互联网网关连接到VPC:</p>
+
+<pre><code class="language-YAML">  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+</code></pre>
+
+<p>在VPC内部，我们可以有一个或多个<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html" rel="nofollow">子网</a>。虽然VPC可以跨越多个可用性区域，但是子网是单个AZ中的网络地址范围。我们正在创建一个EC2实例，因此我们只创建一个子网来容纳它:</p>
+
+<pre><code class="language-YAML">  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+</code></pre>
+
+<p>流量路由由<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html" rel="nofollow">路由表</a>处理:</p>
+
+<pre><code class="language-YAML">  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+</code></pre>
+
+<p>然后，我们将所有外部流量路由到互联网网关。这将为我们的EC2实例提供互联网访问:</p>
+
+<pre><code class="language-YAML">  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+</code></pre>
+
+<p>路由表随后与子网相关联。其流量通过互联网网关路由的任何子网被称为<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html" rel="nofollow">公共子网</a>:</p>
+
+<pre><code class="language-YAML">  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+</code></pre>
+
+<p>进出EC2实例的流量由一个安全组<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html" rel="nofollow">控制。下面的规则允许在端口<code>10933</code>(监听触手端口)上访问我托管的Octopus实例可以使用的所有静态IP</a><a href="https://octopus.com/docs/octopus-cloud/static-ip">。</a></p>
+
+<p>远程桌面访问被允许从一个特定的工作站通过端口<code>3389</code>进入。这意味着只有一个工作站可以远程登录。</p>
+
+<p>我们还允许所有出站流量:</p>
+
+<p>这些IP地址将根据您的具体Octopus Cloud实例而变化，因此请参考<a href="https://octopus.com/docs/octopus-cloud/static-ip" class="alert-link">文档</a>中适用于您的列表。</p>
+
+
+<pre><code class="language-YAML">  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Octopus Target Group"
+      GroupDescription: "Tentacle traffic in from hosted static ips, and RDP in from a personal workstation"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.156/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.42/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.31.180/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.132/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.94/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.173/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.171/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.7/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.147/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.240/32
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp:  !Sub ${WorkstationIp}/32
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+</code></pre>
+
+<p>监听触角需要静态主机名或IP地址。虽然我们的EC2实例在创建时将获得一个公共IP地址，但是如果实例停止并再次启动，该地址将会改变。为了确保实例总是有一个静态IP地址，我们创建了一个<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html" rel="nofollow">弹性IP </a>:</p>
+
+<pre><code class="language-YAML">  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Windows
+</code></pre>
+
+<p>我们现在已经创建了托管EC2实例所需的所有网络，该实例具有Internet访问和静态IP。现在我们创建EC2实例。</p>
+
+<p>我们通过<code>BlockDeviceMappings</code>部分给了这个EC2实例一个更大的硬盘，而<code>UserData</code>部分保存了一个在启动时运行的<a href="https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/ec2-windows-user-data.html" rel="nofollow">脚本。这个示例脚本不做任何事情，但是如果需要的话可以被替换:</a></p>
+
+<pre><code class="language-YAML">  Windows:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 250
+      UserData:
+        Fn::Base64: !Sub |
+          &lt;powershell&gt;
+
+          &lt;/powershell&gt;
+      Tags:
+        -
+          Key: Appplication
+          Value:  Windows Server
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value:  Windows Server Worker
+        -
+          Key: OS
+          Value: Windows
+        -
+          Key: OwnerContact
+          Value: "@matthewcasperson"
+        -
+          Key: Purpose
+          Value: MattC Test Worker
+        -
+          Key: Source
+          Value: CloudFormation Script in Octopus Deploy
+</code></pre>
+
+<p>输出捕获实例ID和实例可用的弹性公共IP:</p>
+
+<pre><code class="language-YAML">Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+        - Windows
+        - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>现在，我们可以在Octopus中通过<strong>部署AWS CloudFormation模板</strong>步骤来部署该模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/aws-cloudformation-ec2-examples/deploy-cf.png" class="zoom" data-title=""><img src="../Images/74f7ef21b6bc1bc38c75bd0bf04f3696.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/aws-cloudformation-ec2-examples/deploy-cf.png"/>T2】</a></p>
+
+<p>结果是在一个孤立的VPC出现了一个新的EC2实例:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/aws-cloudformation-ec2-examples/windows-ec2.png" class="zoom" data-title=""><img src="../Images/a5ec91da998b75d9292db2a6067ee853.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/aws-cloudformation-ec2-examples/windows-ec2.png"/>T2】</a></p>
+
+<h2 id="the-linux-cloudformation-template">Linux CloudFormation模板</h2>
+
+<p>创建Linux虚拟机的模板非常相似:</p>
+
+<pre><code class="language-YAML">AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t3a.medium
+    Description: Enter instance size. Default is t3a.medium.
+  WorkstationIp:
+    Type: String
+    Description: The IP address of the workstation that can SSH into the instance.
+  AMI:
+    Type: String
+    Default: ami-08f3d892de259504d
+    Description: The Linux AMI to use.
+  Key:
+    Type: String
+    Description: The key used to access the instance.
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Linux VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Internet Group"
+      GroupDescription: "SSH and web traffic in, all traffic out."
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.156/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.42/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.31.180/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.132/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.94/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  52.147.25.173/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.171/32 
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.245.7/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.147/32
+        - IpProtocol: tcp
+          FromPort: '10933'
+          ToPort: '10933'
+          CidrIp:  20.188.244.240/32
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp:  !Sub ${WorkstationIp}/32
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Linux
+  Linux:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref SubnetA
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 250
+      Tags:
+        -
+          Key: Appplication
+          Value: Linux Server
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value: Linux Server
+        -
+          Key: OS
+          Value: Linux
+        -
+          Key: OwnerContact
+          Value: "@matthewcasperson"
+        -
+          Key: Purpose
+          Value: Support Test Instance
+        -
+          Key: Source
+          Value: CloudForation Script in Octopus Deploy
+      UserData:
+        Fn::Base64: |
+          #cloud-boothook
+          #!/bin/bash
+          echo "Hello World!"
+Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+        - Linux
+        - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>该模板的大部分内容与Windows模板相同。有一些小差异值得一提:</p>
+
+<ul>
+<li><code>InstanceSecurityGroup</code>现在定义了一个规则，允许工作站在端口<code>22</code> (SSH)而不是端口<code>3389</code> (RDP)上。</li>
+<li>EC2实例中的<code>BlockDeviceMappings</code>改变它映射到Linux主机的路径。</li>
+<li><code>UserData</code>脚本现在是Bash脚本，而不是PowerShell。</li>
+</ul>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这些模板多年来为我提供了很好的服务，作为AWS中自助服务Windows和Linux虚拟机的一种方式。通过创建一个VPC来保存虚拟机，我们可以访问更新的实例类型，这些类型<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-classic-platform.html" rel="nofollow">不支持EC2-Classic环境</a>。VPC还允许我们创建两个或更多可以相互通信但仍与任何其他虚拟机隔离的虚拟机。</p>
+
+                    
+                    
+</body>
+</html>

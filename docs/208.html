@@ -1,0 +1,291 @@
+<html>
+<head>
+<title>Deploying to Payara - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>部署到Payara - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-to-payara#2021-08-12">https://octopus.com/blog/deploying-to-payara#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/blogimage-deploying-to-payara-2021.png" class="zoom" data-title=""><img src="../Images/b197dc0ab3d8132a9999a372d7392717.png" class="img-fluid center" alt="Payara logo on web servers, and Octopus and Payara fish playing in a fish bowl." data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/blogimage-deploying-to-payara-2021.png"/>T2】</a></p>
+
+<p>当您用Java开发应用程序时，您可以选择更多的web服务器来部署。Octopus Deploy内置了对Tomcat和Wildfly (JBoss)的支持，但是也支持其他服务器技术。</p>
+
+<p>在这篇文章中，我演示了如何将Java应用程序PetClinic部署到Payara web服务器上。</p>
+
+<h2 id="infrastructure">基础设施</h2>
+
+<p>在这篇文章中，我在Azure中设置了一个MySQL PaaS服务器作为我的数据库后端，并为Payara设置了一个Ubuntu VM。我用一个<a href="https://octopus.com/docs/runbooks"> runbook </a>自动提供这些资源，因此它们可以根据我的需要上下旋转(参见我们的<a href="https://samples.octopus.app/app#/Spaces-642" rel="nofollow">示例实例了解详细信息</a>)。我选择了Linux操作系统来运行web服务器，但Payara也会在Windows上运行。</p>
+
+<p>下面是Azure Resource Manager (ARM)模板和Bash automation脚本的代码，用于安装Octopus触手和Payara服务器:</p>
+
+<h3 id="mysql-paas-template-code">MySQL PaaS模板代码</h3>
+
+<pre><code>{
+    "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "administratorLogin": {
+            "type": "string"
+        },
+        "administratorLoginPassword": {
+            "type": "securestring"
+        },
+        "location": {
+            "type": "string"
+        },
+        "serverName": {
+            "type": "string"
+        },
+        "skuCapacity": {
+            "type": "int"
+        },
+        "skuFamily": {
+            "type": "string"
+        },
+        "skuName": {
+            "type": "string"
+        },
+        "skuSizeMB": {
+            "type": "int"
+        },
+        "skuTier": {
+            "type": "string"
+        },
+        "version": {
+            "type": "string"
+        },
+        "backupRetentionDays": {
+            "type": "int"
+        },
+        "geoRedundantBackup": {
+            "type": "string"
+        },
+        "previewFeature": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "tags": {
+            "type": "object",
+            "defaultValue": {}
+        },
+        "storageAutoGrow": {
+            "type": "string",
+            "defaultValue": "Disabled"
+        },
+        "infrastructureEncryption": {
+            "type": "string",
+            "defaultValue": "Disabled"
+        }
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-12-01-preview",
+            "kind": "",
+            "location": "[parameters('location')]",
+            "name": "[parameters('serverName')]",
+            "properties": {
+                "version": "[parameters('version')]",
+                "administratorLogin": "[parameters('administratorLogin')]",
+                "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+                "storageProfile": {
+                    "storageMB": "[parameters('skuSizeMB')]",
+                    "backupRetentionDays": "[parameters('backupRetentionDays')]",
+                    "geoRedundantBackup": "[parameters('geoRedundantBackup')]",
+                    "storageAutoGrow": "[parameters('storageAutoGrow')]"
+                },
+                "previewFeature": "[parameters('previewFeature')]",
+                "infrastructureEncryption": "[parameters('infrastructureEncryption')]"
+            },
+            "sku": {
+                "name": "[parameters('skuName')]",
+                "tier": "[parameters('skuTier')]",
+                "capacity": "[parameters('skuCapacity')]",
+                "size": "[parameters('skuSizeMB')]",
+                "family": "[parameters('skuFamily')]"
+            },
+            "tags": "[parameters('tags')]",
+            "type": "Microsoft.DBforMySQL/servers"
+        }
+    ],
+    "variables": {}
+}
+</code></pre>
+
+<h3 id="tentacle-and-payara-automation-script">触手和Payara自动化脚本</h3>
+
+<pre><code class="language-bash">#!/bin/bash
+
+# Install Octpous listening tentacle
+serverUrl="#{Global.Base.Url}"   # The url of your Octous server
+thumbprint="#{Global.Server.Thumbprint}"       # The thumbprint of your Octopus Server
+apiKey="#{Global.Api.Key}"           # An Octopus Server api key with permission to add machines
+name="PetClinic-#{Octopus.Environment.Name}"      # The name of the Tentacle at is will appear in the Octopus portal
+publicHostName="#{Global.Environment.Prefix}#{Octopus.Space.Name | Replace " "}.#{Azure.Location.Abbr}.cloudapp.azure.com"      # The url to the tentacle
+environment="#{Octopus.Environment.Name}"  # The environment to register the Tentacle in
+role="PetClinic-Web"   # The role to assign to the Tentacle
+configFilePath="/etc/octopus/default/tentacle-default.config"
+applicationPath="/home/Octopus/Applications/"
+spaceName="#{Octopus.Space.Name}"
+
+sudo apt install --no-install-recommends gnupg curl ca-certificates apt-transport-https &amp;&amp; \
+curl -sSfL https://apt.octopus.com/public.key | sudo apt-key add - &amp;&amp; \
+sudo sh -c "echo deb https://apt.octopus.com/ stable main &gt; /etc/apt/sources.list.d/octopus.com.list" &amp;&amp; \
+sudo apt update &amp;&amp; sudo apt install tentacle -y
+
+sudo /opt/octopus/tentacle/Tentacle create-instance --config "$configFilePath"
+sudo /opt/octopus/tentacle/Tentacle new-certificate --if-blank
+sudo /opt/octopus/tentacle/Tentacle configure --port 10933 --noListen False --reset-trust --app "$applicationPath"
+sudo /opt/octopus/tentacle/Tentacle configure --trust $thumbprint
+echo "Registering the Tentacle $name with server $serverUrl in environment $environment with role $role"
+sudo /opt/octopus/tentacle/Tentacle register-with --server "$serverUrl" --apiKey "$apiKey" --name "$name" --env "$environment" --role "$role" --space "$spaceName" --publicHostName "$publicHostName"
+sudo /opt/octopus/tentacle/Tentacle service --install --start
+
+# Install JDK
+sudo apt update
+sudo apt install default-jdk -y
+
+# Install Payara
+wget --content-disposition 'https://info.payara.fish/cs/c/?cta_guid=b9609f35-f630-492f-b3c0-238fc55f489b&amp;placement_guid=7cca6202-06a3-4c29-aee0-ca58af60528a&amp;portal_id=334594&amp;redirect_url=APefjpGt1aFvHUflpzz7Lec8jDz7CbeIIHZmgORmDSpteTCT2XjiMvjEzeY8yte3kiHi7Ph9mWDB7qUDEr96P0JS8Ev2ZFqahif2huSBfQV6lt4S6YUQpzPMrpHgf_n4VPV62NjKe8vLZBLnYkUALyR2mkrU3vWe7ME9XjHJqYPsHtxkHn-W7bYPFgY2LjEzKIYrdUsCviMgGrUh_LIbLxCESBa0N90vzaWKjK5EwZT021VaPP0jgfgvt0gF2UdtBQGcsTHrAlrb&amp;hsutk=c279766888b67917a591ec4e209cb29a&amp;canon=https%3A%2F%2Fwww.payara.fish%2Fall_downloads&amp;click=5bad781c-f4f5-422d-ba2b-5e0c2bff7098&amp;utm_referrer=https%3A%2F%2Fwww.google.co.za%2F&amp;__hstc=229474563.c279766888b67917a591ec4e209cb29a.1519832301251.1521408251653.1521485598794.4&amp;__hssc=229474563.7.1521485598794&amp;__hsfp=2442083907' --output-document=payara.zip
+sudo apt install unzip
+sudo unzip payara.zip -d /opt
+
+# Create password files
+cat &gt; newpassword.txt &lt;&lt;EOF
+AS_ADMIN_PASSWORD=
+AS_ADMIN_NEWPASSWORD=#{Payara.Admin.User.Password}
+EOF
+
+cat &gt; password.txt &lt;&lt;EOF
+AS_ADMIN_PASSWORD=#{Payara.Admin.User.Password}
+EOF
+
+# Change admin password
+sudo /opt/payara5/bin/asadmin --user admin --passwordfile $PWD/newpassword.txt change-admin-password
+
+# Create service
+sudo /opt/payara5/bin/asadmin create-service --name payara
+
+# Start the server (service creation does not start automatically)
+sudo /opt/payara5/bin/asadmin start-domain
+
+# Enable remote management
+sudo /opt/payara5/bin/asadmin --user admin --passwordfile $PWD/password.txt enable-secure-admin
+</code></pre>
+
+<h3 id="azure-mysql-paas-troubleshooting">Azure MySQL PaaS故障排除</h3>
+
+<p>我在PaaS MySQL服务器上遇到了一些问题。它们和我的解决方案一起列在下面，以帮助您避免这些问题。</p>
+
+<h4 id="firewall">防火墙</h4>
+
+<p>我使用Azure向导为MySQL PaaS服务器生成ARM模板。该向导不包含任何安全组(防火墙)选项，因此在配置服务器时，没有任何东西可以连接到它。使用Azure命令行界面(CLI)，我打开了防火墙，允许Octopus Deploy workers和Payara VM与之对话:</p>
+
+<pre><code>az mysql server firewall-rule create --resource-group &lt;your resource group&gt; --server-name '&lt;your server name&gt;' --name AllowAllAzureIps --start-ip-address &lt;start range&gt; --end-ip-address &lt;end range&gt;
+</code></pre>
+
+<h4 id="you-do-not-have-the-super-privilege-and-binary-logging-is-enabled">您没有超级权限，并且启用了二进制日志记录</h4>
+
+<p>如果您的应用程序的数据库部署包含任何函数或存储过程，您可能会遇到错误<code>You do not have the SUPER privilege and binary logging is enabled</code>。MySQL的PaaS版本不允许您创建这些类型的对象，直到您打开<code>log_bin_trust_function_creators</code>:</p>
+
+<pre><code>az mysql server configuration set --resource-group &lt;your resource group&gt; --server-name "&lt;your server name&gt;" --name log_bin_trust_function_creators --value "ON"
+</code></pre>
+
+<h4 id="additional-jdbc-querystring-parameters">其他JDBC查询字符串参数</h4>
+
+<p>在我部署了。首先，有几个额外的querystring参数可以让应用程序连接到数据库:</p>
+
+<pre><code>?useSSL=true&amp;serverTimezone=UTC
+</code></pre>
+
+<h4 id="username">用户名</h4>
+
+<p>Azure MySQL PaaS要求用户名也包含主机名，因此用户名如下所示:</p>
+
+<pre><code>username@hostname
+</code></pre>
+
+<h2 id="octopus-deploy">Octopus Deploy</h2>
+
+<p>这篇文章假设你熟悉在Octopus Deploy中创建项目。</p>
+
+<h3 id="process">过程</h3>
+
+<p>PetClinic应用程序是一个带有MySQL后端的Spring Boot Java应用程序。要部署应用程序:</p>
+
+<ol>
+<li>如果数据库不存在，请创建它。</li>
+<li>使用<a href="https://flywaydb.org/" rel="nofollow"> Flyway </a>部署数据库。</li>
+<li>将PetClinic应用程序部署到Payara。</li>
+</ol>
+
+<p>这篇文章是专门关于Payara的，所以我们将把重点放在部署到Payara上。</p>
+
+<h4 id="deploying-to-payara">部署到帕亚拉</h4>
+
+<p>Octopus Deploy包含用于部署到Tomcat和Wildfly的特定模板。然而，Payara包含一个自动部署特性，使得创建Payara模板变得没有必要。通过放置。war文件，Payara会自动将应用程序部署到服务器上。</p>
+
+<h5 id="add-deploy-java-archive-step">添加部署Java归档步骤</h5>
+
+<p>在您的Octopus部署项目中，向您的流程添加一个<strong>部署Java归档</strong>步骤。</p>
+
+<h5 id="configure-deploy-java-archive-step">配置部署Java归档文件步骤</h5>
+
+<p>在<strong> Package Details </strong>下，确保<strong> Deployment </strong>部分已展开(默认情况下应该在新添加的步骤上)。</p>
+
+<p>为了给包重新命名，使其更加用户友好，使用<strong>部署包文件名</strong>选项指定一个新名称。请注意，文件名会影响应用程序的URL。</p>
+
+<p>如果<strong>部署的包文件名</strong>为空，它将使用原始文件名，Payara服务器上的URL将类似于<code>http://PayaraServer/petclinic.web.1.0.21022.194744</code>。</p>
+
+<p>我输入了<code>petclinic.war</code>，所以我的网址看起来像<code>http://PayaraServer/petclinic</code>。</p>
+
+<p>为了利用Payara的自动部署特性，勾选框<strong>使用定制部署目录</strong>。自动部署文件夹位于域的子文件夹中。如果你已经看过了触手和Payara自动化脚本，你会注意到我把Payara安装到了<code>/opt/payara5</code>，所以自动部署的完整路径是<code>/opt/payara5/glassfish/domains/domain1/autodeploy</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-deploy-section.png" class="zoom" data-title=""><img src="../Images/196791aa5df6eaeb41cd7f063f1830cf.png" class="img-fluid center" alt="The deploy section of the step template" data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-deploy-section.png"/>T2】</a></p>
+
+<p>我还启用了<a href="https://octopus.com/docs/projects/steps/configuration-features/structured-configuration-variables-feature">结构化配置变量</a>特性来更新数据库连接信息。为此:</p>
+
+<ol>
+<li>点击<strong>配置功能</strong>按钮。</li>
+<li>勾选<code>Structured Configuration Variables</code>框。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-structured-configuration-variables.png" class="zoom" data-title=""><img src="../Images/6ecaa93653b0ddbb1e19e53b71f11423.png" class="img-fluid center" alt="Octopus structured configuration variables feature toggle" data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-structured-configuration-variables.png"/>T2】</a></p>
+
+<p>包含数据库信息的文件是<code>WEB-INF/classes/spring/datasource-config.xml</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-structured-configuration-variables-folder.png" class="zoom" data-title=""><img src="../Images/e1abbb7db7365bfabeb2c7263af62bea.png" class="img-fluid center" alt="Location of the structured configuration variables" data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-structured-configuration-variables-folder.png"/>T2】</a></p>
+
+<h5 id="configure-variables">配置变量</h5>
+
+<p>最后，为datasource-config.xml文件创建项目变量。我需要更换三个部件:</p>
+
+
+
+<p>我使用以下变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-variables.png" class="zoom" data-title=""><img src="../Images/11d4e5e66f61f53d7ec1edceaacfa169.png" class="img-fluid center" alt="Octopus variables" data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-variables.png"/>T2】</a></p>
+
+<p>变量的<code>Name</code>是XPath表达式，它替换了必要的组件。</p>
+
+<h3 id="deployment">部署</h3>
+
+<p>部署到开发环境，我们可以看到<strong>结构化配置变量</strong>特性被应用，文件被复制到<code>/opt/payara5/glassfish/domains/domain1/autodeploy</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-deploy-complete.png" class="zoom" data-title=""><img src="../Images/fdff54279990dedbd95b69991b5a05a6.png" class="img-fluid center" alt="Deployment task log" data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/octopus-deploy-complete.png"/>T2】</a></p>
+
+<p>如果我们导航到Payara服务器，我们可以看到PetClinic应用程序已经部署，并且正在提取数据。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/deploying-to-payara/payara-petclinic.png" class="zoom" data-title=""><img src="../Images/0f191844e785861bfee84123593f445e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-03/deploying-to-payara/payara-petclinic.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>没有具体的步骤模板，很容易认为Octopus Deploy不支持Payara。我希望这篇文章证明了它确实是受支持的，并且易于部署。</p>
+
+
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,56 @@
+<html>
+<head>
+<title>Execution Containers for Workers - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>工人的执行容器- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/execution-containers#2021-08-12">https://octopus.com/blog/execution-containers#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/execution-containers/execution-workers.png" class="zoom" data-title=""><img src="../Images/4e1f894489ea068c7eef4a48dcf9f57c.png" class="img-fluid center" alt="Execution Containers for Workers" data-original-src="https://i.octopus.com/blog/2020-06/execution-containers/execution-workers.png"/>T2】</a></p>
+
+<p>现代部署依赖于工具。比如AWS、Azure、Google命令行、Terraform、kubectl、Helm、Java、NodeJS、。网，等等等等，<em>等等</em>。</p>
+
+<p>章鱼在历史上对这些采取了不一致的方法。有些与Octopus服务器捆绑在一起，并被推送到部署目标(在Windows上)。例如Azure CLI、AWS CLI和Terraform。在其他情况下，Octopus假设依赖项已经预先安装在目标上，例如kubectl、Helm、Java。</p>
+
+<p>这两种方法都不是完美的。</p>
+
+<p>捆绑的依赖关系有许多缺点。它们总是过时的，用户经常需要最新版本的工具，但它们不能独立于Octopus服务器进行更新。没有办法固定捆绑的依赖项的版本，因此如果工具的发布者引入了突破性的更改，我们会发现自己无法在不潜在地导致用户部署过程失败的情况下更新它们(这是Terraform当前的一个问题)。</p>
+
+<p>当然，通过<em>而不是</em>捆绑依赖关系，我们将痛苦推给了我们的用户。如果你必须安装几十个依赖项，那么让一台新机器旋转起来作为Octopus Worker是一件苦差事。并且管理各种项目的部署过程和工人之间的关系并不明显。</p>
+
+<p>幸运的是，有一种技术非常适合这个场景:<em>容器</em>。</p>
+
+<p>容器允许<a href="https://twitter.com/b0rk/status/1237464479811633154" rel="nofollow">捆绑依赖</a>，并且(这是神奇的一点)在容器内执行命令。</p>
+
+<p>CI工具集中使用容器作为构建软件的执行环境并不是巧合。同样的能力也可以用于部署。</p>
+
+<p>Octopus 2020.2引入了在容器内<a href="https://octopus.com/docs/deployment-process/execution-containers-for-workers">运行部署动作的能力:</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/execution-containers/action-container-image-ui.png" class="zoom" data-title=""><img src="../Images/baefe2e84e6d233c13e6bfa512e064d5.png" class="img-fluid center" alt="Action Container Image User Interface" data-original-src="https://i.octopus.com/blog/2020-06/execution-containers/action-container-image-ui.png"/>T2】</a></p>
+
+<p>这将可用于在Worker上执行的任何步骤(或者在Octopus服务器上，对于自托管实例)。</p>
+
+<p>通常情况下，Octopus服务器通过触手服务将<a href="https://octopus.com/docs/octopus-rest-api/calamari"> Calamari </a>可执行文件发送给工人，在工人机器上直接运行。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/execution-containers/architecture-pre-action-containers.png" class="zoom" data-title=""><img src="../Images/5e81832f0b2b375ab383f360a973c3c5.png" class="img-fluid center" alt="Worker Architecture without action containers" data-original-src="https://i.octopus.com/blog/2020-06/execution-containers/architecture-pre-action-containers.png"/>T2】</a></p>
+
+<p>当一个步骤被配置为使用执行容器时，Octopus服务器仍然会发送Calamari，但是它不是直接在工作机上运行，而是在指定的容器内执行(使用<a href="https://docs.docker.com/engine/reference/commandline/exec/" rel="nofollow"> docker exec </a>)。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/execution-containers/architecture-post-action-containers.png" class="zoom" data-title=""><img src="../Images/e18c71badf1994c56429d0fbc0e9b2b3.png" class="img-fluid center" alt="Worker Architecture with action containers" data-original-src="https://i.octopus.com/blog/2020-06/execution-containers/architecture-post-action-containers.png"/>T2】</a></p>
+
+<p>您可以使用任何Docker映像，但为了帮助提供一个愉快的路径，我们已经将一些映像发布到Docker hub(<a href="https://hub.docker.com/r/octopusdeploy/worker-tools" rel="nofollow">octopus deploy/worker-tools</a>)上的存储库中，其中包含许多最常用的<a href="https://github.com/OctopusDeploy/WorkerTools/blob/master/ubuntu.18.04/Dockerfile" rel="nofollow">部署工具</a>，我们将定期发布包含工具的最新版本的更新。如果您的部署过程需要不在<code>octopusdeploy/worker-tools</code>映像中的工具，或者您喜欢较小的映像，那么您可以使用另一个映像，甚至构建您自己的映像。</p>
+
+<p>值得注意的是，当您将部署操作配置为在容器内部执行时，指定的映像会被以不同于正在部署的包的方式处理。动作图像是在部署过程中完全指定的(包括标签)，不像已部署的包在创建发布时选择它们的版本。这很重要，因为它允许部署过程的维护者控制映像的更新时间，并且任何创建项目发布的人都不需要这些映像的任何知识。</p>
+
+<p>由于Octopus继续支持部署多种类型的应用程序(。NET，Java，NodeJS等。)到很多云(自托管、AWS、Azure等)的很多平台(Windows、Linux、PaaS)。)，我们希望这将成为驯服部署工具依赖的有力武器。</p>
+
+<p>在Octopus 2020.2中，执行容器作为早期访问预览版提供。章鱼云动态工作器目前不支持该功能；在不久的将来，我们将增加对此的支持。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/execution-containers/feature-flag.png" class="zoom" data-title=""><img src="../Images/1eaa4424bfd36eadddea8e5794e77156.png" class="img-fluid center" alt="Action Container Feature Flag" data-original-src="https://i.octopus.com/blog/2020-06/execution-containers/feature-flag.png"/></a>T2】</p>
+
+<p>愉快的(集装箱化)部署！</p>
+
+                    
+                    
+</body>
+</html>

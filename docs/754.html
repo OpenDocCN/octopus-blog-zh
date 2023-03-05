@@ -1,0 +1,97 @@
+<html>
+<head>
+<title>Enabling Parallel Deployments in Tomcat with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus Deploy - Octopus Deploy在Tomcat中启用并行部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/tomcat-parallel-deployments#2021-10-14">https://octopus.com/blog/tomcat-parallel-deployments#2021-10-14</a></blockquote>
+                        <p>在Octopus，我们正在努力构建对Java和Tomcat等服务器的支持。虽然这项工作仍在进行中，但我想分享Tomcat的一个简洁的特性，当这项Java工作发布时，您将能够通过Octopus Deploy使用它。</p>
+
+<p>博文中的截图来自Octopus Deploy的开发版本，在最终版本中会有变化。</p>
+
+
+<h2 id="parallel-deployments">并行部署</h2>
+
+<p>考虑这个相当典型的场景。您有一个为web应用程序提供服务的Tomcat实例，并且您想要部署一个新版本。目前使用该应用程序的用户会发生什么情况？通常，部署新版本的应用程序会使为旧版本的应用程序建立的会话失效。这对用户体验意味着什么在很大程度上取决于所涉及的应用程序，但成为那些会话刚刚终止的客户之一几乎不会有什么乐趣。</p>
+
+<p>Tomcat附带了一个很好的特性，叫做并行部署，这使得这些升级对于管理员来说更加容易，对于客户来说更加愉快。并行部署允许应用程序的两个或更多版本并行运行，允许现有会话自然完成，同时将新流量导向新部署的应用程序版本。</p>
+
+<p>并行部署不能解决数据库等共享资源的变更问题。如果应用程序的新版本改变了数据库模式，旧版本的应用程序可能不再按预期工作。在决定实现并行部署时，请记住这些限制。</p>
+
+
+<p>并行部署很容易配置，所以让我们看一个简单的例子。</p>
+
+<h2 id="tomcat-deployment-through-octopus-deploy">通过Octopus Deploy部署Tomcat</h2>
+
+<p>这里是我们正在构建到Octopus Deploy中的工作进展步骤的截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/octopus-tomcat-step.png" class="zoom" data-title=""><img src="../Images/2dc8ee8eebf221b2b36e917f24e99173.png" class="img-fluid center" alt="Octopus Deploy Tomcat Step" data-original-src="https://i.octopus.com/blog/2017-08/octopus-tomcat-step.png"/>T2】</a></p>
+
+<p>任何通过Octopus Deploy将应用程序部署到IIS的人都应该对此很熟悉。您选择要部署的包，并定义您要部署到的服务器的一些细节。</p>
+
+<p>为了利用并行部署，您只需要为<code>Deployment Version</code>字段定义一个值。唯一的要求是更新的部署要有更高的版本。在这个例子中，我们使用Octopus版本号作为版本，这满足了每次部署都增加版本号的要求。</p>
+
+<h2 id="deploying-the-first-version">部署第一个版本</h2>
+
+<p>一旦部署完成，您将在Tomcat管理器中看到类似这样的内容。在本例中，演示应用程序已经部署了版本<code>0.0.50</code>。另请注意，它还没有会话。这是因为没有人开始使用该应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-single-version.png" class="zoom" data-title=""><img src="../Images/bae4b2ef62329e6f6d7f5a56f8b42ca5.png" class="img-fluid center" alt="First Version" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-single-version.png"/>T2】</a></p>
+
+<p>这是刚刚部署的演示应用程序的屏幕截图。请注意屏幕底部的版本号。这是构建应用程序时生成的时间戳。</p>
+
+<p>应用程序中的时间戳和它在Tomcat中被分配的版本不需要相同。使这些版本相同是有益的，但是对于这个例子，我们只使用这个时间戳来区分并行部署的应用程序的两个版本。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-demo-app-first.png" class="zoom" data-title=""><img src="../Images/db598575ffe305db44f342900b8ad0e6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-demo-app-first.png"/>T2】</a></p>
+
+<p>既然已经使用了这个应用程序，Tomcat将显示它有一个与之相关联的会话。你可以在<code>Sessions</code>栏下看到这个。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-single-version-with-session.png" class="zoom" data-title=""><img src="../Images/290d0fb4bf2effde35b46cefec8bb271.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-single-version-with-session.png"/>T2】</a></p>
+
+<h2 id="deploying-the-second-version">部署第二个版本</h2>
+
+<p>现在我们有一个新版本的应用程序要部署。部署由Octopus Deploy处理，这一次给了我们同一个应用程序的第二个版本，现在是版本<code>0.0.51</code>。</p>
+
+<p>在这里，我在一个隐姓埋名的窗口中打开了应用程序。这样做意味着我没有共享在常规Chrome窗口中开始的会话，这意味着Tomcat将这个请求视为一个新的会话。从截图中可以看到，应用程序显示的时间戳是不同的，因为这是后来构建的不同的WAR文件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-demo-app-second.png" class="zoom" data-title=""><img src="../Images/9ae5539abd76a7c9df8263f5dd127dba.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-demo-app-second.png"/>T2】</a></p>
+
+<p>现在，Tomcat管理器向我们展示了演示应用程序的两个版本:<code>0.0.50</code>和<code>0.0.51</code>。两者都有活动会话，并且都将独立运行。现有用户继续使用版本<code>0.0.50</code>，而新流量被导向版本<code>0.0.51</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-two-version-with-session.png" class="zoom" data-title=""><img src="../Images/1e79539d6908697391e656664d62f5a4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-two-version-with-session.png"/>T2】</a></p>
+
+<h2 id="removing-old-deployments">删除旧部署</h2>
+
+<p>在某个时刻，针对旧版本应用程序的所有会话都将结束。当这种情况发生时，我们可以利用Tomcat中的一个特性，该特性会在没有用户的情况下自动取消部署旧的应用程序版本。</p>
+
+<p>要启用这个特性，您需要编辑<code>server.xml</code>文件，并在<code>&lt;Host&gt;</code>元素中设置<code>undeployOldVersions="true"</code>。</p>
+
+<pre><code>&lt;Host
+  name="localhost"  
+  appBase="webapps"
+  unpackWARs="true"
+  autoDeploy="true"
+  undeployOldVersions="true"&gt;
+</code></pre>
+
+<p>通常会话会在大约30分钟后过期，但是您可以通过使用<code>commands</code>列中的<code>Expire sessions</code>按钮终止空闲了一分钟的会话，并将空闲时间减少到一分钟，从而加快进程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-expire-session.png" class="zoom" data-title=""><img src="../Images/95800d982c7a6080a7c16f5d839bcd69.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-expire-session.png"/>T2】</a></p>
+
+<p>随着会话手动过期，应用程序版本<code>0.0.50</code>不再有任何活动用户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-expired-sessions.png" class="zoom" data-title=""><img src="../Images/4199186b7603672ca7ad5b1f11d4db69.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-expired-sessions.png"/>T2】</a></p>
+
+<p>几秒钟后，这个旧版本将自动取消部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/tomcat-old-app-undeployed.png" class="zoom" data-title=""><img src="../Images/417dfc662b0355352b79a4708c9732fd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2017-08/tomcat-old-app-undeployed.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>如果您正在寻找一种简单的方法来管理Java应用程序的滚动部署，Tomcat中的并行部署特性是一种非常方便的方法，可以将用户定向到新版本，同时在不再使用旧版本时最终清理旧版本。</p>
+
+                    
+                    
+</body>
+</html>

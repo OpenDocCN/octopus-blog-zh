@@ -1,0 +1,230 @@
+<html>
+<head>
+<title>Database deployments with Flyway and Octopus Execution Containers - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Flyway和Octopus执行容器的数据库部署——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/flyway-deployments-with-execution-containers#2021-07-07">https://octopus.com/blog/flyway-deployments-with-execution-containers#2021-07-07</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/blogimage-database-deployments-flyway-octopus-execution-containers.png" class="zoom" data-title=""><img src="../Images/4ad26f8116c78965b68a6ca4edab62a7.png" class="img-fluid center" alt="flyway logo inside execution container in front of laptop" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/blogimage-database-deployments-flyway-octopus-execution-containers.png"/>T2】</a></p>
+
+<p>我最近使用了<a href="https://flywaydb.org" rel="nofollow"> Flyway </a>和Octopus Deploy来部署数据库更改。Flyway给我留下了深刻的印象，除了我必须将工具和Java运行时引擎(JRE)捆绑在一起，或者将它们预安装在一个worker上。</p>
+
+<p>在Octopus Deploy的<strong> 2020.2 </strong>版本中，我们引入了<a href="https://octopus.com/blog/execution-containers">执行容器</a>特性。执行容器使用Docker映像来管理依赖性。</p>
+
+<p>这篇文章介绍了如何使用执行容器和Flyway在Octopus Deploy中配置数据库部署。</p>
+
+<h2 id="execution-container-basics">执行容器基础</h2>
+
+<p>我不喜欢在我的包中包含所有运行Flyway的二进制文件，因为这会导致包膨胀。在我的例子中，差别是10 KB对90 MB。</p>
+
+<p>作为一名开发人员，我还负责升级二进制文件，并将它们包含在我的Git repo中。我还避免在员工身上预装工具，因为这意味着每个人都在同一版本上，升级可能会影响每个人。</p>
+
+<p>执行容器通过使用Docker映像来管理依赖性，从而解决了这两个问题。Docker映像拥有所有必要的工具(JRE、Flyway、PowerShell等。)已安装。您可以指定部署过程中使用的Docker映像和标记。当部署使用执行容器运行时，Calamari执行Docker run命令。此外，Calamari会自动将文件夹挂载到容器中。</p>
+
+<p>任务日志显示类似于以下内容的命令:</p>
+
+<pre><code>docker run --rm  --env TentacleHome=/home/Octopus  -w /home/Octopus/Work/20210329204922-325128-24   -v /home/Octopus/Work/20210329204922-325128-24:/home/Octopus/Work/20210329204922-325128-24  -v /home/Octopus:/home/Octopus  index.docker.io/octopuslabs/flyway-workertools:latest 
+</code></pre>
+
+<p>您拥有的任何包都会自动提取到<code>/home/Octopus/Work/[DATETIME]</code>文件夹中。这发生在幕后。要从直接在worker上运行改为在执行容器上运行，只需单击一个单选按钮并提供包名。其他都一样。</p>
+
+<h2 id="the-flyway-execution-container">飞行路线执行容器</h2>
+
+<p>Octopus Deploy提供了你可以使用的官方Docker图片。不幸的是，这些图像不能在这个例子中使用，原因有二:</p>
+
+<ol>
+<li>它们包括几十种需要从Docker Hub下载千兆字节以上数据的工具。</li>
+<li>没有一张图片包含飞行路线。</li>
+</ol>
+
+<p>为了克服这一点，我创建了一个<a href="https://hub.docker.com/r/octopuslabs/flyway-workertools" rel="nofollow"> Docker图像</a>，你可以在这个例子中使用。我还创建了一个<a href="https://github.com/OctopusDeployLabs/flyway-workertools/blob/main/.github/workflows/docker-build-push.yml" rel="nofollow"> GitHub动作</a>，它将每天运行一次，并在检测到新版本时构建一个新映像。</p>
+
+<p>这个Docker映像的<a href="https://hub.docker.com/r/octopuslabs/workertools" rel="nofollow">基础映像</a>包括我们支持的最流行的脚本语言:PowerShell和Python。基于Ubuntu的镜像也支持Bash。</p>
+
+<h2 id="scaffolding">脚手架</h2>
+
+<p>需要完成两个脚手架步骤:</p>
+
+<ol>
+<li>安装<a href="https://library.octopus.com/step-templates/ccebac39-79a8-4ab4-b55f-19ea570d9ebc/actiontemplate-flyway-database-migrations" rel="nofollow"> Flyway数据库迁移步骤模板</a>。</li>
+<li>添加一个Docker容器注册表外部提要，并将其指向<code>https://index.docker.io</code>。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/docker-hub-external-feed.png" class="zoom" data-title=""><img src="../Images/ebc2483af0c0ea3bacfad010c01ad5d6.png" class="img-fluid center" alt="external docker feed" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/docker-hub-external-feed.png"/>T2】</a></p>
+
+<h2 id="flyway-database-migrations-step-template">Flyway数据库迁移步骤模板</h2>
+
+<p>如果您在我们的<a href="https://library.octopus.com" rel="nofollow">社区步骤模板库</a>中搜索<code>Flyway</code>，您会注意到许多Flyway步骤模板。<strong> Flyway数据库迁移</strong>步骤模板旨在取代旧的步骤模板。</p>
+
+<p>这个新步骤模板的主要区别在于:</p>
+
+<ol>
+<li>您可以选择任何命令(migrate、info、validate等。)飞行路线支持。</li>
+<li>我和Redgate的Flyway团队一起寻找流行的命令行开关。</li>
+<li>支持免费和付费版本的Flyway，使您能够进行模拟迁移，并能够使用undo命令。</li>
+<li>它既可以在Linux上运行，也可以在Windows上运行。</li>
+<li>它试图找到Flyway可执行文件，使得将Flyway包含在包中(如果您喜欢的话)或在执行容器中运行它变得容易。</li>
+<li>SQL和JAR迁移都受支持。</li>
+</ol>
+
+<p>我遵循了类似的模式，在最近的其他步骤模板中包含了更多的参数，例如:</p>
+
+
+
+<p>我这样做是为了确保任何以<code>-</code>开头的参数都是Flyway命令行工具中的<a href="https://flywaydb.org/documentation/configuration/parameters/" rel="nofollow">命令行开关</a>。</p>
+
+<h2 id="packaging-migration-scripts">打包迁移脚本</h2>
+
+<p>我们的文档指导你构建你的包。然而，如果您只有SQL文件，就没有什么可构建的了。你只需要把文件夹打包到你的构建服务器上，然后推给Octopus。</p>
+
+<p>考虑这个例子:<a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/folder-to-package.png" class="zoom" data-title=""> <img src="../Images/be76ca5ab677a38001b787b68d8beb77.png" class="img-fluid center" alt="sample folder to package" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/folder-to-package.png"/> </a></p>
+
+<p>您需要在构建服务器上的<code>db/src</code>文件夹中运行Octo Pack命令。该包将包含这些文件夹和内容。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/packaged-folder.png" class="zoom" data-title=""><img src="../Images/6ed4799e48b724e190566fb21a3aca0f.png" class="img-fluid center" alt="sample package" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/packaged-folder.png"/>T2】</a></p>
+
+<p>在构建包之后，您需要将它发布到Octopus Deploy。为了验证概念，您不需要构建服务器。可以使用7-Zip之类的工具将文件夹压缩成<code>Flyway.Test.1.0.0.zip</code>，手动<a href="https://octopus.com/docs/packaging-applications/package-repositories/built-in-repository#pushing-packages-to-the-built-in-repository">上传包</a>。这就是我为这篇文章所做的。</p>
+
+<p>然而，在概念验证之后，如果集成一个构建服务器是有意义的，我们有文档和博客文章来帮助你。</p>
+
+<p>构建服务器的示例:</p>
+
+
+
+<h2 id="configuring-the-project">配置项目</h2>
+
+<p>现在我们可以配置项目了，因为我们已经上传了步骤模板、Docker提要和包。</p>
+
+<p>首先，创建一个项目。在这个例子中，我将使用名称<a href="https://samples.octopus.app/app#/Spaces-106/projects/flyway-azure-sql-execution-containers/deployments" rel="nofollow"> Flyway - Azure SQL执行容器</a>。参见我们的samples实例中的Flyway示例，了解如何使用执行容器。</p>
+
+<h3 id="variables">变量</h3>
+
+<p>创建项目后，导航至<strong>变量</strong>并添加必要的变量。</p>
+
+<p>我推荐命名空间变量，例如项目变量使用<code>Project.[Component].[VariableName]</code>，库变量集变量使用<code>[VariableSetName].[Component].[VariableName]</code>。这将使在流程中插入变量时更容易找到它们。</p>
+
+
+<ul>
+<li><code>Project.Database.ConnectionString</code>:我要部署到的数据库的连接字符串。<strong>请注意:</strong>这是我的例子使用SQL Server和将其改为Oracle、MySQL、PostgreSQL、Maria、Snowflake等之间唯一的<em>真正的区别。</em></li>
+<li><code>Project.Database.Name</code>:要部署到的数据库的名称。</li>
+<li><code>Project.Database.Password</code>:进行部署的数据库用户的密码。</li>
+<li><code>Project.Database.UserName</code>:执行部署的数据库用户的用户名。</li>
+<li><code>Project.Database.Server.Name</code>:数据库所在服务器的名称。</li>
+<li><code>Project.Flyway.LicenseKey</code>:fly way许可证密钥需要利用诸如模拟运行部署和撤消等功能。<strong>请注意:</strong>如果没有提供许可证密钥，Flyway将恢复为社区版。</li>
+<li><code>Project.Worker.Pool</code>:工人池，工作将在这里完成。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/project-variables.png" class="zoom" data-title=""><img src="../Images/8ac1c2e1726483b7d6ccde2b1ec9618c.png" class="img-fluid center" alt="The flyway project variables" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/project-variables.png"/>T2】</a></p>
+
+<h3 id="deployment-process">部署流程</h3>
+
+<p>在<a href="https://octopus.com/docs/deployments/databases/common-patterns/manual-approvals">我们的文档</a>中，我们建议从以下数据库部署流程开始:</p>
+
+<ol>
+<li>生成一个delta脚本，并将其作为一个<a href="https://octopus.com/docs/projects/deployment-process/artifacts">工件</a>进行附加。</li>
+<li>通知数据库管理员等待批准(仅在生产中)。</li>
+<li>数据库管理员通过人工干预批准增量脚本<a href="https://octopus.com/docs/projects/built-in-step-templates/manual-intervention-and-approvals">(仅在生产中)。</a></li>
+<li>部署数据库更改。</li>
+<li>通知团队成功或失败。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/process-overview.png" class="zoom" data-title=""><img src="../Images/025a43c5e0284db5464bfabd0a5f755d.png" class="img-fluid center" alt="overview of the deployment process" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/process-overview.png"/>T2】</a></p>
+
+<p>通知步骤可以是电子邮件、Slack、微软团队或您选择的任何工具。手动干预是不言自明的，我们在文档中包含了这些信息。</p>
+
+<h3 id="using-the-flyway-database-migrations-step-template">使用Flyway数据库迁移步骤模板</h3>
+
+<p>生成增量报告和部署数据库更改是使用Flyway数据库迁移步骤模板完成的。当您将其添加到流程中时，请进行以下更改:</p>
+
+<ol>
+<li>更新步骤的名称。</li>
+<li>把它改成在一个工人身上运行。</li>
+<li>选择一个工作池。</li>
+<li>将容器图像更改为<code>runs inside a container, on a worker</code>。</li>
+<li>输入<code>octopuslabs/flyway-workertools:latest</code>作为Docker图像；Docker会根据主机运行的内容自动下载正确的架构(Ubuntu或Windows)。</li>
+</ol>
+
+<p>工人必须安装Docker才能工作。章鱼云提供了已经在运行Docker的托管工人。如果你想自己托管你的工人，Linux工人必须运行Linux容器，而Windows工人只能运行Windows容器。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/configure-step-to-run-on-execution-container.png" class="zoom" data-title=""><img src="../Images/fa582d9add989e3315c97e07c19a9c2f.png" class="img-fluid center" alt="configuring Flyway to run on the execution container" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/configure-step-to-run-on-execution-container.png"/>T2】</a></p>
+
+<p>步骤模板将在哪里运行现在已经配置好了。接下来，我们配置参数:</p>
+
+<ul>
+<li>选择包含您希望Flyway运行的脚本的包。</li>
+<li>可选:输入飞行路线所在的路径。</li>
+</ul>
+
+<p>如果你在<code>octopuslabs/flyway-workertools</code>执行容器上运行这个，你不需要输入任何东西。步骤模板将自动找到要运行的可执行文件。</p>
+
+
+<ul>
+<li>选择希望该步骤运行的命令。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/flyway-common-parameters.png" class="zoom" data-title=""><img src="../Images/e4eadc358d83c2220096db5180787fde.png" class="img-fluid center" alt="common parameters" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/flyway-common-parameters.png"/>T2】</a></p>
+
+<p>Octopus中最常用的命令是:</p>
+
+<ul>
+<li><code>info</code>:这将生成一个列表，列出所有找到的脚本以及它们相对于正在部署的数据库的状态。当使用community edition时，info命令是理想的，您需要列出将在数据库上运行的脚本。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/community-info-list-pending-files.png" class="zoom" data-title=""><img src="../Images/00fbe1e6507bf532d3f077a42e32934b.png" class="img-fluid center" alt="using info to list pending scripts" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/community-info-list-pending-files.png"/>T2】</a></p>
+
+<ul>
+<li><code>migrate dry run</code>:这将生成一个包含所有待定SQL脚本的文件，它将被保存为一个工件，DBA可以下载和查看。这优于<code>info</code>，但仅当您提供一个Flyway许可密钥时才受支持。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/dry-run-report-as-artifact.png" class="zoom" data-title=""><img src="../Images/21443912be6d063ada9c6ab696f3ffc7.png" class="img-fluid center" alt="migrate dry run file generated as an artifact" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/dry-run-report-as-artifact.png"/>T2】</a></p>
+
+<ul>
+<li><code>migrate</code>:这将获取包中的所有SQL脚本和JAR文件，并在目标数据库上运行它们。这是执行实际工作的命令。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/migrate-command-in-action.png" class="zoom" data-title=""><img src="../Images/06cf475247bd4bcacebc7b4717529630.png" class="img-fluid center" alt="migrate command in action" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/migrate-command-in-action.png"/>T2】</a></p>
+
+<p>接下来是许可参数，接下来是连接参数，最后是Flyway支持的各种命令行开关。</p>
+
+<ul>
+<li>因为我有许可证密钥，所以把版本改成了<code>Teams</code>。</li>
+<li>下一个选项是传递许可证密钥。</li>
+<li>然后，使用连接字符串格式提供数据库的URL。</li>
+<li>之后是可选的<a href="https://flywaydb.org/documentation/configuration/parameters/" rel="nofollow">参数</a>，供Flyway运行。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/remaining-parameters.png" class="zoom" data-title=""><img src="../Images/c72a62f431a2667763d0e92e794681dd.png" class="img-fluid center" alt="remaining parameters" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/remaining-parameters.png"/>T2】</a></p>
+
+<p>step模板包括每个参数的详细帮助文本以及相应文档的链接。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/parameter-help.png" class="zoom" data-title=""><img src="../Images/7a754bb976da17f63f7f88bdb61c709b.png" class="img-fluid center" alt="parameter help text" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/parameter-help.png"/>T2】</a></p>
+
+<p>并非所有命令都支持所有命令行参数。步骤模板足够智能，可以排除命令不支持的参数。</p>
+
+
+<h3 id="generate-delta-script-step">生成增量脚本步骤</h3>
+
+<p>生成供DBA批准的增量脚本的步骤设置了以下参数。我有一个许可证密钥，所以我正在使用<code>migrate dry run</code>命令。如果我没有许可证密钥，我会选择<code>info</code>作为命令。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/generate-delta-report.png" class="zoom" data-title=""><img src="../Images/d46568798073b28d667385aed06c11b6.png" class="img-fluid center" alt="generate delta report step" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/generate-delta-report.png"/>T2】</a></p>
+
+<h3 id="deploy-database-changes-step">部署数据库更改步骤</h3>
+
+<p>从包中部署数据库变更的步骤实际上与<strong>生成增量脚本</strong>步骤相同。唯一的区别是使用命令<code>migrate</code>而不是<code>migrate dry run</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/deploy-database-changes.png" class="zoom" data-title=""><img src="../Images/944a6ad761fa93188222fb1628957812.png" class="img-fluid center" alt="deploy database changes step" data-original-src="https://i.octopus.com/blog/2021-06/flyway-deployments-with-execution-containers/deploy-database-changes.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>正如本文所展示的，更新您的流程以在执行容器中运行并不复杂，尤其是如果您使用的是Octopus Cloud。添加Docker容器注册表外部提要后，只需为应该在执行容器上运行的每个步骤单击一个单选按钮。</p>
+
+<p>这是一个很小的变化，但是它使部署过程和管道更加健壮。您可以利用运行您需要的Flyway的精确版本的工具，而无需所有维护开销。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

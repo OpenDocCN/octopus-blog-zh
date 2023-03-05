@@ -1,0 +1,68 @@
+<html>
+<head>
+<title>Octopus December Release 4.1 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通12月版4.1 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-4-1#2022-07-14">https://octopus.com/blog/octopus-release-4-1#2022-07-14</a></blockquote>
+                        <p>今年12月发布的Octopus继续支持早在3.17中引入的Java，能够将证书导出为Java密钥库，并直接在现有的Tomcat 7+、wildly 10+和Red Hat JBoss EAP 6+应用服务器中配置证书。这个版本还允许将Maven存储库配置为外部Octopus提要，这意味着Octopus现在可以在部署中使用Maven工件。请继续阅读所有激动人心的细节！</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="release-tour">发布之旅</h2>
+
+<iframe src="https://www.youtube.com/embed/vKwv56oYSyY" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="export-certificates-as-java-keystores-and-to-wildfly-jboss-eap-and-tomcat">将证书作为Java密钥库导出到WildFly、JBoss EAP和Tomcat</h2>
+
+<p>Octopus已经具备了<a href="https://octopus.com/docs/deployments/certificates">管理您的证书</a>的能力，现在这些证书可以通过<code>Configure certificate for WildFly or EAP</code>步骤直接在现有的wildly 10+或Red Hat JBoss EAP 6+应用服务器中配置，或者通过<code>Deploy a certificate to Tomcat</code>步骤在现有的Tomcat 7+应用服务器中配置。对于那些希望手动配置证书的人来说，新的<code>Deploy a keystore to the filesystem</code>步骤允许将由Octopus管理的证书保存为Java密钥库。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/java-steps.png" class="zoom" data-title=""><img src="../Images/044cf3b3ec947f142a10ad734a3c43d2.png" class="img-fluid center" alt="New Java Steps" data-original-src="https://i.octopus.com/blog/2017-12/java-steps.png"/>T2】</a></p>
+
+<p>您可以通过查看这些步骤的文档来了解更多信息:</p>
+
+
+
+<h2 id="maven-repositories-as-external-feeds">作为外部提要的Maven存储库</h2>
+
+<p>Maven存储库非常受Java开发人员的欢迎，在这个版本中，Maven存储库可以配置为Octopus中的外部提要。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/maven-feed.png" class="zoom" data-title=""><img src="../Images/32bb9ae628203660a94473fe094df1c0.png" class="img-fluid center" alt="Maven Feed" data-original-src="https://i.octopus.com/blog/2017-12/maven-feed.png"/>T2】</a></p>
+
+<p>这意味着Maven工件现在可以像任何其他提要一样作为部署的一部分下载。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/maven-artifacts.png" class="zoom" data-title=""><img src="../Images/92bf372e36494550686be7d1f8901c31.png" class="img-fluid center" alt="Maven Artifact" data-original-src="https://i.octopus.com/blog/2017-12/maven-artifacts.png"/>T2】</a></p>
+
+<p>所有您喜欢的特性，比如频道和版本规则，也可以用于Maven提要，您也可以使用标准的<a href="https://g.octopushq.com/MavenVersioning" rel="nofollow"> Maven版本范围语法</a>！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/maven-version-ranges.png" class="zoom" data-title=""><img src="../Images/a8f8fdcca95709d7e94470cf7930d60a.png" class="img-fluid center" alt="Maven version ranges" data-original-src="https://i.octopus.com/blog/2017-12/maven-version-ranges.png"/>T2】</a></p>
+
+<p>在我们的<a href="https://octopus.com/docs/packaging-applications/package-repositories/maven-feeds">文档</a>中获得更多关于使用Maven仓库作为外部提要的细节。</p>
+
+<h2 id="more-configuration-enhancements">更多配置增强</h2>
+
+<p>基于我们在4.0中所做的配置增强，我们在此版本中添加了一些新功能。</p>
+
+<p>首先是调整如何处理任务日志、工件和包存储库的目录路径。这些路径先前被默认为相对于服务器主目录的路径，但被存储为绝对路径。如果您出于某种原因需要移动整个文件夹结构，这会很困难，因为您必须单独更改所有路径。我们现在默认将路径存储为相对值，并在运行时计算绝对路径。如果您覆盖了任何路径，并且它们不是相对于主目录的，例如，当您使用HA的共享位置时，那么我们将它们存储为绝对值。</p>
+
+<p>第二个新特性也与这些路径相关。现在你可以在设置界面和<code>show-configuration</code>命令的输出中看到它们。</p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>这个版本没有重大变化。</p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>升级Octopus Deploy 的所有常规<a href="https://octopus.com/docs/administration/upgrading">步骤都适用。更多信息，请参见</a><a href="https://octopus.com/downloads/compare?to=4.1.0">发行说明</a>。</p>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。我们希望你喜欢我们的新功能和最新版本。欢迎给我们留下评论，让我们知道你的想法！愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

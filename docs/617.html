@@ -1,0 +1,56 @@
+<html>
+<head>
+<title>RFC: Improving the deployment process - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC:改进部署流程- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-deployment-process-changes#2015-09-25">https://octopus.com/blog/rfc-deployment-process-changes#2015-09-25</a></blockquote>
+                        <p>在这篇文章中，我想分享一些我正在考虑的对Octopus Deploy使用的部署工作流程的改变。</p>
+
+<p>目前在Octopus中，任何部署都包括三个阶段:</p>
+
+<ol>
+<li>Octopus服务器从NuGet feed下载所有必需的包</li>
+<li>Octopus服务器安全地将包上传到所需的触角上</li>
+<li>部署步骤运行(包被提取和配置)</li>
+</ol>
+
+<p>这可以总结为下图:</p>
+
+<p><img src="../Images/99f5ca8306bdb5e3ddfb1e5c68f22c92.png" alt="Octopus Deploy architecture" data-original-src="https://i.octopus.com/blog/migrated/13/architectural-diagram.png"/></p>
+
+<p>我们这样做的原因很简单:<strong>包可能很大，上传它们可能需要很长时间</strong>。我们不想部署一个包(例如，一个数据库模式更改)，然后等待20分钟，直到下一个包的上传完成，然后再继续。相反，我们上传一切，然后配置一切。</p>
+
+<p>但是这种架构也有一些缺点，我将讨论这些缺点以及我正在考虑的一些解决方案。</p>
+
+<h2>上传前的步骤</h2>
+
+<p>这种架构的第一个问题是，在上传包之前，目前不可能运行任何步骤(包括专门的PowerShell脚本)。这阻止了使用脚本来完成有用的任务，如建立VPN连接。最好插入在下载/上传活动发生之前运行的步骤。</p>
+
+<h2>带宽</h2>
+
+<p>由于Octopus将每个包的副本推送到相关的触角，因此可能会浪费很多带宽。例如，想象一个场景，Octopus服务器在本地网络中，它被部署到云中的许多机器上。同一个包将在互联网上推送多次:</p>
+
+<p><img src="../Images/594c66d27cc0f1f6c53efb92c925fe19.png" alt="Octopus potentially wasting bandwidth" data-original-src="https://i.octopus.com/blog/migrated/13/octopus_wasting_bandwidth_x0twg0.png"/></p>
+
+<p>另一种节省带宽的方法是将包复制到云中的NuGet服务器上，让每个触手从服务器上提取包:</p>
+
+<p><img src="../Images/b6db1fddd9e143d500048a73e9113c0a.png" alt="Saving bandwidth by using a local NuGet server" data-original-src="https://i.octopus.com/blog/migrated/13/using_a_local_nuget_repository_dszoyu.png"/></p>
+
+<p>当使用DNS或分布式文件系统部署到不同数据中心的机器上时，这种架构也可以很好地工作，以确保机器选择离它们最近的NuGet服务器。</p>
+
+<h2>改进部署流程</h2>
+
+<p>为了支持这些场景，我考虑对部署流程进行两项更改。</p>
+
+<p>第一个是<strong>预包上传步骤</strong>的概念，它将在下载NuGet包之前运行。您可以在这里添加PowerShell步骤，以便在包下载过程开始之前建立VPN连接或执行其他任务。</p>
+
+<p>第二个变化是软件包步骤设置中的一个选项，让Tentacles直接下载软件包。八达通不是下载软件包，而是指示触手下载软件包。下载会在部署步骤运行之前发生(同样，这样我们就不用在部署步骤之间等待复制包)，但是它们会直接到达NuGet服务器。</p>
+
+<p>希望这些变化能使分布式环境中的部署变得更加容易。我很乐意在下面的评论框中得到您对提议的更改的反馈。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,84 @@
+<html>
+<head>
+<title>RFC: Octopus Reactions - Integration toolkit - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC: Octopus反应-集成工具包- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rcf-octopus-reactions-integration-toolkit#2015-10-16">https://octopus.com/blog/rcf-octopus-reactions-integration-toolkit#2015-10-16</a></blockquote>
+                        <p>最近在Octopus总部，我们一直在研究如何更好地与DevOps生态系统中的其他工具集成。</p>
+
+<p>我们已经花了一些时间来研究类似领域中存在的其他工具，人们使用Octopus Deploy的情况，以及我们的客户已经在哪里编写与他们现有工具的集成。</p>
+
+<p>对于如何最好地支持目前有点棘手的各种工具和产品，我们已经有了一些想法，以及做一些人们已经在做的事情的更好的方法。我们已经为Octopus开发了一些特性，这些特性将实现更多更好的集成，以及对您可能想要使用的一些定制流程的更好支持。</p>
+
+<h2>介绍章鱼反应</h2>
+
+<p>我们为Octopus提出了一个新功能，我们现在称之为反应。它将允许您获取内部和外部事件(触发器),并将它们映射到一些自定义操作，或者以PowerShell脚本的形式，或者以传出HTTP请求的形式。</p>
+
+<h3>触发器和操作</h3>
+
+<p>有两种类型的事件触发器可用于反应。内部事件，如部署成功或失败、创建发布、注册触手或更新部署流程。我们也有外部事件，比如一个新的包在一个外部包存储库中可用，它可以作为HTTP webhook请求接收。</p>
+
+<p>在内部或外部触发的情况下，我们可以启动一个操作。</p>
+
+<p>例如，我们可能想要将我们的工件存储库中的外部HTTP触发器映射到一个PowerShell脚本来创建一个新的版本。</p>
+
+<p>我们在内部的NuGet资源库中为包创建了自动发布，但是我们从来没有支持过外部的资源库，比如MyGet，因为轮询这些服务不会让我们成为一个好公民。</p>
+
+<p>这个特性允许我们用一个webhook触发器来实现它。当Octopus以它期望的模式收到HTTP请求时，它将触发一个脚本，该脚本可以查询您的包存储库以构建一些发布说明，然后创建一个发布。</p>
+
+<p>另一个例子可能是使用Octopus事件，比如部署开始和结束，通过它们的HTTP API通知外部监控系统。在这种情况下，我们将一个内部触发器映射到一个传出的HTTP请求。</p>
+
+<h2>这可能看起来像什么</h2>
+
+<p>添加新的反应就是选择触发器，添加过滤器(在一些内部事件的情况下)，然后创建相应的动作。</p>
+
+<h3>具有PowerShell操作的外部触发器</h3>
+
+<p>外部触发器将通过定义一个端点来创建，就像您定义ASP.NET路由的方式一样。例如，您可能希望对MyGet中可用的新包做出反应，因此您可以定义/triggers/mygetpackage的端点(即https://octopus.yourcompany.com/triggers/mygetpackage)并在<a href="http://docs.myget.org/docs/reference/webhooks"> MyGet </a>中进行配置。</p>
+
+<p>对于身份验证，我们可能需要在查询字符串或HTTP头中传递API密钥。</p>
+
+<p>大多数发送HTTP WebHook的产品都将JSON有效负载作为请求的主体。我们将把它反序列化为PowerShell对象，并把它以及任何查询字符串参数传递给PowerShell脚本。这个脚本也有一个可用的引导API客户端，因此您可以使用Octopus API来创建发布。</p>
+
+<p><img src="../Images/cbed5c601b7608a18eacc4a76f0f47c3.png" alt="" data-original-src="https://i.octopus.com/blog/201510-external-powershell-LDCY.png"/></p>
+
+<h3>内部事件和传出HTTP操作</h3>
+
+<p>我们看到人们编写步骤模板的一个常见场景是通知监控或分析系统，如<a href="http://newrelic.com/"> New Relic </a>、<a href="http://www.appdynamics.com/"> AppDynamics </a>或<a href="https://raygun.io/"> Raygun </a>部署正在开始和结束。通过与这些系统集成，我们可以在部署期间放宽警报阈值，并标记版本以供以后进行性能关联。</p>
+
+<p>为了创建它，我们将选择内部事件(部署开始，然后部署成功)，应用过滤器来选择我们感兴趣的项目和环境(例如生产中的核心Web应用程序)，然后通过指定URI、头和主体来定义HTTP请求。</p>
+
+<p>为了构建HTTP请求，我们将包含标准的Octopus Deploy文本模板特性，以包含像发布版本和其他相关变量这样的变量。</p>
+
+<p><img src="../Images/ac7b55900db6820ea0f976316add2991.png" alt="" data-original-src="https://i.octopus.com/blog/201510-internal-http-G9XM.png"/></p>
+
+<h3>内部事件和PowerShell操作</h3>
+
+<p>这里我想到了几种类型的场景。第一个可能与前一个类似，但是第三方集成比简单的HTTP请求更复杂，我们可以使用PowerShell与产品更紧密地集成(也许有我们需要使用的API DLL)。第二种类型是我们希望在完成其他操作的基础上开始的内部Octopus操作。一个例子可能是触发部署的新触手注册(场景<a href="https://octopus.com/blog/rfc-cloud-and-infrastructure-automation-support">我们已经讨论过自动执行</a>，但是这可能是一种更细粒度的实现方式)。另一个例子可能是，如果一个依赖组件发布了一个新版本，那么创建并部署一个新版本的项目。</p>
+
+<p>在这些情况下，PowerShell脚本将使用API客户端以及基于事件的任何相关变量(项目ID、发布ID、部署ID、机器ID等)进行引导。</p>
+
+<p><img src="../Images/333c41ccece3006256f648c574880996.png" alt="" data-original-src="https://i.octopus.com/blog/201510-internal-powershell-5N6Y.png"/></p>
+
+<h3>外部事件和传出HTTP操作</h3>
+
+<p>这个场景实际上没有意义，所以我们很可能不会支持它。Octopus将只是充当一个直通HTTP代理，并且可能有更好的方法来实现这将打开的任何场景。</p>
+
+<h2>有些事情我们还在考虑</h2>
+
+<p>这里我们仍然需要解决几个问题，首先想到的是权限。</p>
+
+<h2>让它更简单</h2>
+
+<p>我们认为这些特性为扩展Octopus部署提供了大量的能力和可能性。这里的风险是，创建和管理你所有的反应会变得有点麻烦。我们可能会做的是预先构建许多第三方集成，并允许您选择它们，添加任何帐户特定的东西(API令牌等)，并为您配置它们。</p>
+
+<h2>轮到你了</h2>
+
+<p>这些功能听起来像是你会使用的吗？我们遗漏了什么情况吗？让我们知道你的想法。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>Octopus August Release 3.16 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通8月版3.16 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-3-16#2022-07-15">https://octopus.com/blog/octopus-release-3-16#2022-07-15</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/blogimage-release-3-16.png" class="zoom" data-title=""><img src="../Images/776a8ff5a26da04772e57b4c17368f31.png" class="img-fluid center" alt="Octopus 3.16 release announcement" data-original-src="https://i.octopus.com/blog/2017-08/blogimage-release-3-16.png"/>T2】</a></p>
+
+<p>虽然这个月的版本比往常小了一点(我们一直在忙于一些超级令人兴奋的东西)，但它仍然有一些令人敬畏的功能。最大的变化是，我们通过消除对Mono框架的需求，使部署到SSH部署目标变得更加容易，如Ubuntu、Red Hat Enterprise Linux或macOS。这使得部署到这些平台更加容易。我们还升级了ScriptCS以更好地使用C#编写脚本，为<a href="https://okta.com" rel="nofollow"> Okta身份管理服务</a>添加了一个新的身份验证提供者，并包括许多其他小的增强和修复。详情请继续阅读。</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="release-tour">发布之旅</h2>
+
+<iframe src="https://www.youtube.com/embed/FmyE4v68MPQ" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="ssh-targets-sans-mono">SSH以sans Mono为目标</h2>
+
+<p>Octopus Deploy支持通过<a href="https://octopus.com/docs/deployment-targets/ssh-targets"> SSH目标</a>部署到Linux和macOS。因为<a href="https://octopus.com/docs/octopus-rest-api/calamari">枪乌贼</a>(章鱼部署可执行文件)是用。NET，<a href="http://www.mono-project.com/" rel="nofollow"> Mono </a>是SSH目标服务器的先决条件。</p>
+
+<p>从章鱼3.16开始，不再需要Mono了！</p>
+
+<p>SSH目标现在提供了一个使用自包含的Calamari的选项。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-08/ssh-mono-not-installed.png" class="zoom" data-title=""><img src="../Images/c6adcf07f3b91af19d974e7159f9eb50.png" class="img-fluid center" alt="SSH Target .NET Settings" data-original-src="https://i.octopus.com/blog/2017-08/ssh-mono-not-installed.png"/>T2】</a></p>
+
+<p>独立的鱿鱼是用。网芯2.0。因为。NET Core 2.0目前是一个预览版，我们觉得有必要将这个特性标记为<em> beta </em>。但是请放心，这是完全支持的。我们相信。NET Core将在未来为Octopus Deploy的跨平台支持提供基础，我们可能会在某个时候放弃基于Mono的选项。</p>
+
+<h2 id="scriptcs-upgraded-to-0.17.1">ScriptCS升级到0.17.1</h2>
+
+<p>Octopus支持用C#编写的自定义脚本，这由<a href="http://scriptcs.net/" rel="nofollow"> ScriptCS </a>提供支持。在此版本中，我们升级了库，因此您可以获得最现代的ScriptCS支持。在这个ScriptCS版本中有一些突破性的变化——阅读下面的更多内容。</p>
+
+<p>我们的<a href="https://octopus.com/docs/deployments/custom-scripts">定制脚本文档</a>涵盖了编写C#脚本或任何其他支持的语言所需的一切。</p>
+
+<h2 id="okta-authentication-provider">Okta认证提供者</h2>
+
+<p>八达通现在包括一个Okta认证提供商，所以你可以很容易地通过这项服务进行认证。非常感谢<a href="https://github.com/brentm5" rel="nofollow">布伦特·蒙塔古</a>的出色表现，并为此提交了一份公关。</p>
+
+<p>我们的<a href="https://octopus.com/docs/administration/authentication-providers">认证提供者文档</a>提供了更多关于如何使用这个新提供者或任何现有提供者的信息。</p>
+
+<h2 id="lets-encrypt-required-update">让我们加密所需的更新</h2>
+
+<p>让我们加密最近部署的更新，从特定的API调用返回更多的数据。不幸的是，我们用来与Let's Encrypt通信的库无法处理这个问题，这意味着新注册和续订都无法成功完成。如果您已经设置了让我们加密集成，请升级以确保您的门户证书正确续订。</p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>我们需要指出的是，最新的ScriptCS已经引入了一些突破性的变化，所以在升级之前查看他们的<a href="https://github.com/scriptcs/scriptcs/releases/tag/v0.17.0" rel="nofollow">发行说明</a>是很重要的。这只会影响使用C#编写脚本步骤的项目，这些项目由幕后的ScriptCS提供支持。</p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>此版本包含安装后数据修复，这可能需要一些时间(取决于事件表的大小)，因此请确保您有时间来完成此操作。如果您正在运行<a href="https://octopus.com/docs/administration/service-watchdog">看门狗服务</a>，请确保在升级期间停止该服务。</p>
+
+<p>升级Octopus Deploy 的所有常规<a href="https://octopus.com/docs/administration/upgrading">步骤都适用。更多信息请参见</a><a href="https://octopus.com/downloads/compare?to=3.16.0">发行说明</a>。</p>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。我们希望你喜欢我们的新功能和最新版本。欢迎给我们留下评论，让我们知道你的想法！愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

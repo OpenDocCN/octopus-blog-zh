@@ -1,0 +1,75 @@
+<html>
+<head>
+<title>In Octopus 3.0, we're switching from RavenDB to SQL Server - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在Octopus 3.0中，我们将从RavenDB切换到SQL Server - Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/3.0-switching-to-sql#2015-09-25">https://octopus.com/blog/3.0-switching-to-sql#2015-09-25</a></blockquote>
+                        <p>Octopus的早期测试版本使用带有实体框架的SQL Server。2012年，就在1.0之前，我改用了RavenDB，写了一篇关于<a href="http://octopusdeploy.com/blog/how-we-use-ravendb">我们如何使用嵌入式版本RavenDB </a>的博文。</p>
+
+<p>两年多来，我们一直在基于RavenDB进行开发。在此期间，我们安装了超过10，000台Octopus，这意味着我们负责将RavenDB投入生产超过10，000次。由于大多数客户没有内部的Raven专家，所以当Raven出现问题时，我们是第一(唯一)支持线。我们不只是在踢轮胎或“看着”乌鸦，我们把农场押在它身上。</p>
+
+<p>对于Octopus 3.0，我们将停止使用RavenDB，而使用SQL Server。可以理解，许多人对“为什么”感兴趣。开始了。</p>
+
+<h2>第一，好的</h2>
+
+<p>RavenDB有很好的开发经验。与SQL + EF或NHibernate相比，使用RavenDB可以极快地进行迭代，并且它通常“工作正常”。如果我在一个紧张的期限内构建一个最小可行的产品，RavenDB将是我的首选数据库。我们在6个月的时间里重写了Octopus 1.6和2.0之间的几乎所有内容，我不认为我们可以在SQL + EF上这么快地迭代。</p>
+
+<h2>坏事</h2>
+
+<p>我们通过电子邮件/论坛处理大部分支持，但当出现大问题时，我们会将其升级为Skype/GoToMeeting电话，以便帮助客户。通常是在早上很早的时候，或者晚上很晚的时候，所以最小化做这些事情的需求对我们的理智是至关重要的。</p>
+
+<p>我们大多数支持电话的原因是什么？不幸的是，它要么是Raven，要么是我们在使用Raven时犯的一个错误。而且用Raven的时候真的很容易出错。这些问题通常分为两类:索引/数据损坏问题，或API/使用问题。</p>
+
+<p>最重要的是，数据库需要坚如磐石，性能可靠。Raven的底层使用ESENT，我们通常不会丢失Raven事务方面的任何数据。但是指数是基于Lucene.NET的，这是一个不同的故事。已经损坏并需要重建的索引是如此常见，以至于我们为1.6版写了一篇博文解释人们如何能够<a href="http://octopusdeploy.com/blog/resetting-raven-indexes">重置他们的索引</a>。我们把这篇博文发给了很多人，所以在2.0中我们<a href="http://docs.octopusdeploy.com/display/OD/Repairing+the+Octopus+database">在UI </a>中为他们构建了一个完整的功能。</p>
+
+<p><img src="../Images/e13bbda2d21e1ec0bc0c86b4a8061378.png" alt="Repair RavenDB" data-original-src="https://i.octopus.com/blog/migrated/2014-05-28+09_17_03-Octopus+Manager.png"/></p>
+
+<p>当我说我们从未丢失过交易数据时，这并不完全正确。在RavenDB中添加一个导致大问题的索引真的很容易。拿着这个:</p>
+
+<pre><code>  Map = processes =&gt; from process in processes
+                     from step in process.Steps
+                     select {...}
+  Reduce = results =&gt; from result in results
+                      group result by ....
+</code></pre>
+
+<p>你可以写这个索引，它对你来说很好，你把它投入生产。然后，您发现一个客户有10，000个流程文档，每个文档有40个步骤。</p>
+
+<p>虽然Raven使用Lucene进行索引，但它也将索引记录写入ESENT。我不知道内部的情况，但是Raven ESENT数据库内部有各种各样的表，有些是用来临时写这些map/reduce记录的。对于每个被索引的条目，它将向这些表中写入大量的记录。因此，我们从一个客户那里得到一个支持问题:他们启动Octopus，他们的数据库文件以每秒几十或几百MB的速度增长，直到填满磁盘。数据库文件变得太大，他们无法修复。他们所能做的就是从备份中恢复。当我们最终获得这些巨大数据文件中的一个副本，并使用ESENT的一些UI工具对其进行研究时，这些表包含了数百万条记录，仅10，000个文档。</p>
+
+<p>RavenDB团队意识到这是一个问题，因为在3.0中他们增加了一个新功能。如果地图操作产生的输出记录超过15条，则该文档不会被索引。</p>
+
+<p>我是说，再读一遍那一段。你写一些代码，测试它，它在开发中运行良好。你把它放到生产环境中，它对每个人都很好。然后你接到一个客户的电话:我刚刚添加了一个新流程，它没有出现在列表中。只有在许多电子邮件和支持电话之后，你才意识到这是因为Raven认为15是可以的，16是不行的，并且该项目没有被索引。你没有阅读文档是你的错！</p>
+
+<p><strong>“默认安全”是<em>所以</em>生产中痛苦</strong></p>
+
+<p>Raven有一个“默认安全”的哲学，但是API使得编写“安全”的代码变得如此容易，以至于在生产中中断。例如:</p>
+
+<pre><code>session.Query&lt;Project&gt;().ToList();
+</code></pre>
+
+<p>把它投入生产，你会得到一个支持电话:“我刚刚添加了我的第129个项目，但它没有出现在屏幕上”。为了避免可怕的“无界结果集”问题，Raven限制了任何查询返回的项数。感谢不是这个:</p>
+
+<pre><code>DeleteExcept(session.Query&lt;Project&gt;().Where(p =&gt; !p.KeepForever).ToList())
+</code></pre>
+
+<p>无界的结果集当然不好。但是，在开发和生产中工作的代码，直到当记录数量改变时，它突然表现出不同的行为，就更糟糕了。如果RavenDB相信防止无限的结果集，他们根本就不应该让那个查询运行——当我在没有调用<code>.Take()</code>的情况下做任何查询时抛出一个异常。让它成为开发问题，而不是生产问题。</p>
+
+<p>在一个会话中，您只能执行30个查询。结果集是有界的<em>。每个被映射的项目只有15个映射结果。当你和Raven一起工作时，每次和RavenDB互动时，都要记住这些限制，否则你会后悔的。</em></p>
+
+<p>这些限制被清楚地记录下来，但是你会忘记它们。只有当生产中发生了奇怪的事情，你去寻找时，你才会意识到它们。尽管有两年使用Raven的生产经验，这些意见仍然咬着我们。看到像这样的<a href="http://ayende.com/blog/169057/is-the-library-open-or-not">帖子出现在</a>网站上让我很沮丧，这些帖子提倡的解决方案如果有人尝试，将会积极地打破生产。</p>
+
+<h2>结论</h2>
+
+<p>RavenDB非常适合开发。也许我们正在经历的问题是我们的错。所有的数据库都有它们的缺点，也许这是另一边的草总是更绿的例子。切换到SQL Server可能看起来像是一种倒退，并且可能会使开发更加困难，但是在这一点上，我确实觉得我们在生产中使用SQL Server会有更少的问题。它已经存在了很长一段时间，其中的陷阱至少是众所周知和可以预见的。</p>
+
+<p>关于我们为什么要离开RavenDB已经说得够多了。下周我将分享一些关于我们计划如何在Octopus 3.0中使用SQL Server的细节。</p>
+
+<p>(*)您可以通过指定要返回的无限项来禁用无限结果集保护，如果您知道在哪里关闭它的话。但是您仍然必须在每次编写查询时显式调用<code>.Take(int.MaxValue)</code>。</p>
+
+                    
+                    
+</body>
+</html>

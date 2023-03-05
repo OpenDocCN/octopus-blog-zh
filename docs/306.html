@@ -1,0 +1,161 @@
+<html>
+<head>
+<title>Hosting a Maven repo in Amazon S3 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在亚马逊S3托管Maven repo-Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/hosting-maven-in-s3#2021-08-12">https://octopus.com/blog/hosting-maven-in-s3#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/maven-repo-s3.png" class="zoom" data-title=""><img src="../Images/1d26dbd8846db20488e2b3c2369d145f.png" class="img-fluid center" alt="Hosting a Maven repo in Amazon S3" data-original-src="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/maven-repo-s3.png"/>T2】</a></p>
+
+<p>包存储库是任何CI/CD管道中的核心需求，因为可重复的部署需要在使用标准API的工具之间共享正确版本化的工件。</p>
+
+<p>尽管Maven是Java的同义词，但是Maven仓库为几乎所有类型的工件提供了非常灵活的解决方案。Maven存储库通常存储JAR和WAR文件，但是它们也可以轻松地存储ZIP或TAR.GZ文件。</p>
+
+<p>Maven仓库有些独特，因为它们没有服务器端服务或API，而是由客户端解析的静态文件组成。这意味着Maven仓库可以由几乎任何文件系统托管，包括HTTP、FTP、WebDAV或SVN。</p>
+
+<p>Maven通过一个名为<a href="https://maven.apache.org/wagon/" rel="nofollow"> Maven Wagon </a>的抽象接口来公开这种文件处理。在这篇博文中，我们将使用一个名为<a href="https://github.com/gkatzioura/CloudStorageMaven/tree/master/S3StorageWagon" rel="nofollow"> S3StorageWagon </a>的第三方库将文件上传到AWS S3的Maven仓库。</p>
+
+<h2 id="compiling-the-code">编译代码</h2>
+
+<p>如果您有兴趣将S3StorageWagon集成到您的Maven项目中，这篇<a href="https://egkatzioura.com/2018/04/09/host-your-maven-artifacts-using-amazon-s3/" rel="nofollow">博客文章</a>解释了这个过程，但是我们将做一些稍微不同的事情，并使用<a href="http://maven.apache.org/guides/mini/guide-3rd-party-jars-remote.html" rel="nofollow"> deploy:deploy-file </a>将单个文件复制到S3的Maven repo中，而不需要完整的Maven项目。</p>
+
+<p>第一步是从<a href="https://github.com/gkatzioura/CloudStorageMaven" rel="nofollow"> GitHub </a>克隆S3StorageWagon源代码。使用以下命令编译项目并收集依赖项:</p>
+
+<pre><code>mvn "-Dmaven.javadoc.skip=true" "-DskipTests" package dependency:copy-dependencies
+</code></pre>
+
+<p>在<code>CloudStorageMaven\S3StorageWagon\target</code>目录中，您会找到文件<code>s3-storage-wagon-2.3.jar</code>。把这个拷贝给<code>${maven.home}/lib</code>。</p>
+
+<p>我们还需要在<code>s3-storage-wagon-2.3.jar</code>文件旁边复制一些额外的依赖项。附加到build命令的<code>dependency:copy-dependencies</code>目标将所有的依赖项放到了<code>CloudStorageMaven/S3StorageWagon/dependencies</code>目录中。</p>
+
+<p>在一个完美的世界中，我们可以将所有的JAR文件从<code>CloudStorageMaven/S3StorageWagon/dependencies</code>复制到<code>${maven.home}/lib</code>，但是事实证明，这样做会引入一些冲突。通过一个反复试验的过程，我发现这些JAR文件需要被复制:</p>
+
+<ul>
+<li>云存储核心2.3.jar</li>
+<li>aws-java-sdk-core-1.11.595.jar</li>
+<li>aws-java-sdk-kms-1.11.595.jar</li>
+<li>S3 11版。595 .冲突</li>
+<li>aws-java-sdk-sts-1.11.595.jar</li>
+<li>杰克逊-注解-2.6.0.jar</li>
+<li>杰克逊核心2.6.7.jar</li>
+<li>杰克逊数据绑定</li>
+<li>杰克逊数据格式</li>
+<li>httpclient-4.5.5.jar</li>
+<li>httpcore-4.4.10.jar</li>
+<li>joda-time-2.8.1.jar</li>
+</ul>
+
+<p>自从这篇博文发表以来，这些JAR文件的具体版本可能已经发生了变化，但是库将保持不变。</p>
+
+<h2 id="defining-the-repository">定义存储库</h2>
+
+<p>下一步是在Maven <code>settings.xml</code>文件中定义存储库。该文件通常位于<code>~/.m2/settings.xml</code>下。下面显示了一个示例:</p>
+
+<pre><code>&lt;settings 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                      http://maven.apache.org/xsd/settings-1.0.0.xsd"&gt;
+
+  &lt;activeProfiles&gt;
+    &lt;activeProfile&gt;s3&lt;/activeProfile&gt;
+  &lt;/activeProfiles&gt;
+
+  &lt;profiles&gt;
+    &lt;profile&gt;
+      &lt;id&gt;s3&lt;/id&gt;
+      &lt;repositories&gt;
+        &lt;repository&gt;
+            &lt;id&gt;octopus-s3-repo&lt;/id&gt;
+            &lt;url&gt;s3://octopus-maven-repo/snapshot&lt;/url&gt;
+        &lt;/repository&gt;
+      &lt;/repositories&gt;
+    &lt;/profile&gt;
+  &lt;/profiles&gt;
+
+  &lt;servers&gt;
+    &lt;server&gt;
+      &lt;id&gt;octopus-s3-repo&lt;/id&gt;
+      &lt;username&gt;AWS ACCESS KEY&lt;/username&gt;
+      &lt;password&gt;AWS SECRET KEY&lt;/password&gt;
+      &lt;configuration&gt;
+            &lt;region&gt;us-east-1&lt;/region&gt;
+            &lt;publicRepository&gt;true&lt;/publicRepository&gt;
+        &lt;/configuration&gt;
+    &lt;/server&gt;
+  &lt;/servers&gt;
+&lt;/settings&gt;
+</code></pre>
+
+<p>这些是重要的设置:</p>
+
+<ul>
+<li>定义为<code>&lt;url&gt;s3://octopus-maven-repo/snapshot&lt;/url&gt;</code>的URL包括<code>s3</code>协议，这意味着S3货车库用于任何传输。</li>
+<li>定义为<code>&lt;username&gt;AWS ACCESS KEY&lt;/username&gt;</code>和<code>&lt;password&gt;AWS SECRET KEY&lt;/password&gt;</code>的AWS凭证是有权访问S3存储桶的用户的IAM凭证。这个用户是在后面的步骤中创建的。</li>
+<li>用值<code>&lt;publicRepository&gt;true&lt;/publicRepository&gt;</code>将存储库定义为public意味着任何人都可以通过HTTP从repo下载工件。</li>
+</ul>
+
+<h2 id="creating-the-s3-bucket-and-user">创建S3时段和用户</h2>
+
+<p>我们需要创建一个名为<code>octopus-maven-repo</code>的S3桶，并创建一个可以访问桶中文件的用户。以下IAM策略授予IAM用户对<code>octopus-maven-repo</code>存储桶的完全访问权限:</p>
+
+<pre><code>{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::octopus-maven-repo",
+                "arn:aws:s3:::octopus-maven-repo/*"
+            ]
+        }
+    ]
+}
+</code></pre>
+
+<p>请记住，S3存储桶名称是全球唯一的，您必须为您的存储桶指定一个唯一的名称。</p>
+
+<p>下载IAM用户的访问密钥和密钥，并替换<code>settings.xml</code>文件中<code>&lt;username&gt;AWS ACCESS KEY&lt;/username&gt;</code>和<code>&lt;password&gt;AWS SECRET KEY&lt;/password&gt;</code>元素中的值。</p>
+
+<h2 id="fixing-public-permissions">修复公共权限</h2>
+
+<p>AWS最近通过一个额外的安全层锁定了公共S3桶，默认情况下阻止所有公共访问。如果您的存储库将允许公共访问，您需要禁用阻止公共访问的设置。在下面的截图中，您可以看到S3铲斗的<code>Block all public access</code>设置已经关闭:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/permissions.png" class="zoom" data-title=""><img src="../Images/52781cf269e92e8679a3408e05bd4623.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/permissions.png"/>T2】</a></p>
+
+<h2 id="uploading-a-file">上传文件</h2>
+
+<p>最后一步是将文件上传到新的存储库中。以下命令将<code>template.zip</code>文件作为工件上传，文件组为<code>org.example</code>，ID为<code>template</code>，版本为<code>0.0.1-SNAPSHOT</code>:</p>
+
+<pre><code>mvn deploy:deploy-file \
+  "-DgroupId=org.example" \
+  "-DartifactId=template" \
+  "-Dversion=0.0.1-SNAPSHOT" \
+  "-Dpackaging=zip" \
+  "-Dfile=template.zip" \
+  "-DrepositoryId=octopus-s3-repo" \
+  "-Durl=s3://octopus-maven-repo/snapshot"
+</code></pre>
+
+<p>然后，生成的文件将作为版本化工件保存在S3:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/s3.png" class="zoom" data-title=""><img src="../Images/df86db04f70820edef5fd99818f3cf91.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/s3.png"/>T2】</a></p>
+
+<h2 id="consuming-the-feed-in-octopus">食用章鱼的饲料</h2>
+
+<p>使用S3作为Maven知识库的好处是客户端可以通过HTTP访问它。因为我们将我们的存储库配置为公共的，Maven客户端(比如Octopus)可以通过HTTP URL<a href="https://octopus-maven-repo.s3.amazonaws.com/snapshot" rel="nofollow">https://octopus-maven-repo.s3.amazonaws.com/snapshot</a>访问工件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/octopus.png" class="zoom" data-title=""><img src="../Images/2aba9ccc18d34bd2c85d9c8839dccbe6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/octopus.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/test.png" class="zoom" data-title=""><img src="../Images/ad43b5436dddb8e0ce42a25f7e467a3d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-09/hosting-maven-in-s3/test.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>使用S3托管Maven知识库是一种快速创建公共知识库的方法，不需要任何特殊的软件或托管解决方案。通过使用定制的Wagon提供者将工件上传到S3，然后通过HTTP访问相同的文件，我们可以创建一个功能完整的Maven存储库，供Octopus使用。</p>
+
+                    
+                    
+</body>
+</html>

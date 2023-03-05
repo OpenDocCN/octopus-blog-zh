@@ -1,0 +1,165 @@
+<html>
+<head>
+<title>Creating an EKS cluster in AWS - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在AWS - Octopus部署中创建EKS集群</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/eks-cluster-aws#2022-05-19">https://octopus.com/blog/eks-cluster-aws#2022-05-19</a></blockquote>
+                        <p>在本文中，您将学习如何在Amazon Web Services (AWS)中建立一个弹性的Kubernetes服务(EKS)集群。</p>
+
+<p>EKS是一个托管容器服务，用于在云中或内部运行和扩展Kubernetes。Kubernetes提供了一种可扩展的分布式方法来管理工作负载。它通过容器化应用程序来做到这一点。容器确保了跨不同环境和云基础设施的可复制性。</p>
+
+<p>您在本文中创建的集群将在我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的后续文章中使用，以设置web应用程序并作为工作流的一部分。我们将在相关帖子可用时添加链接:</p>
+
+
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进这篇文章，你需要:</p>
+
+
+
+<p>在EKS有两种方式来建立集群:</p>
+
+<ul>
+<li>命令行界面</li>
+<li>控制台</li>
+</ul>
+
+<p>在此之前，您需要设置一些访问密钥和用户帐户。</p>
+
+<h2 id="preliminary-setup">初步设置</h2>
+
+<p>在AWS中，您需要配置访问策略。这些策略决定了哪种用户可以访问群集。</p>
+
+<p>通常，遵循最小特权原则是有用的。这意味着您为用户提供了执行其角色所需的最小权限集。这通过不向用户授予超出他们需要的权限来支持云基础架构的安全性。</p>
+
+<p>按照以下步骤设置您的访问密钥和用户帐户:</p>
+
+<ul>
+<li>进入<strong> AWS控制台</strong>，然后<strong> IAM </strong>，然后<strong>用户</strong>，然后<strong>添加用户</strong></li>
+<li>给用户一个名字，并勾选<strong>访问键-编程访问</strong></li>
+<li>点击<strong>下一个</strong></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/eks-cluster-aws/new-user.png" class="zoom" data-title=""><img src="../Images/8c7e5d0f0be73e93c5926f55e822851b.png" class="img-fluid center" alt="New user" data-original-src="https://i.octopus.com/blog/2022-02/eks-cluster-aws/new-user.png"/>T2】</a></p>
+
+<ul>
+<li>选择<strong>直接附加现有策略</strong>，然后<strong>创建策略</strong></li>
+</ul>
+
+<p>IAM策略允许您从命令行创建EKS集群。<a href="https://eksctl.io/usage/minimum-iam-policies/" rel="nofollow">此策略中的操作是eksctl </a>要求的最低策略。</p>
+
+<ul>
+<li>点击下一个的<strong>，并为策略命名</strong></li>
+<li>点击<strong>添加策略</strong></li>
+</ul>
+
+<p>亚马逊然后向你展示<strong>访问密钥ID </strong>和<strong>秘密访问密钥</strong>。下载此文件供以后参考。</p>
+
+<h2 id="command-line-interface">命令行界面</h2>
+
+<p>使用<code>aws login</code>登录AWS命令行。</p>
+
+<p>运行<code>aws configure</code>。</p>
+
+<p>请提前输入您的访问密钥ID和秘密访问密钥。将区域设置为<code>us-east-2</code>并接受默认值。</p>
+
+<p>现在您可以创建您的集群了。</p>
+
+<pre><code>eksctl create cluster \
+--name my-cluster \
+--region us-east-2 \
+--fargate
+</code></pre>
+
+<p>AWS Fargate允许您运行容器，而无需管理服务器或Amazon EC2实例集群。这个概要文件提供了一个简单的方法来启动一个测试集群。测试集群配置:</p>
+
+<pre><code>kubectl get svc
+</code></pre>
+
+<p><strong>输出</strong></p>
+
+<pre><code>NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.100.0.1   &lt;none&gt;        443/TCP   25h
+</code></pre>
+
+<p>运行以下命令查看集群节点:</p>
+
+<pre><code>kubectl get nodes -o wide
+</code></pre>
+
+<p><strong>输出</strong></p>
+
+<pre><code>NAME                                                    STATUS   ROLES    AGE   VERSION              INTERNAL-IP       EXTERNAL-IP   OS-IMAGE         KERNEL-VERSION                  CONTAINER-RUNTIME
+fargate-ip-192-168-129-76.us-east-2.compute.internal    Ready    &lt;none&gt;   25h   v1.20.7-eks-135321   192.168.129.76    &lt;none&gt;        Amazon Linux 2   4.14.243-185.433.amzn2.x86_64   containerd://1.4.6
+fargate-ip-192-168-165-146.us-east-2.compute.internal   Ready    &lt;none&gt;   25h   v1.20.7-eks-135321   192.168.165.146   &lt;none&gt;        Amazon Linux 2   4.14.243-185.433.amzn2.x86_64   containerd://1.4.6
+</code></pre>
+
+<p>查看集群上运行的工作负载:</p>
+
+<pre><code>kubectl get pods --all-namespaces -o wide
+</code></pre>
+
+<p><strong>输出</strong></p>
+
+<pre><code>NAMESPACE     NAME                       READY   STATUS    RESTARTS   AGE   IP                NODE                                                    NOMINATED NODE   READINESS GATES
+kube-system   coredns-85f9f6cd8b-2n8wr   1/1     Running   0          25h   192.168.129.76    fargate-ip-192-168-129-76.us-east-2.compute.internal    &lt;none&gt;           &lt;none&gt;
+kube-system   coredns-85f9f6cd8b-c4jfk   1/1     Running   0          25h   192.168.165.146   fargate-ip-192-168-165-146.us-east-2.compute.internal   &lt;none&gt;           &lt;none&gt;
+</code></pre>
+
+<h2 id="console-interface">控制台界面</h2>
+
+<p>您也可以从AWS控制台创建集群。</p>
+
+<p>转到<strong> EKS </strong>，然后<strong>添加集群</strong>，然后<strong>创建</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/eks-cluster-aws/eks-console.png" class="zoom" data-title=""><img src="../Images/245b3da49a05bfc56c3c61e6109220f6.png" class="img-fluid center" alt="EKS Console" data-original-src="https://i.octopus.com/blog/2022-02/eks-cluster-aws/eks-console.png"/>T2】</a></p>
+
+<ul>
+<li><strong>名称</strong>:为您的集群命名</li>
+<li><strong> Kubernetes版本</strong>:选择最新的Kubernetes版本</li>
+<li>集群服务角色:重用从CLI集群创建的服务角色</li>
+</ul>
+
+<p>接受所有其他默认设置来创建集群。</p>
+
+<h2 id="checking-clusters">检查集群</h2>
+
+<p>通过转到<strong> EKS </strong>，然后转到<strong>集群</strong>，检查您的两个集群的状态。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/eks-cluster-aws/eks-two-clusters.png" class="zoom" data-title=""><img src="../Images/f95681e8872842f500736d355820532c.png" class="img-fluid center" alt="EKS Two Clusters" data-original-src="https://i.octopus.com/blog/2022-02/eks-cluster-aws/eks-two-clusters.png"/>T2】</a></p>
+
+<p>既然您的集群是活动的，那么您可以对它们执行操作，比如部署应用程序或配置资源。对于本例，我们将删除它们。</p>
+
+<h2 id="deleting-the-clusters">删除集群</h2>
+
+<p>您可以通过运行以下命令，使用CLI删除群集。用您的值替换分类名称和区域。</p>
+
+<p><code>eksctl delete cluster --name my-cluster --region us-east-2</code></p>
+
+<p>您可以使用控制台删除集群，方法是选择集群，单击<strong>删除</strong>，并键入要删除的集群的名称。</p>
+
+<p>您只能按照创建资源的方式删除资源。这意味着通过CLI创建的群集只能通过CLI删除。通过控制台创建的集群只能通过控制台删除。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/eks-cluster-aws/delete-cluster.png" class="zoom" data-title=""> T32 </a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本文中，您将在AWS中设置IAM权限。您使用CLI和控制台创建、检查和删除了EKS集群。</p>
+
+<p>AWS上的EKS允许您在云中提供Kubernetes服务来部署和扩展工作负载。</p>
+
+<p>您创建的集群可用于设置web应用程序，并作为后续帖子中工作流的一部分。我们将在相关帖子可用时添加链接:</p>
+
+
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

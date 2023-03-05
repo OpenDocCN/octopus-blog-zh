@@ -1,0 +1,231 @@
+<html>
+<head>
+<title>Octopus Deploy's Kubernetes YAML generator - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>章鱼部署的库伯内特YAML发电机-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-kubernetes-yaml-generator#2021-12-16">https://octopus.com/blog/octopus-kubernetes-yaml-generator#2021-12-16</a></blockquote>
+                        <p>Kubernetes (K8s)是一个强大的容器编排工具。</p>
+
+<p>Kubernetes读取定义您要部署到的资源的YAML文件。当然，不是每个人都喜欢写YAML。为了使这更容易，我们发布了一个工具，帮助开发人员为Kubernetes集群部署构建YAML文件。</p>
+
+<p>你可以在https://k8syaml.com/找到这个工具。</p>
+
+<h2 id="overview-of-our-k8s-yaml-generator">我们的K8s YAML发电机概述</h2>
+
+<p>YAML文件是一个人类可读的配置文件，它告诉Kubernetes如何提供和部署服务。</p>
+
+<p>我们工具的左侧包含YAML文件的各种选项。每个选项都有一个填充的下拉菜单。</p>
+
+<p>右边包含Kubernetes将使用的YAML文件。</p>
+
+<p>K8s YAML工具内置的两个功能是实时更新和双向同步。</p>
+
+<h3 id="live-updates">实时更新</h3>
+
+<p>更改工具左侧的字段时，右侧的YAML文件会更新以进行匹配。将左侧的资源类型从<strong> Deployment </strong>更改为<strong> StatefulSet </strong>将会更改YAML文件以匹配新选项。实时更新可以为YAML文件添加以前没有的新选项。</p>
+
+<p><figure> <a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/live-update-deployment.png" class="zoom" data-title="&quot;Live Update Deployment&quot;"> <img src="../Images/5d271b1c9752ea4c9ebfd563b5a1fc45.png" class="img-fluid" alt="Live Update Deployment" title="&quot;Live Update Deployment&quot;" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/live-update-deployment.png"/> </a> <figcaption>部署资源类型</figcaption> </figure></p>
+
+<p><figure> <a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/live-update-stateful.png" class="zoom" data-title="&quot;Live Update Stateful&quot;"> <img src="../Images/7dc277b524c6b9bfc55e6b031bafd97c.png" class="img-fluid" alt="Live Update Stateful" title="&quot;Live Update Stateful&quot;" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/live-update-stateful.png"/> </a> <figcaption>有状态设置资源类型</figcaption> </figure></p>
+
+<h3 id="two-way-sync">双向同步</h3>
+
+<p>您可以通过选择<strong>编辑YAML </strong>按钮在工具中编辑YAML。</p>
+
+<p>在编辑窗格中，您可以编辑任何字段。</p>
+
+<p>下面，我将部署的名称编辑为<code>test-deployment</code>，并点击<strong>完成</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/two-way-sync-edit.png" class="zoom" data-title="Two Way Sync Edit"><img src="../Images/8132e947b4680dda2776ee68e0d227f7.png" class="img-fluid center" alt="Two Way Sync Edit" title="Two Way Sync Edit" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/two-way-sync-edit.png"/>T2】</a></p>
+
+<p>双向同步会更新工具的左侧以匹配编辑内容。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/two-way-sync-test.png" class="zoom" data-title="Two Way Sync Test"><img src="../Images/ef30745340d71503cab7a6cefe887041.png" class="img-fluid center" alt="Two Way Sync Test" title="Two Way Sync Test" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/two-way-sync-test.png"/>T2】</a></p>
+
+<h3 id="more-information">更多信息</h3>
+
+<p>Kubernetes YAML文件中有几个可配置的选项。该工具链接到Kubernetes的官方文档，而不是详细解释它们。大多数选项都有一个<strong>更多信息</strong>链接，直接将您带到文档。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/kubernetes-more-info.png" class="zoom" data-title="Kubernetes More Information"><img src="../Images/b160c6ce0763f9b7f37e26e16423bdca.png" class="img-fluid center" alt="Kubernetes More Information" title="Kubernetes More Information" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/kubernetes-more-info.png"/>T2】</a></p>
+
+<h2 id="use-case">用例</h2>
+
+<p>为了展示YAML文件的作用，我用它将一个web应用程序部署到一个带有Octopus Deploy的Azure Kubernetes服务中。请随意跟随。</p>
+
+<p>通过填充左侧，根据图像填写字段。</p>
+
+<p><strong>部署</strong>——将app的值改为<code>randomquotes</code></p>
+
+<p><strong>容器</strong>——删除nginx默认容器，并添加一个新容器，包含:</p>
+
+<ul>
+<li><strong>名称</strong> : <code>randomquotes</code></li>
+<li><strong>包装图片</strong> : <code>terenceocto/randomquotes-js</code></li>
+<li><strong>添加端口</strong> : <code>TCP:80</code></li>
+</ul>
+
+<p>点击<strong>确定</strong>确认。</p>
+
+<p>右边的文本是我们用来部署到Azure的YAML文件。复制此文件以备后用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/yaml-generator.png" class="zoom" data-title="YAML generator"><img src="../Images/299a1e610d0f5e5891e79e28f1acda6a.png" class="img-fluid center" alt="YAML generator" title="YAML generator" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/yaml-generator.png"/>T2】</a></p>
+
+<h2 id="configuring-an-azure-account">配置Azure帐户</h2>
+
+<p>您需要配置一个Azure帐户和web应用程序作为Octopus部署的目标。其他目标也是可能的，比如AWS、Windows或Linux服务器。</p>
+
+<p>接下来，你需要在Azure中创建一个账户，导航到<a href="https://portal.azure.com/" rel="nofollow"> Azure门户</a>。</p>
+
+<h3 id="create-service-principal-account-in-azure">使用Azure门户创建Azure服务主体</h3>
+
+<iframe src="https://www.youtube.com/embed/QDwDi17Dkfs" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<ol>
+<li>在Azure门户中，打开菜单，导航到<strong> Azure Active Directory </strong>，然后是<strong>属性</strong>。</li>
+<li>从<strong>租户ID </strong>字段中复制值。这是你的<strong>租户ID </strong>。</li>
+<li>接下来，您需要您的<strong>应用程序ID </strong>:          <ul>
+<li>如果您创建了一个AAD注册的应用程序，导航到<strong> Azure Active Directory </strong>、<strong>应用程序注册</strong>，点击<strong>查看所有应用程序</strong>，选择应用程序并复制<strong>应用程序ID </strong>。请注意，Azure UI默认为<strong>自有应用</strong>标签。点击<strong>所有应用</strong>选项卡查看所有应用注册。</li>
+<li>如果您尚未创建已注册的应用程序，请导航至<strong> Azure Active Directory </strong>、<strong>应用程序注册</strong>，点击<strong>新注册</strong>并为您的应用程序添加详细信息，然后点击<strong>保存</strong>。记下<strong>应用ID </strong>。</li>
+</ul>
+</li>
+<li>通过导航到<strong>证书&amp;机密</strong>，然后导航到<strong>新客户端机密</strong>，生成一次性密码。添加新密码，输入描述，点击<strong>保存</strong>。记下显示的应用程序密码，以便在Octopus中使用。如果您不想接受默认的密码一年到期，您可以更改到期日期。</li>
+</ol>
+
+<p>您现在拥有以下内容:</p>
+
+<ul>
+<li><strong>租户ID </strong></li>
+<li><strong>应用ID </strong></li>
+<li><strong>应用程序密码/秘密</strong></li>
+</ul>
+
+<p>接下来，您需要配置您的资源权限。</p>
+
+<h3 id="resource-permissions">资源权限</h3>
+
+<p>资源权限确保您注册的应用程序有权使用您的Azure资源。</p>
+
+<ol>
+<li>在Azure门户中，导航到<strong>资源组</strong>并选择您希望注册的应用程序访问的资源组。如果一个资源组不存在，通过转到<strong>主页</strong>，然后<strong>资源组</strong>并选择<strong>创建</strong>来创建一个。创建之后，记下资源组的Azure订阅ID。</li>
+<li>点击<strong>访问控制(IAM) </strong>选项。在<strong>角色分配</strong>下，如果你的应用没有列出，点击<strong>添加角色分配</strong>。选择适当的角色(<strong>贡献者</strong>是一个常见选项)，并搜索您的新应用名称。从搜索结果中选择它，然后点击<strong>保存</strong>。</li>
+</ol>
+
+<p>下一步是设置Azure web应用程序并配置其属性。</p>
+
+<h3 id="web-application-set-up">Web应用程序设置</h3>
+
+<ol>
+<li>在您的<strong>资源组</strong>中点击<strong>创建</strong>，然后<strong> Kubernetes服务</strong></li>
+<li>为群集命名并选择适当的区域</li>
+<li>点击<strong>审核+创建</strong></li>
+<li>集群名称将是Octopus Deploy中的AKS集群名称——记下资源组名称</li>
+</ol>
+
+<h3 id="add-service-principal-account">在八达通上加入服务主账户</h3>
+
+<p>使用以下值，您可以将您的帐户添加到Octopus:</p>
+
+<ul>
+<li>应用程序ID</li>
+<li>租户ID</li>
+<li>应用程序密码/密钥</li>
+</ul>
+
+<ol>
+<li>导航到<strong>基础设施</strong>，然后选择<strong>账户</strong></li>
+<li>选择<strong>添加账户</strong>，然后点击<strong> Azure订阅</strong></li>
+<li>在Octopus中给帐户起一个你想要的名字</li>
+<li>给账户一个描述</li>
+<li>添加您的Azure订阅ID -在Azure门户的<strong>订阅</strong>下找到</li>
+<li>添加<strong>应用ID </strong>、<strong>租户ID </strong>和<strong>应用密码/关键字</strong></li>
+</ol>
+
+<p>点击<strong>保存并测试</strong>确认账户可以与Azure交互。Octopus将尝试使用帐户凭据来访问Azure资源管理(ARM) API，并列出该订阅中的资源组。</p>
+
+<p>您可能需要将您针对的Azure数据中心的IP地址列入安全列表。更多细节请参见<a href="https://octopus.com/docs/deployments/azure/deploying-to-azure-via-a-firewall">通过防火墙部署到Azure</a>。</p>
+
+<p>新创建的服务主体可能需要几分钟才能通过凭据测试。如果您已经仔细检查了您的凭据值，请等待15分钟，然后重试。</p>
+
+
+<p>接下来，设置Octopus Deploy来加载YAML文件，以设置Kubernetes集群。</p>
+
+<h2 id="octopus-deploy-set-up">八达通部署设置</h2>
+
+<p>在Octopus Deploy实例中创建一个带有生产环境的项目。</p>
+
+<p>为此，转到<strong>基础设施</strong>，然后是<strong>环境</strong>，然后是<strong>添加环境</strong>以添加生产环境。然后，进入<strong>项目</strong>、<strong>添加项目</strong>添加项目。</p>
+
+<p>转到<strong>库</strong>，然后<strong>外部源</strong>并设置docker注册表。因为我们使用的是公共存储库，所以您可以将<strong>凭证</strong>留空。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/docker-registry.png" class="zoom" data-title="Docker registry"> T39 </a></p>
+
+<p>通过转到<strong>基础设施部署目标</strong>设置Kubernetes目标，然后<strong>添加部署目标</strong>，然后<strong> Kubernetes集群</strong>。</p>
+
+<p>填写步骤:</p>
+
+<ul>
+<li><strong>环境</strong> -你在Octopus中设置的环境</li>
+<li><strong>目标角色</strong> - <code>kube</code></li>
+<li><strong>认证</strong> - <code>Azure Service Principal</code>          <ul>
+<li><strong>选择账户</strong> -你在八达通上设置的Azure账户</li>
+<li><strong> AKS集群名称</strong> -您的Kubernetes集群的名称</li>
+<li><strong> AKS资源组名称</strong> -您的Azure资源组的名称</li>
+<li><strong>使用管理员凭证登录</strong> -选中此框</li>
+</ul>
+</li>
+</ul>
+
+<p>将其他一切保持默认，点击<strong>保存</strong>完成。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/octopus-kubernetes-target.png" class="zoom" data-title="Kubernetes target"><img src="../Images/fe7471a4d3c8204798b89a7e9aab74ff.png" class="img-fluid center" alt="Kubernetes target" title="Kubernetes target" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/octopus-kubernetes-target.png"/>T2】</a></p>
+
+<p>在您的新项目中，创建一个<strong>部署Kubernetes </strong>容器步骤，方法是转到<strong>流程</strong>，然后<strong>添加步骤</strong>，然后<strong> Kubernetes </strong>，然后选择<strong>部署Kubernetes容器</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/add-kubernetes-deployment-step.png" class="zoom" data-title="Kubernetes deployment step"><img src="../Images/6d1e77241b69bab1f1c70a17ef89967b.png" class="img-fluid center" alt="Kubernetes deployment step" title="Kubernetes deployment step" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/add-kubernetes-deployment-step.png"/>T2】</a></p>
+
+<p>确保在代表选项的<strong>下添加<code>kube</code>角色，以触发Kubernetes部署目标的构建。将K8s YAML工具中的YAML文件粘贴到<strong>编辑YAML </strong>部分。将所有其他内容保留为默认，点击<strong>保存</strong>完成。</strong></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/edit-yaml.png" class="zoom" data-title="Edit YAML"><img src="../Images/a6a945011ce99b459313a7b67587ab3e.png" class="img-fluid center" alt="Edit YAML" title="Edit YAML" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/edit-yaml.png"/>T2】</a></p>
+
+<p>点击<strong>创建发布</strong>，然后点击部署步骤部署发布。等待成功消息。</p>
+
+<p>部署成功后，通过将群集暴露于互联网来访问web应用程序。转到Azure门户并打开PowerShell Azure CLI。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/azure-cli.png" class="zoom" data-title="Azure CLI"> T32 </a></p>
+
+<pre><code>az aks get-credentials --resource-group myResourceGroup --name myAKSCluster
+</code></pre>
+
+<p>此命令会将CLI指向您的群集:</p>
+
+<pre><code>kubectl get deployments
+</code></pre>
+
+<p>运行此命令将获得集群上的部署列表。您应该会看到部署<code>octopus-deployment</code>。使用此名称公开web应用程序:</p>
+
+<pre><code>kubectl expose deployment octopus-deployment --type=LoadBalancer --name=my-service
+</code></pre>
+
+<p>此命令创建一个名为“my-service”的服务，该服务生成一个公共IP来查看web应用程序:</p>
+
+<pre><code>kubectl get services
+</code></pre>
+
+<p>运行此命令，您将在External-IP下看到“pending”。等一分钟，再次运行，您应该在该字段中看到一个公共IP。在浏览器中转到IP地址以查看您的web应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/random-quotes.png" class="zoom" data-title="RandomQuotes"><img src="../Images/57bbb4add12df6513cc65c9e922434e6.png" class="img-fluid center" alt="RandomQuotes" title="RandomQuotes" data-original-src="https://i.octopus.com/blog/2021-10/octopus-kubernetes-yaml-generator/random-quotes.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本帖中，您了解了具有实时更新和双向同步功能的新Kubernetes YAML工具。您可以使用该工具生成与Kubernetes兼容的YAML文件。</p>
+
+<p>您还使用Octopus Deploy和Azure Kubernetes服务运行了一个简单的用例。您使用K8s YAML生成的YAML文件部署了一个web应用程序。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,429 @@
+<html>
+<head>
+<title>Spring Boot as a Service - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Spring Boot即服务-部署八达通</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/spring-boot-as-a-service#2022-07-14">https://octopus.com/blog/spring-boot-as-a-service#2022-07-14</a></blockquote>
+                        <p>Spring Boot支持构建JAR文件，这些文件可以像普通的bash脚本一样在Unix环境中执行。这些文件被称为<a href="https://docs.spring.io/spring-boot/docs/current/reference/html/deployment-install.html" rel="nofollow">完全可执行的JARs </a>，它们使得将Spring Boot应用程序部署为Linux服务变得非常方便。在这篇博文中，我们将看看如何将一个完全可执行的JAR文件部署到一个EC2实例中，该实例是使用Octopus通过CloudFormation模板创建的。</p>
+
+<h2 id="the-aws-account">AWS帐户</h2>
+
+<p>Octopus CloudFormation步骤通过AWS帐户向AWS进行身份验证。这些账户由<span class="path">基础设施➜账户➜亚马逊网络服务账户</span>管理。你可以通过我们的<a href="https://octopus.com/docs/infrastructure/aws/creating-an-aws-account">文档</a>找到更多关于创建AWS账户的信息，记住账户需要有一些<a href="https://octopus.com/docs/deployments/aws/permissions">通用权限</a>才能有效地用于部署CloudFormation模板。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/aws-account.png" class="zoom" data-title=""><img src="../Images/e35507332549985b5aedd13b91d0f398.png" class="img-fluid center" alt="AWS Account" data-original-src="https://i.octopus.com/blog/2018-02/aws-account.png"/>T2】</a></p>
+
+<h2 id="the-ssh-account">SSH帐户</h2>
+
+<p>我们还需要配置一个帐户，用于通过SSH连接到Linux EC2实例。这些账户由<span class="path">基础设施➜账户➜ SSH密钥对</span>管理。在这里，我们将创建一个SSH帐户，用户名为<code>ec2-user</code>(这是Amazon Linux的默认用户名)和PEM文件，您需要在AWS中创建该文件并将其分配给EC2映像。你可以在他们的<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html" rel="nofollow">文档</a>中找到更多关于创建AWS密钥对的信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/ssh-account-ec2user.png" class="zoom" data-title=""><img src="../Images/6820d263ead396941b609204d0f04eb1.png" class="img-fluid center" alt="SSH Account" data-original-src="https://i.octopus.com/blog/2018-02/ssh-account-ec2user.png"/>T2】</a></p>
+
+<h2 id="the-machine-policy">机器政策</h2>
+
+<p>我们需要配置的最后一个全局Octopus设置是机器策略，可在<span class="path">基础设施➜机器策略</span>下访问。</p>
+
+<p>与轮询触角不同，SSH目标必须有准确的IP地址或主机名才能参与Octopus部署。然而，将由CloudFormation模板创建的EC2实例没有固定的IP地址，并且当EC2实例停止并再次启动时，它们所具有的IP地址将会改变。这意味着我们需要做两件事来确保我们的EC2实例在Octopus中正确配置:</p>
+
+<ol>
+<li>每次EC2实例启动时，将EC2实例添加到Octopus中(如果它尚未注册)。</li>
+<li>让Octopus清理任何未通过健康检查的部署目标。</li>
+</ol>
+
+<p>我们将在后面的章节中用CloudFormation模板中的一些脚本来处理第一步。通过编辑默认机器策略中的<code>Clean Up Unavailable Deployment Targets</code>部分来启用<code>Automatically delete unavailable machines</code>来配置步骤2。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/machine-policy.png" class="zoom" data-title=""><img src="../Images/940416ffa743a65833138121018276ad.png" class="img-fluid center" alt="Machine Policy" data-original-src="https://i.octopus.com/blog/2018-02/machine-policy.png"/>T2】</a></p>
+
+<h2 id="building-a-fully-executable-jar-file">构建完全可执行的JAR文件</h2>
+
+<p>通常情况下，JAR文件是用类似<code>java -jar application.jar</code>的命令运行的。然而，Spring使得构建完全可执行的jar成为可能，这些jar可以在Unix之类的系统上运行，比如T3。</p>
+
+<p>在这篇博文中，我们将使用一个简单的百里香叶Spring Boot应用程序，它可以从<a href="https://github.com/OctopusDeploy/ThymeleafSpringDemo/tree/executable-jar" rel="nofollow"> GitHub </a>获得。在Maven <code>pom.xml</code>里面我们有配置:</p>
+
+<pre><code class="language-xml">&lt;plugin&gt;
+  &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+  &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+  &lt;configuration&gt;
+      &lt;executable&gt;true&lt;/executable&gt;
+  &lt;/configuration&gt;
+&lt;/plugin&gt;
+</code></pre>
+
+<p>设置<code>&lt;executable&gt;true&lt;/executable&gt;</code>指示Spring Boot Maven插件构建一个完全可执行的JAR。</p>
+
+<p>如果我们查看JAR文件的实际内容，我们可以看到它是从一个Bash脚本开始的，这个脚本包含了Init脚本的<a href="http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/initscrcomconv.html" rel="nofollow">注释约定。</a></p>
+
+<pre><code>$ head -n 21 target/springboot.0.0.1-SNAPSHOT.jar
+#!/bin/bash
+#
+#    .   ____          _            __ _ _
+#   /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+#  ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+#   \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+#    '  |____| .__|_| |_|_| |_\__, | / / / /
+#   =========|_|==============|___/=/_/_/_/
+#   :: Spring Boot Startup Script ::
+#
+
+### BEGIN INIT INFO
+# Provides:          springboot
+# Required-Start:    $remote_fs $syslog $network
+# Required-Stop:     $remote_fs $syslog $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: springboot
+# Description:       Demo project for Spring Boot
+# chkconfig:         2345 99 01
+### END INIT INFO
+</code></pre>
+
+<p>这意味着我们可以像执行一个常规的init脚本一样执行这个文件。</p>
+
+<h2 id="building-an-ec2-instance-with-cloudformation">使用CloudFormation构建EC2实例</h2>
+
+<p>我们将利用Octopus中的CloudFormation步骤来构建一个EC2实例，该实例将托管我们的Spring Boot服务。这个模板将在<code>us-east-1</code>区域运行，并将从标准的Amazon Linux AMI创建一个EC2实例，在我们的例子中是<code>ami-97785bed</code>。</p>
+
+<p>这是完整的云形成模板。</p>
+
+<pre><code class="language-yaml">AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SSH and Web Ports
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: '0.0.0.0/0'
+      - IpProtocol: tcp
+        FromPort: '8080'
+        ToPort: '8080'
+        CidrIp: '0.0.0.0/0'
+  Linux:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: ami-97785bed
+      InstanceType: m3.medium
+      KeyName: DukeLegion
+      SecurityGroups:
+        - Ref: InstanceSecurityGroup
+      Tags:
+        -
+          Key: Application
+          Value: Spring Boot
+        -
+          Key: Domain
+          Value: None
+        -
+          Key: Environment
+          Value: Test
+        -
+          Key: LifeTime
+          Value: Transient
+        -
+          Key: Name
+          Value: Spring Boot
+        -
+          Key: OS
+          Value: Linux
+        -
+          Key: OwnerContact
+          Value: "#{Contact}"
+        -
+          Key: Purpose
+          Value: Support Test Instance
+        -
+          Key: Source
+          Value: CloudForation Script in Octopus Deploy
+        -
+          Key: scheduler:ec2-startstop
+          Value: true
+      UserData:
+        Fn::Base64: |
+          #cloud-boothook
+          #!/bin/bash
+          sudo yum install -y libunwind libicu jq java-1.8.0-openjdk
+          sudo update-alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java
+          if [ ! -d /opt/springboot ]; then
+            sudo mkdir /opt/springboot
+            sudo chown ec2-user:ec2-user /opt/springboot
+          fi
+          role="SpringBoot"
+          serverUrl="#{ServerURL}"
+          apiKey="#{APIKey}"
+          environment="#{Environment}"
+          accountId="#{AccountID}"
+          localIp=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
+          existing=$(wget -O- --header="X-Octopus-ApiKey: $apiKey" ${serverUrl}/api/machines/all | jq ".[] | select(.Name==\"$localIp\") | .Id" -r)
+          if [ -z "${existing}" ]; then
+            fingerprint=$(sudo ssh-keygen -l -E md5 -f /etc/ssh/ssh_host_rsa_key.pub | cut -d' ' -f2 | cut -b 5-)
+            environmentId=$(wget --header="X-Octopus-ApiKey: $apiKey" -O- ${serverUrl}/api/environments?take=100 | jq ".Items[] | select(.Name==\"${environment}\") | .Id" -r)
+            machineId=$(wget --header="X-Octopus-ApiKey: $apiKey" --post-data "{\"Endpoint\": {\"DotNetCorePlatform\":\"linux-x64\", \"CommunicationStyle\":\"Ssh\",\"AccountType\":\"SshKeyPair\",\"AccountId\":\"$accountId\",\"Host\":\"$localIp\",\"Port\":\"22\",\"Fingerprint\":\"$fingerprint\"},\"EnvironmentIds\":[\"$environmentId\"],\"Name\":\"$localIp\",\"Roles\":[\"${role}\"]}" -O- ${serverUrl}/api/machines | jq ".Id" -r)
+          fi
+Outputs:
+  PublicIp:
+    Value:
+      Fn::GetAtt:
+      - Linux
+      - PublicIp
+    Description: Server's PublicIp Address
+</code></pre>
+
+<p>我们首先定义将分配给EC2实例的安全组。这个安全组为SSH开放端口22，为Spring Boot应用程序开放端口8080。</p>
+
+<pre><code class="language-yaml">InstanceSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: SSH and Web Ports
+    SecurityGroupIngress:
+    - IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      CidrIp: '0.0.0.0/0'
+    - IpProtocol: tcp
+      FromPort: '8080'
+      ToPort: '8080'
+      CidrIp: '0.0.0.0/0'
+</code></pre>
+
+<p>接下来是EC2实例。这个配置定义了AMI映像ID、实例类型、要使用的SSH密钥对以及应用于实例的一些标记。</p>
+
+<p>在Octopus内部，我们有一堆需要在任何EC2实例上设置的标签。至少您需要设置<code>Name</code>标记，因为这是出现在AWS控制台中的名称。</p>
+
+<p>注意，在Octopus中使用变量替换<a href="https://octopus.com/docs/deployment-process/variables/variable-substitution-syntax" class="alert-link">设置了<code>OwnerContact</code>标记值。我们将在后面的步骤中定义这个变量。</a></p>
+
+
+<pre><code class="language-yaml">Linux:
+  Type: 'AWS::EC2::Instance'
+  Properties:
+    ImageId: ami-97785bed
+    InstanceType: m3.medium
+    KeyName: DukeLegion
+    SecurityGroups:
+      - Ref: InstanceSecurityGroup
+    Tags:
+      -
+        Key: Application
+        Value: Spring Boot
+      -
+        Key: Domain
+        Value: None
+      -
+        Key: Environment
+        Value: Test
+      -
+        Key: LifeTime
+        Value: Transient
+      -
+        Key: Name
+        Value: Spring Boot
+      -
+        Key: OS
+        Value: Linux
+      -
+        Key: OwnerContact
+        Value: "#{Contact}"
+      -
+        Key: Purpose
+        Value: Support Test Instance
+      -
+        Key: Source
+        Value: CloudForation Script in Octopus Deploy
+      -
+        Key: scheduler:ec2-startstop
+        Value: true
+</code></pre>
+
+<p>为了将这个EC2实例用作Octopus部署目标，它需要安装Mono，或者安装支持DotNET Core 2所需的包。在这个例子中，我选择了支持后者，所以我们使用<code>yum</code>来安装<a href="https://docs.microsoft.com/en-us/dotnet/core/linux-prerequisites?tabs=netcore2x" rel="nofollow">先决条件中列出的依赖项。Linux上的NET Core</a>。</p>
+
+<p>虽然Amazon Linux没有得到微软官方支持运行DotNET核心应用，但我们在遵循DotNET核心文档时，可以将Amazon Linux与CentOS同等对待。然而，虽然这适用于本博客，但它是一个不受支持的配置。</p>
+
+
+<p>我们还安装了Java 8，并将其设置为现有Java 7安装的默认设置。</p>
+
+<p><code>#cloud-boothook</code>标记被<code>cloud-init</code>服务用来<a href="http://cloudinit.readthedocs.io/en/latest/topics/format.html#cloud-boothook" rel="nofollow">识别应该在每次引导</a>时运行的脚本。</p>
+
+<p>在生产环境中，像Java和DotNET核心依赖项这样的包将被放入基本AMI映像中，而不是在实例启动时安装。</p>
+
+
+<pre><code class="language-yaml">UserData:
+  Fn::Base64: |
+    #cloud-boothook
+    #!/bin/bash
+    sudo yum install -y libunwind libicu jq java-1.8.0-openjdk
+    sudo update-alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java
+</code></pre>
+
+<p>我们将在<code>/opt/springboot</code>下安装JAR文件，因此我们需要确保该目录存在，并且<code>ec2-user</code>帐户可以修改其内容。</p>
+
+<pre><code>    if [ ! -d /opt/springboot ]; then
+      sudo mkdir /opt/springboot
+      sudo chown ec2-user:ec2-user /opt/springboot
+    fi
+</code></pre>
+
+<p>最后，我们需要这个EC2实例向Octopus服务器注册自己，如果它还没有这样做的话。脚本的这一部分查询Octopus API，以确定EC2实例的当前主机名是否存在一个部署目标，如果没有找到部署目标，就会添加它。</p>
+
+<p>该脚本中的许多变量是使用<a href="https://octopus.com/docs/deployment-process/variables/variable-substitution-syntax" class="alert-link">变量替换</a>提供的。这些将在下一节中定义。</p>
+
+
+<pre><code>    role="SpringBoot"
+    serverUrl="#{ServerURL}"
+    apiKey="#{APIKey}"
+    environment="#{Environment}"
+    accountId="#{AccountID}"
+    localIp=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
+    existing=$(wget -O- --header="X-Octopus-ApiKey: $apiKey" ${serverUrl}/api/machines/all | jq ".[] | select(.Name==\"$localIp\") | .Id" -r)
+    if [ -z "${existing}" ]; then
+      fingerprint=$(sudo ssh-keygen -l -E md5 -f /etc/ssh/ssh_host_rsa_key.pub | cut -d' ' -f2 | cut -b 5-)
+      environmentId=$(wget --header="X-Octopus-ApiKey: $apiKey" -O- ${serverUrl}/api/environments?take=100 | jq ".Items[] | select(.Name==\"${environment}\") | .Id" -r)
+      machineId=$(wget --header="X-Octopus-ApiKey: $apiKey" --post-data "{\"Endpoint\": {\"DotNetCorePlatform\":\"linux-x64\", \"CommunicationStyle\":\"Ssh\",\"AccountType\":\"SshKeyPair\",\"AccountId\":\"$accountId\",\"Host\":\"$localIp\",\"Port\":\"22\",\"Fingerprint\":\"$fingerprint\"},\"EnvironmentIds\":[\"$environmentId\"],\"Name\":\"$localIp\",\"Roles\":[\"${role}\"]}" -O- ${serverUrl}/api/machines | jq ".Id" -r)
+    fi
+</code></pre>
+
+<h2 id="the-variables">变量</h2>
+
+<p>CloudFormation脚本有许多使用<a href="https://octopus.com/docs/deployment-process/variables/variable-substitution-syntax">变量替换</a>定义的变量。这些变量在我们的Octopus项目的<span class="path">变量➜项目</span>部分中定义。</p>
+
+<p>通过获取URL <code>https://octopusserver/app#/infrastructure/accounts/sshkeypair-ec2user</code>的最后一个元素找到了<code>sshkeypair-ec2user</code>的<code>AccountID</code>变量，这是从<span class="path">基础设施➜帐户➜ SSH密钥对</span>打开ec2用户SSH帐户时显示的URL。</p>
+
+
+<p>注意，<code>AWS Account</code>变量被设置为之前创建的<code>AWS Account</code>。该变量由Octopus步骤使用，而不是由CloudFormation模板直接使用。</p>
+
+<p>你可以从<a href="https://octopus.com/docs/octopus-rest-api/how-to-create-an-api-key">文档</a>中获得更多关于创建Octopus API密匙的信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/project-variables-linux.png" class="zoom" data-title=""><img src="../Images/08fdb5002563b46886c8c3ed9c743764.png" class="img-fluid center" alt="Project Variables" data-original-src="https://i.octopus.com/blog/2018-02/project-variables-linux.png"/>T2】</a></p>
+
+<h2 id="starting-the-deployment-with-no-targets">开始没有目标的部署</h2>
+
+<p>因为我们正在创建我们将作为Octopus项目的一部分部署到的基础设施，所以我们需要配置一些设置，以允许Octopus在没有任何预先存在的有效目标的情况下开始部署。这是在<code>Deployment Targets</code>下的项目设置中完成的。将值设置为<code>Allow deployments to be created when there are no deployment targets</code>意味着即使没有可用的目标，项目也可以开始部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/allow-deployments-no-targets-linux.png" class="zoom" data-title=""><img src="../Images/522167e749291da3221ee0761e7d3dd5.png" class="img-fluid center" alt="Allow deployments with no targets" data-original-src="https://i.octopus.com/blog/2018-02/allow-deployments-no-targets-linux.png"/>T2】</a></p>
+
+<h2 id="the-cloudformation-step">云形成步骤</h2>
+
+<p>现在是时候开始定义项目步骤了。我们将从部署CloudFormation模板开始，这是通过<code>Deploy an AWS CloudFormation template</code>步骤完成的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/cloudformation-step.png" class="zoom" data-title=""><img src="../Images/2d7ba0062c62ebf664a71e6453e607c7.png" class="img-fluid center" alt="CloudFormation Step" data-original-src="https://i.octopus.com/blog/2018-02/cloudformation-step.png"/>T2】</a></p>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/cloudformation-linux.png" class="zoom" data-title=""><img src="../Images/e3c88ecfa9c1d48dbdb4acd2dd4165d5.png" class="img-fluid center" alt="CloudFormation Linux" data-original-src="https://i.octopus.com/blog/2018-02/cloudformation-linux.png"/>T2】</a></p>
+
+<h2 id="the-health-check-step">健康检查步骤</h2>
+
+<p>一旦部署了CloudFormation模板，它所创建的EC2实例将启动并向Octopus注册自己作为部署目标。我们现在需要将这个新目标添加到项目将要部署到的目标列表中。这是使用<code>Health Check</code>步骤完成的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/health-check.png" class="zoom" data-title=""><img src="../Images/daf610a9f9e65e0d02fbfc14714c75bd.png" class="img-fluid center" alt="Health Check" data-original-src="https://i.octopus.com/blog/2018-02/health-check.png"/>T2】</a></p>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/health-check-linux.png" class="zoom" data-title=""><img src="../Images/c440377861864e4ca2e5129affd17d14.png" class="img-fluid center" alt="Health Check Linux" data-original-src="https://i.octopus.com/blog/2018-02/health-check-linux.png"/>T2】</a></p>
+
+<h2 id="the-transfer-package-step">传输包步骤</h2>
+
+<p>既然我们新创建或更新的EC2实例是我们的部署目标列表的一部分，我们可以将我们的Spring Boot JAR文件转移到它。这是使用<code>Transfer a package</code>步骤完成的。</p>
+
+<p>我们使用<code>Transfer a package</code>步骤代替<code>Deploy Java Archive</code>步骤，因为后者将提取并重新打包JAR文件。完成提取和重新打包是为了允许JAR中的文件修改其内容(如果启用了变量替换)。然而，Spring Boot完全可执行的JAR文件不能被<code>jar</code>工具提取。Spring Boot文档中有这样的警告:</p>
+<blockquote class="blockquote">
+<p>目前，一些工具不接受这种格式，所以您可能并不总是能够使用这种技术。例如，jar -xf可能无法提取完全可执行的jar或war。</p>
+</blockquote>
+<p>另一方面,<code>Transfer a package</code>步骤只复制文件，并不试图修改它，这对于我们的用例来说是完美的。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/transfer-package-step.png" class="zoom" data-title=""><img src="../Images/679d187bffb330da8969b5043277faa5.png" class="img-fluid center" alt="Transfer a package step" data-original-src="https://i.octopus.com/blog/2018-02/transfer-package-step.png"/>T2】</a></p>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/package-transfer.png" class="zoom" data-title=""><img src="../Images/a26dc6764f4625a1bc00abfcbf31b6c4.png" class="img-fluid center" alt="Package transfer" data-original-src="https://i.octopus.com/blog/2018-02/package-transfer.png"/>T2】</a></p>
+
+<h2 id="installing-the-service">安装服务</h2>
+
+<p>有了系统上的JAR文件，我们现在可以将它作为Linux服务安装。这是通过使JAR文件可执行，在<code>/etc/init.d</code>下链接JAR文件，并配置服务在start上运行<code>chkconfig</code>来完成的。</p>
+
+<p>我们将使用<code>Run a Script</code>步骤运行这个脚本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/run-script.png" class="zoom" data-title=""><img src="../Images/c6fdb7efe78e57f709c15c27a4393667.png" class="img-fluid center" alt="Run a Script" data-original-src="https://i.octopus.com/blog/2018-02/run-script.png"/>T2】</a></p>
+
+<p>这是完整的脚本。</p>
+
+<pre><code class="language-bash">filePath=$(get_octopusvariable "Octopus.Action[Transfer JAR File].Output.Package.FilePath")
+echo Linking $filePath to /etc/init.d/springboot
+sudo chmod +x $filePath
+sudo rm /etc/init.d/springboot
+sudo ln -s $filePath /etc/init.d/springboot
+sudo chkconfig springboot on
+sudo service springboot restart
+</code></pre>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/run-script-service.png" class="zoom" data-title=""><img src="../Images/9c65647a7e56f693d25ec329cec4b928.png" class="img-fluid center" alt="Run Script to Install Service" data-original-src="https://i.octopus.com/blog/2018-02/run-script-service.png"/>T2】</a></p>
+
+<h2 id="displaying-summary-information">显示摘要信息</h2>
+
+<p>为了方便运行此部署的人员，我们将显示一些有用的摘要信息。这是通过第二个<code>Run a Script</code>步骤完成的。</p>
+
+<p>部署CloudFormation模板时，Octopus会捕获任何输出变量，并将其用于后续步骤。我们利用这一点来构建一个基于EC2实例的公共IP地址的URL。</p>
+
+<pre><code class="language-powershell">Write-Host "Open application at http://$($OctopusParameters["Octopus.Action[Linux CloudFormation].Output.AwsOutputs[PublicIp]"]):8080"
+</code></pre>
+
+<p>下面是填充步骤的屏幕截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/run-script-linux.png" class="zoom" data-title=""><img src="../Images/5721d285bf0da556561397eb262782fc.png" class="img-fluid center" alt="Run Script Linux" data-original-src="https://i.octopus.com/blog/2018-02/run-script-linux.png"/>T2】</a></p>
+
+<h2 id="deploying-the-project">部署项目</h2>
+
+<p>下面是这个项目的一个部署结果的截图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-02/cloudformation-output-linux.png" class="zoom" data-title=""><img src="../Images/7ab404e49574910b22a7be257bf6d96a.png" class="img-fluid center" alt="CloudFormation Output" data-original-src="https://i.octopus.com/blog/2018-02/cloudformation-output-linux.png"/>T2】</a></p>
+
+<p>请注意CloudFormation模板部署的输出中的这几行:</p>
+
+<pre><code>Saving variable "Octopus.Action[Linux CloudFormation].Output.AwsOutputs[StackId]"
+Saving variable "Octopus.Action[Linux CloudFormation].Output.AwsOutputs[PublicIp]"
+</code></pre>
+
+<p>这些日志消息提供了一种简单的方法来获取作为CloudFormation部署的结果而创建的任何输出变量的完整变量名。</p>
+
+<p>还要注意运行状况检查步骤的输出。在这个部署中，我通过在UserData脚本中添加一个注释，对CloudFormation模板进行了一些调整。虽然这种变化不影响EC2实例的部署方式，但CloudFormation将其视为对现有堆栈的更改，因此关闭并重新启动EC2实例。这又给了EC2实例一个新的公共IP，这意味着EC2实例将在启动时向Octopus注册自己。然后，运行状况检查步骤检查旧的部署目标和新的部署目标，确定旧的目标不再有效并将其删除，并成功完成对新目标的运行状况检查，并将其包括在用于剩余部署的目标列表中。</p>
+
+<h2 id="open-the-web-application">打开Web应用程序</h2>
+
+<p>最后一个脚本步骤的输出生成了一个URL<code>http://184.73.104.221:8080</code>。打开它会显示Spring Boot应用程序。</p>
+
+<p>这个URL实际上对您不起作用，因为这个演示EC2实例已经关闭。为您生成的URL将具有不同的IP地址。</p>
+
+
+<p>【T2 <img src="../Images/0aa27af87bf23dfee8c703273439a942.png" class="img-fluid center" alt="Spring Boot Demo" data-original-src="https://i.octopus.com/blog/2018-02/spring-boot-demo.png"/></p>
+
+<h2 id="verifying-the-service">验证服务</h2>
+
+<p>我们可以通过连接到EC2实例并运行<code>service</code>命令来验证Spring Boot应用程序是否作为Linux服务运行。</p>
+
+<pre><code>$ sudo service springboot status
+Running [2716]
+</code></pre>
+
+<p>该服务可以像任何其他服务一样启动、停止和重新启动。</p>
+
+<pre><code>$ sudo service springboot restart
+Stopped [2716]
+Started [4123]
+$ sudo service springboot stop
+Stopped [4123]
+$ sudo service springboot start
+Started [4235]
+</code></pre>
+
+<h2 id="conclusion">结论</h2>
+
+<p>完全可执行的JAR文件允许将Spring Boot应用程序部署为常规的Linux服务，使它们易于部署和管理。如果您对自动化部署Java应用程序或创建云基础设施感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看<a href="https://octopus.com/docs/deploying-applications">我们的文档</a>。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,57 @@
+<html>
+<head>
+<title>RFC: Azure and FTP steps - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC: Azure和FTP步骤- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/upcoming-features-azure-and-ftp#2015-09-17">https://octopus.com/blog/upcoming-features-azure-and-ftp#2015-09-17</a></blockquote>
+                        <p>我目前正在为Octopus Deploy构建两个新的步骤类型:</p>
+
+<ol>
+<li><strong>通过FTP </strong> <br/>部署在这一步中，我们将在Octopus服务器上提取一个NuGet包，然后将其“同步”到一个FTP/FTPS服务器上。这也使得部署Azure网站成为可能，因为它们支持FTP。</li>
+<li><strong>部署Azure云服务包</strong> <br/>在这一步中，我们将在Octopus服务上提取一个NuGet包，它应该包含一个Azure云服务包(。cspkg)(我们将扩展Octo.exe或OctoPack，以便更容易地将. cspkg重新打包为. nupkg)。然后，我们将cspkg上传到blob存储，然后将其部署到Azure。</li>
+</ol>
+
+<p>通常，我们在触手代理上运行包步骤。然而，在这种情况下，这两种步骤类型都将直接在Octopus服务器上运行，而不是在Tentacles上运行。这意味着如果你只是使用Octopus通过FTP或Azure进行部署，你不需要设置任何触手代理。</p>
+
+<p>这两个步骤都将支持我们目前所做的常规的XML更新和转换，加上执行常规的PowerShell脚本(将在Octopus服务器上运行)。因此，举例来说，你可以在FTP之前或上传到Azure之前使用PowerShell更新文件。</p>
+
+<p>配置FTP步骤时，您将设置主机、用户名、密码和其他常用设置。您也可以指定FTP根目录。所有这些都可以引用Octopus变量，例如，您可以为您的暂存/生产部署使用不同的主机/根目录/用户名。</p>
+
+<p>对于Azure云服务包，我们还将提供两个选项来管理实例数量:</p>
+
+<ul>
+<li>使用CSCFG中的实例计数设置</li>
+<li>更新时保留当前部署的服务中的实例计数设置</li>
+</ul>
+
+<p>例如，如果您最初使用两个实例部署到生产环境，然后使用Azure管理门户将其扩展到4，我们可以使用2(在cscfg中指定)或4(我们将从管理API获取)，这取决于您选择的选项。</p>
+
+<p>我们还将支持Azure cscfg文件中的变量替换。例如:</p>
+
+<pre><code>&lt;Role name="WorkerRole1"&gt;
+  &lt;Instances count="1" /&gt;
+  &lt;ConfigurationSettings&gt;
+    &lt;Setting name="MyConnectionString" value="blah blah" /&gt;
+  &lt;/ConfigurationSettings&gt;
+&lt;/Role&gt;
+</code></pre>
+
+<p>如果您有一个名为<code>WorkerRole1/MyConnectionString</code>的Octopus变量，我们将替换该设置的“value”属性。请注意，该设置以角色名称为前缀，以允许不同角色的不同设置。</p>
+
+<p>在选择要使用的云服务配置文件时，我们将寻找(按此顺序):</p>
+
+<ul>
+<li>服务配置。<em>环境</em>。cscfg</li>
+<li>服务配置。Cloud.cscfg</li>
+</ul>
+
+<p>由于连接Azure管理API需要X509证书，我们将自动使用Octopus服务器证书。要允许Octopus部署到您的Azure订阅，您只需从Octopus下载<code>.cer</code>文件并将其上传到Azure门户。我们将在页面上提供到您的<code>.cer</code>和安装说明的链接，用于编辑Azure步骤。</p>
+
+<p>你怎么想呢?正如我所说的，我目前正在构建这些功能，所以如果有其他与Azure或FTP相关的场景，我很乐意听到它们，这样我们就可以在下一个版本中包含它们。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,229 @@
+<html>
+<head>
+<title>Microservices and frameworks - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>微服务和框架- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/microservices-and-frameworks#2022-07-07">https://octopus.com/blog/microservices-and-frameworks#2022-07-07</a></blockquote>
+                        <p>通过微服务交付软件是一种现代开发方法，对开发者和客户都有很多好处。</p>
+
+<p>使用微服务意味着在单独、独立的服务中开发应用程序。然后，用户通过前端访问整个应用程序及其功能，不会意识到交付的差异。</p>
+
+<p>尽管有好处，但在开发微服务之前还有一些事情要考虑，比如软件的结构和团队的流程。幸运的是，许多微服务框架的存在有助于减轻一些负担。</p>
+
+<p>在本帖中，我们来看看:</p>
+
+<ul>
+<li>微服务开发的优势</li>
+<li>框架的概念以及为什么应该考虑框架</li>
+<li>编程语言和适合它们的框架</li>
+</ul>
+
+<h2 id="benefits-of-microservices">微服务的优势</h2>
+
+<p>让我们想象一下，你正在用微服务建立一个零售网站。您可能会决定将以下功能开发为单独的服务:</p>
+
+<ul>
+<li>网站前端(HTML，CSS等)</li>
+<li>搜索</li>
+<li>航行</li>
+<li>产品数据库</li>
+<li>行动号召</li>
+<li>旋转木马</li>
+<li>网站小工具(例如，新的、流行的或特价商品)</li>
+<li>客户产品评论</li>
+<li>结账和支付系统</li>
+<li>支持实时聊天</li>
+</ul>
+
+<p>与作为单一对象交付的传统网站相比，微服务具有以下优势:</p>
+
+<ul>
+<li>产品可靠性-一个组件的问题不太可能影响您的业务。例如，如果您的客户评论组件关闭，人们仍然可以搜索和购买东西。</li>
+<li>更快的修复——如果你的结账系统损坏了，你可以在几分钟内用一个新的图像替换它。</li>
+<li>可重复使用的组件-如果您打开第二个零售网站，两者可以共享相同的实时聊天功能。</li>
+<li>可扩展性——您可以轻松扩展网站资源，以满足每个组件的流量需求。</li>
+</ul>
+
+<p>然而，需要考虑成本和网络流量的权衡。Terence Wong在他的文章<a href="https://octopus.com/blog/monoliths-vs-microservices">中更深入地探讨了这些问题。</a></p>
+
+<h2 id="microservices-frameworks-and-why-you-should-consider-them">微服务框架以及为什么应该考虑它们</h2>
+
+<p>如果你想通过微服务来交付你的产品，有很多方法来规划它将如何工作。</p>
+
+<p>你可以从头开始，一路摸索出一个简单的产品结构，除了你的代码和一些容器之外什么都没有。</p>
+
+<p>这种方法对于功能很少的小项目可能很好，但是如果您需要突然扩展，事情会变得很复杂。您可能会看到一些意想不到的影响，例如:</p>
+
+<ul>
+<li>产品很难排除故障</li>
+<li>新团队成员努力找出事物如何组合的风险</li>
+<li>寻找你不知道自己拥有的依赖</li>
+</ul>
+
+<p>这就是从一开始就采用已建立的微服务框架使事情变得更容易的地方。</p>
+
+<p>顾名思义，框架是软件开发的现成架构。一个框架:</p>
+
+<ul>
+<li>当软件存在于您的基础设施中时，有助于形成软件的形状</li>
+<li>为团队提供清晰度和关注点</li>
+<li>拥有帮助开发的工具</li>
+<li>帮助团队中的每个人朝着同一个方向努力</li>
+</ul>
+
+<p>最重要的是，框架节省了您规划、开发和支持的时间。框架是软件交付的成熟途径。既然已经有人为你做了，为什么还要花时间去犯错误或绘制结构呢？</p>
+
+<p>微服务中交付的项目有无数可用的框架。你所考虑的将取决于你的项目和你使用的编程语言。</p>
+
+<h2 id="popular-frameworks-for-microservices">微服务的流行框架</h2>
+
+<p>让我们来看看针对不同开发语言的一些流行的框架选项。不过，这并不是一个完整的列表。市场上还有很多其他的框架，我们建议在选择一个之前先做一下研究。</p>
+
+<p>所有这些框架都是开源的。</p>
+
+<h3 id="node.js-and-javascript">Node.js和JavaScript</h3>
+
+<h4 id="molecular">分子的</h4>
+
+<p><a href="https://moleculer.services/" rel="nofollow">分子</a>微服务框架承诺:</p>
+
+<ul>
+<li>高速性能</li>
+<li>通过现有或自行开发的插件进行扩展</li>
+<li>通过内置负载平衡器、断路器等实现容错</li>
+<li>与流行的日志服务兼容</li>
+</ul>
+
+<h4 id="koa">寇阿相思树</h4>
+
+<p><a href="https://koajs.com/" rel="nofollow"> Koa </a>是一个微服务框架，号称比它的前身<a href="http://expressjs.com/" rel="nofollow"> Express </a>更精简、更可定制。它还旨在简化服务器的创建。</p>
+
+<h4 id="loopback-4">回送4</h4>
+
+<p><a href="https://loopback.io/doc/en/lb4/" rel="nofollow"> LoopBack 4 </a>是一个微服务框架，包括:</p>
+
+<ul>
+<li>OpenAPI规范驱动的REST APIs</li>
+<li>通过组件、混合和存储库的依赖注入</li>
+<li>GraphQL支持</li>
+</ul>
+
+<h3 id="java">Java 语言(一种计算机语言，尤用于创建网站)</h3>
+
+<h4 id="micronaut">微型机器人</h4>
+
+<p>Micronaut 是一个可靠的选择，因为它与类似Java的语言兼容，比如Groovy和Kotlin。</p>
+
+<p>它提供:</p>
+
+<ul>
+<li>内置云支持</li>
+<li>简单的单元测试</li>
+<li>快速配置</li>
+<li>支持API服务，如OpenAPI和Swagger</li>
+</ul>
+
+<h4 id="axon-framework">轴突框架</h4>
+
+<p>由<a href="https://www.axoniq.io/axoniq-products" rel="nofollow"> AxonIQ </a>开发的微服务框架，适合使用:</p>
+
+
+
+<h4 id="spring-cloud-functions">弹簧云函数</h4>
+
+<p>来自Java框架提供商Spring的微服务框架。</p>
+
+<p><a href="https://spring.io/microservices" rel="nofollow"> Spring Cloud Functions </a>拥有一个框架，可以很容易地从小规模起步并不断发展。</p>
+
+<p>它的<a href="https://spring.io/cloud" rel="nofollow"> Spring Cloud </a>特性有助于与许多服务注册中心的连接，并且还为您的项目提供了一个API网关。</p>
+
+<p>他们还通过<a href="https://micrometer.io/" rel="nofollow">千分尺</a>提供可选的度量标准。</p>
+
+<h4 id="quarkus">夸库斯</h4>
+
+<p>专门针对想要使用Kubernetes的Java开发人员，<a href="https://quarkus.io/" rel="nofollow"> Quarkus </a>是一个微服务框架，旨在与<a href="https://www.graalvm.org/" rel="nofollow"> GraalVM </a>和<a href="https://www.oracle.com/java/technologies/javase/vmoptions-jsp.html" rel="nofollow"> HotSpot </a>一起使用。</p>
+
+<h3 id="python">计算机编程语言</h3>
+
+<h4 id="flask">瓶</h4>
+
+<p>Flask 是一个用于Python开发项目的极简但功能强大的微服务框架。</p>
+
+<h4 id="falcon">猎鹰</h4>
+
+<p><a href="https://falconframework.org/" rel="nofollow"> Falcon </a>是一个微服务框架，与其他Python框架配合得很好。</p>
+
+<p>它是:</p>
+
+
+
+<h4 id="cherrypy">樱桃派</h4>
+
+<p>作为另一个轻量级Python产品，<a href="https://cherrypy.dev/" rel="nofollow"> CherryPy </a>声称就像它的名字一样简单。</p>
+
+<p>它是:</p>
+
+<ul>
+<li>符合HTTP和WSGI</li>
+<li>能够在多个端口上运行</li>
+<li>可通过插件扩展</li>
+</ul>
+
+<h3 id="go">去</h3>
+
+<h4 id="go-micro">去微</h4>
+
+<p><a href="https://asim.github.io/go-micro/" rel="nofollow">围棋微</a>承诺:</p>
+
+<ul>
+<li>内置认证</li>
+<li>动态配置</li>
+<li>通过DNS进行服务发现</li>
+<li>负载平衡</li>
+<li>消息编码</li>
+<li>异步和事件流</li>
+</ul>
+
+<h4 id="echo">回声</h4>
+
+<p><a href="https://echo.labstack.com/" rel="nofollow">附和</a>的承诺:</p>
+
+<ul>
+<li>零动态内存分配的HTTP路由</li>
+<li>可量测性</li>
+<li>让我们加密自动TLS证书</li>
+<li>模板</li>
+<li>数据绑定和呈现</li>
+</ul>
+
+<h4 id="fiber">纤维</h4>
+
+<p>Fiber的开发者将Fiber描述为Express框架的Go等价物。它建立在Fasthttp之上，提供了简单的路由定义，并有助于传递静态文件。</p>
+
+<h3 id="net-and-c">。NET和C#</h3>
+
+<h4 id="asp.net">ASP。网</h4>
+
+<p>ASP.NET是微软构建网络应用和服务的框架。ASP.NET对微服务特别有用，因为它支持Docker镜像，并且可以方便地为每个服务创建API。</p>
+
+<h2 id="whats-next">下一步是什么？</h2>
+
+<p>在这篇文章中，我们讨论了微服务的好处，探索了为什么使用微服务框架是一个好主意，并列举了一些流行的框架选项。</p>
+
+<p>我们还有一些关于集装箱化的帖子，包括:</p>
+
+<ul>
+<li>您应该考虑的注册中心</li>
+<li>更详细地看集装箱化的好处</li>
+<li>深入探讨云流程编排和云自动化</li>
+<li>看看“一切都是代码”</li>
+</ul>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

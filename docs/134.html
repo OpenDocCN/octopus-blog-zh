@@ -1,0 +1,187 @@
+<html>
+<head>
+<title>Configuring the web.xml file during deployment - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>部署期间配置web.xml文件- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/configuring-web-xml#2022-07-15">https://octopus.com/blog/configuring-web-xml#2022-07-15</a></blockquote>
+                        <p>使用Octopus的包的典型部署使您能够替换模板文件中的标记。当您控制源包并且可以将所需的标记语句嵌入到配置文件中时，这是非常好的，但是当您正在部署您不控制的包时会发生什么呢？</p>
+
+<p>在这篇博文中，我们将看看如何使用一些简单的脚本来更新来自Maven central的Java web应用程序中的<code>web.xml</code>文件，我们对此没有任何控制。</p>
+
+<h2 id="download-octopus-deploy-4.1">下载八达通部署4.1</h2>
+
+<p>首先从<a href="https://octopus.com/downloads">下载页面</a>获取Octopus Deploy 4.1的副本。版本4.1包括与Maven repos集成的能力。你可以从<a href="https://octopus.com/docs/installation">文档</a>中找到更多关于安装Octopus的信息。</p>
+
+<p>Octopus 4.1目前处于测试阶段，所以如果现在还不能从下载页面获得，那也很快了。看好这个空间！</p>
+
+
+<h2 id="install-wildfly">安装WildFly</h2>
+
+<p>在这个例子中，我们将为WildFly安装<a href="http://hawt.io/" rel="nofollow"> Hawtio </a>管理应用程序。特别是，我们将安装<a href="https://mvnrepository.com/artifact/io.hawt/hawtio-no-slf4j" rel="nofollow"> io.hawt:hawtio-no-slf4j </a>包。</p>
+
+<p>所以下载一个<a href="http://wildfly.org/downloads/" rel="nofollow"> WildFly 11 </a>的副本，<a href="https://octopus.com/docs/deployments/java/deploying-java-applications#deploying-to-wildflyjboss-eap">用一个可以被Octopus </a>使用的admin用户配置它。</p>
+
+<h2 id="configuring-the-maven-central-repository">配置Maven中央存储库</h2>
+
+<p>下一步是将Maven central设置为外部提要。更多细节可以参考<a href="https://octopus.com/docs/packaging-applications/package-repositories/maven-feeds">文档</a>，或者这个<a href="https://octopus.com/blog/secured-tomcat-from-scratch#configure-maven-central-as-an-external-feed">的博文</a>。</p>
+
+<h2 id="adding-an-application-user">添加应用程序用户</h2>
+
+<p>我们将在部署期间更新Hawtio <code>WEB-INF/web.xml</code>文件，以启用身份验证。但是在我们这样做之前，WildFly需要配置Hawtio用户登录的凭证。</p>
+
+<p>运行<code>bin/add-user.sh</code>(适用于Linux和Mac)或<code>bin\add-user.bat</code>(适用于Windows)脚本，将新的<code>Application User</code>添加到<code>admin</code>组。在下面的例子中，我们创建了一个名为<code>monitor</code>的用户。</p>
+
+<pre><code>PS C:\wildfly11_standalone\wildfly-11.0.0.Beta1\bin&gt; .\add-user.bat
+JAVA_HOME is not set. Unexpected results may occur.
+Set JAVA_HOME to the directory of your local JDK to avoid this message.
+
+What type of user do you wish to add?
+ a) Management User (mgmt-users.properties)
+ b) Application User (application-users.properties)
+(a): b
+
+Enter the details of the new user to add.
+Using realm 'ApplicationRealm' as discovered from the existing property files.
+Username : monitor
+Password recommendations are listed below. To modify these restrictions edit the add-user.properties configuration file.
+ - The password should be different from the username
+ - The password should not be one of the following restricted values {root, admin, administrator}
+ - The password should contain at least 8 characters, 1 alphabetic character(s), 1 digit(s), 1 non-alphanumeric symbol(s)
+Password :
+Re-enter Password :
+What groups do you want this user to belong to? (Please enter a comma separated list, or leave blank for none)[  ]: admin
+About to add user 'monitor' for realm 'ApplicationRealm'
+Is this correct yes/no? yes
+Added user 'monitor' to file 'C:\wildfly11_standalone\wildfly-11.0.0.Beta1\standalone\configuration\application-users.properties'
+Added user 'monitor' to file 'C:\wildfly11_standalone\wildfly-11.0.0.Beta1\domain\configuration\application-users.properties'
+Added user 'monitor' with groups admin to file 'C:\wildfly11_standalone\wildfly-11.0.0.Beta1\standalone\configuration\application-roles.properties'
+Added user 'monitor' with groups admin to file 'C:\wildfly11_standalone\wildfly-11.0.0.Beta1\domain\configuration\application-roles.properties'
+Is this new user going to be used for one AS process to connect to another AS process?
+e.g. for a slave host controller connecting to the master or for a Remoting connection for server to server EJB calls.
+yes/no? no
+Press any key to continue . . .
+</code></pre>
+
+<h2 id="deploy-hawtio">部署Hawtio</h2>
+
+<p>我们可以使用<code>Deploy to WildFly or EAP</code>步骤部署Hawtio，选择外部Maven提要，然后部署包<code>io.hawt:hawtio-no-slf4j</code>。</p>
+
+<p>在部署过程中，我们希望更新<code>web.xml</code>文件中的三个<code>&lt;env-entry-value&gt;</code>元素。这些值配置了<code>hawtio/authenticationEnabled</code>、<code>hawtio/role</code>和<code>hawtio/realm</code>T5的设置。默认值如下所示。</p>
+
+<pre><code class="language-xml">&lt;web-app 
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee
+          http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+          version="2.4"&gt;
+
+  ...
+
+  &lt;env-entry&gt;
+    &lt;description&gt;Enable/disable hawtio's authentication filter, value is really a boolean&lt;/description&gt;
+    &lt;env-entry-name&gt;hawtio/authenticationEnabled&lt;/env-entry-name&gt;
+    &lt;env-entry-type&gt;java.lang.String&lt;/env-entry-type&gt;
+    &lt;env-entry-value&gt;false&lt;/env-entry-value&gt;
+  &lt;/env-entry&gt;
+
+  &lt;env-entry&gt;
+    &lt;description&gt;Authorized user role, empty string disables authorization&lt;/description&gt;
+    &lt;env-entry-name&gt;hawtio/role&lt;/env-entry-name&gt;
+    &lt;env-entry-type&gt;java.lang.String&lt;/env-entry-type&gt;
+    &lt;env-entry-value&gt;&lt;/env-entry-value&gt;
+  &lt;/env-entry&gt;
+
+  &lt;env-entry&gt;
+    &lt;description&gt;JAAS realm used to authenticate users&lt;/description&gt;
+    &lt;env-entry-name&gt;hawtio/realm&lt;/env-entry-name&gt;
+    &lt;env-entry-type&gt;java.lang.String&lt;/env-entry-type&gt;
+    &lt;env-entry-value&gt;*&lt;/env-entry-value&gt;
+  &lt;/env-entry&gt;
+
+  ...
+
+&lt;/web-app&gt;
+</code></pre>
+
+<p>我们希望<code>hawtio/authenticationEnabled</code>的<code>&lt;env-entry-value&gt;</code>是<code>true</code>，<code>hawtio/role</code>是<code>admin</code>(我们用<code>add-user</code>脚本将用户添加到的同一个组)，以及<code>hawtio/realm</code>到<code>jboss-web-policy</code>。</p>
+
+<p><code>jboss-web-policy</code>是WildFly和JBoss EAP中配置的默认领域，它遵从由<code>add-user</code>脚本配置的<code>Application User</code>凭证。你可以阅读<a href="https://access.redhat.com/documentation/en-us/jboss_enterprise_application_platform/6.1/html/security_guide/use_a_security_domain_in_your_application" class="alert-link" rel="nofollow">文档</a>了解更多细节。</p>
+
+
+<p>要进行这些更改，我们需要启用<code>Custom deployment scripts</code>功能。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/configure-features.png" class="zoom" data-title=""><img src="../Images/cf51344fee461c7e8bb2141437c1a3d4.png" class="img-fluid center" alt="Custom Deployment Scripts" data-original-src="https://i.octopus.com/blog/2017-12/configure-features.png"/>T2】</a></p>
+
+<p>我们将使用一个C#预部署脚本来更新<code>web.xml</code>文件，然后将其重新打包并部署到WildFly。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/pre-deployment-script.png" class="zoom" data-title=""><img src="../Images/2712ebedb27b6e832c1135e1a54a3c70.png" class="img-fluid center" alt="Pre-Deployment Script" data-original-src="https://i.octopus.com/blog/2017-12/pre-deployment-script.png"/>T2】</a></p>
+
+<p>该脚本加载了<code>web.xml</code>文件，并使用一些XPath语句来查找需要更新的元素。然后保存XML文件，更新后的文件将被重新打包和部署。</p>
+
+<p>XPath语句通过引用元素<code>*[local-name()='env-entry']</code>来避免与名称空间相关的问题。</p>
+
+
+<pre><code class="language-csharp">using System.Xml;
+using System.IO;
+
+/*
+    Get the location of the web.xml fie
+*/
+var installation = Octopus.Parameters["Octopus.Action.Package.InstallationDirectoryPath"];
+var xmlFile = installation + Path.DirectorySeparatorChar + "WEB-INF" + Path.DirectorySeparatorChar + "web.xml";
+
+/*
+    Parse the web.xml file
+*/
+XmlDocument doc = new XmlDocument();
+doc.Load(xmlFile);
+XmlNode root = doc.DocumentElement;
+
+/*
+    Update the nodes
+*/
+XmlNode authenticationEnabled = root.SelectSingleNode("*[local-name()='env-entry']/*[local-name()='env-entry-value'][../*[local-name()='env-entry-name'][text()=\"hawtio/authenticationEnabled\"]]");
+Console.WriteLine("Existing hawtio/authenticationEnabled InnerText: " + authenticationEnabled?.InnerText);
+authenticationEnabled.InnerText = "true";
+
+XmlNode role = root.SelectSingleNode("*[local-name()='env-entry']/*[local-name()='env-entry-value'][../*[local-name()='env-entry-name'][text()=\"hawtio/role\"]]");
+Console.WriteLine("Existing hawtio/role InnerText: " + role?.InnerText);
+role.InnerText = "admin";
+
+XmlNode realm = root.SelectSingleNode("*[local-name()='env-entry']/*[local-name()='env-entry-value'][../*[local-name()='env-entry-name'][text()=\"hawtio/realm\"]]");
+Console.WriteLine("Existing hawtio/realm InnerText: " + realm?.InnerText);
+realm.InnerText = "jboss-web-policy";
+
+/*
+    Commit the changes
+*/
+doc.Save(xmlFile);
+</code></pre>
+
+<h2 id="defining-a-channel-rule">定义渠道规则</h2>
+
+<p>出于某种原因，Hawtio的一个旧版本发布到了Maven central，其版本为2.0.0。Hawtio的最新版本其实是1.5.6。默认情况下，Octopus会尝试部署最新版本，但在这种情况下，版本号最大的版本不是最新版本。为了解决这个问题，我们可以创建一个通道规则，强制Octopus部署版本1.5.6。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/hawtio-channel-rule.png" class="zoom" data-title=""><img src="../Images/c7282215513bfdc8c021f8d3ee462197.png" class="img-fluid center" alt="Channel Rule" data-original-src="https://i.octopus.com/blog/2017-12/hawtio-channel-rule.png"/>T2】</a></p>
+
+<h2 id="testing-the-deployment">测试部署</h2>
+
+<p>在WildFly中配置了Hawtio用户并且更新了<code>web.xml</code>文件以要求认证之后，我们可以通过打开<a href="http://server:8080/hawtio" rel="nofollow">http://server:8080/haw TiO</a>来完成部署并检查结果。您将看到登录页面。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/hawtio-login.jpg" class="zoom" data-title=""><img src="../Images/cc9ac4ebe5e1723b87f8f2e1d631803f.png" class="img-fluid center" alt="Hawtio Login" data-original-src="https://i.octopus.com/blog/2017-12/hawtio-login.jpg"/>T2】</a></p>
+
+<p>使用我们之前创建的<code>monitor</code>用户登录后，将显示欢迎页面。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-12/hawtio-welcome.png" class="zoom" data-title=""><img src="../Images/a792743ac6c7579168d4854f8e8e56e9.png" class="img-fluid center" alt="Hawtio Welcome" data-original-src="https://i.octopus.com/blog/2017-12/hawtio-welcome.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过一些简单的C#脚本，我们可以对XML文件进行任何我们无法控制的修改。这是由Octopus部署时可以应用于Java应用程序的强大定制的一个例子。</p>
+
+<p>如果您对Java应用程序的自动化部署感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看<a href="https://octopus.com/docs/deployments/java/deploying-java-applications">我们的文档</a>。</p>
+
+                    
+                    
+</body>
+</html>

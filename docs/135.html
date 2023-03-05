@@ -1,0 +1,123 @@
+<html>
+<head>
+<title>Connect an AWS Account to Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>将AWS帐户连接到Octopus Deploy - Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/connect-an-aws-account-to-octopus#2021-08-12">https://octopus.com/blog/connect-an-aws-account-to-octopus#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/aws-octopus.png" class="zoom" data-title=""><img src="../Images/b2842e7d5e02057a460342c5c88c7df5.png" class="img-fluid center" alt="Connect an AWS Account to Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/aws-octopus.png"/>T2】</a></p>
+
+<p>当您与任何云提供商合作时，您都希望有一种连接到云的简单方法。您不希望仅仅为了部署代码或构建持续交付的基础设施而担心创建定制脚本、API调用和管道胶带解决方案。</p>
+
+<p>Octopus Deploy有一种干净、直接的方式来连接许多云提供商。在这篇博文中，您将了解如何将Octopus Deploy连接到AWS。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进这篇博文，您需要具备:</p>
+
+<ul>
+<li>AWS账户。</li>
+<li>Octopus部署服务器，可以是Octopus服务器的本地实例，也可以是Octopus云实例。</li>
+</ul>
+
+<p>你可以从八达通服务器或八达通云免费开始使用。</p>
+
+<h2 id="creating-an-iam-user">创建IAM用户</h2>
+
+<p>在从Octopus Deploy部署到AWS之前，您需要一种身份验证方法。因为Octopus Deploy将向AWS部署基础设施或应用程序，AWS需要知道<em>Octopus Deploy</em>是谁。AWS的典型认证方法是身份和访问管理(<a href="https://aws.amazon.com/iam/#:%7E:text=AWS%20Identity%20and%20Access%20Management%20(IAM)%20enables%20you%20to%20manage,offered%20at%20no%20additional%20charge." rel="nofollow"> IAM </a>)，它提供访问密钥和秘密。</p>
+
+<h3 id="create-the-iam-user-in-the-ui">在UI中创建IAM用户</h3>
+
+<ol>
+<li>要在AWS UI中创建IAM用户，请打开web浏览器并进入<a href="https://aws.amazon.com/console/" rel="nofollow"> AWS控制台</a>:</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/1.png" class="zoom" data-title=""><img src="../Images/89484b4692a3c2dd3251aaf32bf76582.png" class="img-fluid center" alt="AWS console" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/1.png"/>T2】</a></p>
+
+<ol start="2">
+<li>在搜索栏的<strong>查找服务</strong>下，输入<strong> IAM </strong>。</li>
+<li>点击<strong>权限管理</strong>下的<strong>用户</strong>选项。</li>
+<li>要创建可以从Octopus Deploy访问AWS的新用户，请单击蓝色的<strong>添加用户</strong>按钮。</li>
+<li>在“设置用户详细信息”下，为用户名创建一个适当的名称。比如<code>OctopusDeployAccount</code>。</li>
+<li>在<strong>选择AWS访问类型</strong>部分，选择<strong>编程访问</strong>选项。Octopus Deploy将在SDK级别对AWS进行API调用。</li>
+<li>点击蓝色<strong>下一步:权限</strong>按钮。</li>
+</ol>
+
+<p>用户的权限将取决于您希望Octopus Deploy拥有哪些AWS服务的权限。例如，假设您希望Octopus Deploy只部署EC2实例，在这种情况下，您可以让IAM用户访问类似于<code>AmazonEC2FullAccess</code>的内容。</p>
+
+<ol start="8">
+<li><p>出于这篇博文的目的，我们希望Octopus与所有AWS服务通信，因此我们将选择<strong>直接附加现有策略</strong>下的<code>AdministratorAccess</code>策略。选择<code>AdministratorAccess</code>选项后，点击蓝色的<strong> Next: Tags </strong>按钮，如下图所示。</p>
+</li>
+<li><p>标签对于这篇博文来说并不是必须的，所以你可以点击蓝色的<strong> Next: Review </strong>按钮。</p>
+</li>
+<li><p>最后，要创建新的IAM用户，单击蓝色的<strong>创建用户</strong>按钮。</p>
+</li>
+</ol>
+
+<p>您将看到一个包含访问密钥ID和秘密访问密钥的屏幕。将秘密访问密钥保存在安全的位置，因为您将无法再次访问它。但是，如果丢失了这个密钥，您可以创建一个新的秘密访问密钥。访问密钥ID和秘密访问密钥将用于Octopus Deploy身份验证。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/10.png" class="zoom" data-title=""><img src="../Images/674b1699472da1c43ee6d31b2b994a8a.png" class="img-fluid center" alt="Successfully added an IAM user" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/10.png"/>T2】</a></p>
+
+<h3 id="iam-user-on-the-cli">CLI上的IAM用户</h3>
+
+<p>正如您在上一节中看到的，创建一个IAM用户并将其添加到适当的策略可能有点麻烦，并且需要大量的点击操作。如果你使用AWS CLI，有一个简单得多的方法，只需要几行代码。</p>
+
+<p>第一段代码创建了新的IAM用户:</p>
+
+<pre><code>aws iam create-user --user-name OctopusDeployAWSAccount
+</code></pre>
+
+<p>输出应该类似于下面的屏幕截图:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/11.png" class="zoom" data-title=""><img src="../Images/12af1e04e757fe2d318fe5a23e28e49c.png" class="img-fluid center" alt="AWS CLI create-user output" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/11.png"/>T2】</a></p>
+
+<p>接下来，您需要创建秘密访问密钥。秘密访问密钥充当各种类型的<em>密码</em>。</p>
+
+<p>要创建秘密访问密钥，请运行以下代码:</p>
+
+<pre><code>aws iam create-access-key --user-name OctopusDeployAccount
+</code></pre>
+
+<p>输出应该类似于下面的屏幕截图:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/12.png" class="zoom" data-title=""><img src="../Images/0f9e6b949a5351750ef18cfc89392f7e.png" class="img-fluid center" alt="AWS CLI create-access-key output" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/12.png"/>T2】</a></p>
+
+<p>现在，您已经准备好将AWS IAM帐户连接到Octopus Deploy。</p>
+
+<h2 id="connecting-aws-to-octopus-deploy">将AWS连接到Octopus Deploy</h2>
+
+<p>在上一节中，您了解了如何在编程级别创建让Octopus Deploy与AWS交互的能力。既然您已经理解了访问密钥和秘密密钥的用途，那么是时候在Octopus Deploy中设置AWS帐户了。</p>
+
+<ol>
+<li>打开网络浏览器，进入Octopus Deploy门户网站:</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/13.png" class="zoom" data-title=""><img src="../Images/ced3ac4fc4d4b7f065f10e3094be9381.png" class="img-fluid center" alt="Octopus Web Portal" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/13.png"/></a>T2】</p>
+
+<ol start="2">
+<li>导航至<strong> <span class="path">基础设施➜账户</span> </strong>以设置新的AWS账户。</li>
+<li>在<strong>账户</strong>下，点击绿色<strong>添加账户</strong>按钮，选择<strong> AWS账户</strong>:</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/19.png" class="zoom" data-title=""><img src="../Images/49cf83827be4802c877b7d08ad6f5f69.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/connect-an-aws-account-to-octopus/images/19.png"/>T2】</a></p>
+
+<ol start="4">
+<li>在<strong>详情</strong>下，您可以添加关于您的账户的元数据；名称和描述。</li>
+<li>接下来，在<strong>凭证</strong>下，您可以添加AWS访问密钥和秘密密钥。</li>
+<li>最后，您可以在“限制”部分设置限制。例如，我选择只允许我的开发环境使用这个帐户。</li>
+<li>点击页面顶部的绿色<strong>保存</strong>按钮。</li>
+</ol>
+
+<p>恭喜你。您已经成功地在八达通部署中设置了一个AWS帐户。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>与不同的基于云的平台进行交互的需求不会消失。无论您使用什么样的持续交付和部署工具，从CD工具到云甚至本地平台的身份验证总是有原因的。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,205 @@
+<html>
+<head>
+<title>Importing and deploying your first Octopus project - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>导入和部署您的第一个Octopus项目- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/importing-deploying-your-first-octopus-project#2022-01-11">https://octopus.com/blog/importing-deploying-your-first-octopus-project#2022-01-11</a></blockquote>
+                        <p>设置您的第一个部署可能具有挑战性。有新的系统需要学习，有多种配置需要调整。</p>
+
+<p>在这篇文章中，我将指导您使用Octopus Deploy完成第一次部署。</p>
+
+<p>为了简化这个过程，我配置了一个项目，将一个示例应用程序部署到一个Azure web应用程序。</p>
+
+<p>使用Octopus 2021.1中引入的<a href="https://octopus.com/blog/exporting-projects">导出/导入特性</a>，我导出了一个Octopus项目，并向您展示了如何导入和部署这个项目。</p>
+
+<p>部署后，应用程序将对您可见，并可与您的同事共享。</p>
+
+<h2 id="getting-set-up">正在设置</h2>
+
+<p>这篇文章的惟一先决条件是运行Octopus Deploy实例，要么在Octopus Cloud中，要么在自托管Octopus服务器中。</p>
+
+<p>我将带您通过五个步骤在Octopus中部署web应用程序:</p>
+
+<ol>
+<li>导入现有项目</li>
+<li>配置Azure帐户</li>
+<li>上传我提供的包</li>
+<li>添加您的部署目标</li>
+<li>部署到Azure web应用程序</li>
+</ol>
+
+<p>如果您还没有设置Octopus部署实例，现在需要通过选择以下选项之一来设置:</p>
+
+
+
+<p>准备好Octopus实例后，第一步是导入一个现有的项目。</p>
+
+<h2 id="importing-an-existing-project">导入现有项目</h2>
+
+<p>导出/导入功能可以将一个或多个项目导出到zip文件中，然后可以将其导入到其他空间中。目标空间可以在不同的Octopus服务器实例中，甚至可以在自托管和Octopus云实例之间移动。</p>
+
+
+
+<p>从<strong>项目</strong>页面上的溢出菜单可以访问<strong>导出/导入特性</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/import-project.png" class="zoom" data-title="Import"><img src="../Images/f816c41736c34004471bf74655223a66.png" class="img-fluid center" alt="Import" title="Import" data-original-src="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/import-project.png"/>T2】</a></p>
+
+<p>您需要将以下项目导入您的Octopus实例:</p>
+
+
+
+<p>在Octopus Web Portal中，导航到<strong>项目</strong>，然后<strong>导入项目</strong>，点击<strong>选择zip文件</strong>，上传项目ZIP。点击<strong>导入</strong>完成。</p>
+
+<p>这个项目的密码是<code>html</code>。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/summary-zip.png" class="zoom" data-title="Summary"><img src="../Images/ef0bc0335ab00d7ef2b4d6622d365301.png" class="img-fluid center" alt="Summary" title="Summary" data-original-src="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/summary-zip.png"/>T2】</a></p>
+
+<p>导入项目意味着您不必手动配置项目的环境或部署步骤。这只是一个小项目，但有些项目很大，包括复杂的部署步骤，因此导入项目比重新创建项目容易得多。使用导出/导入功能可以确保您的环境和部署步骤跨空间保持不变。</p>
+
+
+<p>恭喜您，您成功导入了该项目！</p>
+
+<p>在部署web应用程序之前，还有一些其他项目需要配置。导出和导入项目不会捕获项目的部署目标或所需的包。部署目标需要新实例上的新连接。由于包的文件可能很大，因此它们被排除在导出的项目之外。</p>
+
+<h2 id="configuring-an-azure-account">配置Azure帐户</h2>
+
+<p>您需要配置一个Azure帐户和web应用程序作为Octopus部署的目标。其他目标也是可能的，比如AWS，或者Linux和Windows服务器。</p>
+
+<p>通过导航到<a href="https://portal.azure.com/" rel="nofollow"> Azure门户</a>在Azure中创建一个帐户。</p>
+
+<h3 id="create-service-principal-account-in-azure">使用Azure门户创建Azure服务主体</h3>
+
+<iframe src="https://www.youtube.com/embed/QDwDi17Dkfs" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<ol>
+<li>在Azure门户中，打开左上方的菜单，导航到<strong> Azure Active Directory </strong>，然后是<strong>属性</strong>。</li>
+<li>从<strong>租户ID </strong>字段中复制值。这是你的<strong>租户ID </strong>。</li>
+<li>接下来，您需要您的<strong>应用程序ID </strong>:          <ul>
+<li>如果你创建了一个AAD注册的应用，导航到<strong> Azure Active Directory </strong>，然后选择<strong>应用注册</strong>，点击<strong>查看所有应用</strong>，选择应用并复制<strong>应用ID </strong>。请注意，Azure UI默认为<strong>自有应用</strong>标签。点击<strong>所有应用</strong>选项卡查看所有应用注册。</li>
+<li>如果您还没有创建注册的应用程序，请导航到<strong> Azure Active Directory </strong>，然后选择<strong>应用程序注册</strong>，点击<strong>新注册</strong>并为您的应用程序添加详细信息，然后点击<strong>保存</strong>。记下<strong>应用ID </strong>。</li>
+</ul>
+</li>
+<li>通过导航到<strong>证书&amp;机密</strong>，然后导航到<strong>新客户端机密</strong>，生成一次性密码。添加新的<strong>秘密</strong>，输入描述，点击<strong>保存</strong>。记下显示的应用程序密码，以便在Octopus中使用。如果您不想接受默认的密码一年到期，您可以更改到期日期。</li>
+</ol>
+
+<p>您现在拥有以下内容:</p>
+
+<ul>
+<li><strong>租户ID </strong></li>
+<li><strong>应用程序ID </strong></li>
+<li><strong>应用程序密码/秘密</strong></li>
+</ul>
+
+<p>接下来，您需要配置您的资源权限。</p>
+
+<h3 id="resource-permissions">资源权限</h3>
+
+<p>资源权限确保您注册的应用程序有权使用您的Azure资源。</p>
+
+<ol>
+<li>在Azure门户中，导航到<strong>资源组</strong>，并选择您希望注册的应用程序访问的资源组。如果资源组不存在，通过转到<strong>主页</strong>创建一个，然后转到<strong>资源组</strong>，然后选择<strong>创建</strong>。创建之后，记下资源组的Azure订阅ID。</li>
+<li>点击<strong>访问控制(IAM) </strong>选项。在<strong>角色分配</strong>下，如果您的应用未列出，请点击<strong>添加角色分配</strong>。选择适当的角色(<strong>贡献者</strong>是一个常见选项)并搜索您的新应用程序名称。从搜索结果中选择它，然后点击<strong>保存</strong>。</li>
+</ol>
+
+<p>下一步是建立一个Azure web应用程序并配置其属性。</p>
+
+<h3 id="web-application-setup">Web应用程序设置</h3>
+
+<ol>
+<li>在您的<strong>资源组</strong>中点击<strong>创建</strong>，然后点击<strong> Web App </strong></li>
+<li>在<strong>运行时栈</strong>和<strong>操作系统</strong>下创建一个Windows节点应用</li>
+<li>记下你的Azure应用名称，因为这将是你的web应用的地址:[your-site].azurewebsites.net</li>
+<li>设置web应用程序后，通过导航到<strong>配置</strong>，然后<strong>路径映射</strong>，然后<strong>虚拟应用程序和目录</strong>，将web应用程序的路径默认路由到主路径</li>
+<li>将物理路径设置为<code>site\wwwroot\guide</code>并将虚拟路径设置为<code>/</code></li>
+</ol>
+
+<h3 id="add-service-principal-account">在八达通上加入服务主账户</h3>
+
+<p>使用以下值，您可以将您的帐户添加到Octopus:</p>
+
+<ul>
+<li>应用程序ID</li>
+<li>租户ID</li>
+<li>应用程序密码/密钥</li>
+</ul>
+
+<ol>
+<li>导航至<strong>基础设施</strong>，然后选择<strong>账户</strong></li>
+<li>选择<strong>添加账号</strong>，然后点击<strong> Azure订阅</strong></li>
+<li>在Octopus中给帐户起一个你想要的名字</li>
+<li>给账户一个描述</li>
+<li>添加您的Azure订阅ID -这可以在Azure门户网站的<strong>订阅</strong>下找到</li>
+<li>添加<strong>应用ID </strong>、<strong>租户ID </strong>和<strong>应用密码/关键字</strong></li>
+</ol>
+
+<p>点击<strong>保存并测试</strong>以确认帐户可以与Azure交互。Octopus将尝试使用帐户凭据来访问Azure资源管理(ARM) API，并列出该订阅中的资源组。</p>
+
+<p>您可能需要将您针对的Azure数据中心的IP地址列入安全列表。请参见<a href="https://octopus.com/docs/deployments/azure/deploying-to-azure-via-a-firewall">通过防火墙部署到Azure</a>了解更多详细信息。</p>
+
+<p>新创建的服务主体可能需要几分钟才能通过凭据测试。如果您已经仔细检查了您的凭据值，请等待15分钟，然后重试。</p>
+
+
+<p>现在你已经在Azure和Octopus中设置了Azure帐户，你上传了Azure的包。</p>
+
+<h2 id="uploading-an-existing-package">上传现有包</h2>
+
+<p>您正在部署的web应用程序需要一些代码来部署。Octopus通过包将这些代码提供给部署目标。</p>
+
+<p>包是将部署到目标的代码。在这种情况下，它将是您的web应用程序可以显示的可部署教程。</p>
+
+<p>这个包系统可以方便地交换或更新包，以便以后重新部署。以下是您将用于部署Octopus Deploy的包:</p>
+
+
+
+<p>您可以手动将软件包上传到Octopus web门户中的Octopus内置存储库。</p>
+
+<ol>
+<li>导航至<strong>库</strong>选项卡</li>
+<li>点击<strong>上传包</strong></li>
+<li>选择想要上传的包，点击<strong>上传</strong></li>
+</ol>
+
+<p>在下一步中，您将设置应用程序将被部署到的部署目标。</p>
+
+<h2 id="adding-deployment-targets">添加部署目标</h2>
+
+<ol>
+<li>转到<strong>基础设施</strong>，然后选择<strong>部署目标</strong></li>
+<li>选择一个Azure Web应用</li>
+<li>输入一个<strong>显示名称</strong></li>
+<li>填写<strong>环境</strong>和<strong>目标角色</strong></li>
+<li>选择之前创建的Azure帐户和web应用</li>
+<li>点击<strong>保存</strong></li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/azure-web-app-settings.png" class="zoom" data-title="Azure Web App Settings"><img src="../Images/8519890e35019637ddcb1d02afd1bbb3.png" class="img-fluid center" alt="Azure Web App Settings" title="Azure Web App Settings" data-original-src="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/azure-web-app-settings.png"/>T2】</a></p>
+
+<h2 id="deploying-to-azure-web-application">部署到Azure web应用程序</h2>
+
+<p>您可以在导入项目、设置Azure帐户、设置部署目标并上传包之后部署应用程序。</p>
+
+<ul>
+<li>转到<strong>项目</strong>，然后选择<strong> HTML </strong>，然后点击<strong> CREATE RELEASE </strong>并逐步将web应用从Azure生产环境部署到Azure。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/deploy-success.png" class="zoom" data-title="Deploy Success"><img src="../Images/ce481a17da1e98761d73f8a3ba2af0b7.png" class="img-fluid center" alt="Deploy Success" title="Deploy Success" data-original-src="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/deploy-success.png"/>T2】</a></p>
+
+<p>请转到[your-site].azurewebsites.net检查您的应用程序，在那里您将看到以下页面:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/importing-deploying-your-first-octopus-project/deployed-application.png" class="zoom" data-title="Deployed Application"> T31 </a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>干得好！您已经获得了一个现有的项目，并通过Octopus Deploy将一个包部署到一个Azure web应用程序。您可以与您的团队分享，教他们如何导入和部署他们的第一个Octopus项目。</p>
+
+<p>如果您需要部署方面的帮助或有任何问题，请联系我们位于<a href="mailto:customersuccess@octopus.com" rel="nofollow">customersuccess@octopus.com</a>的客户成功团队。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

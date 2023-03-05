@@ -1,0 +1,109 @@
+<html>
+<head>
+<title>Octopus May Release 2018.5 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通可能发布2018.5 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2018.5#2022-07-14">https://octopus.com/blog/octopus-release-2018.5#2022-07-14</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/blogimage-shipping-2018-5.png" class="zoom" data-title=""><img src="../Images/4441f4035c0d9c99a9ffa2ba0f3aa147.png" class="img-fluid center" alt="Octopus Deploy 2018.5 release banner" data-original-src="https://i.octopus.com/blog/2018-05/blogimage-shipping-2018-5.png"/>T2】</a></p>
+
+<p>这个月，我们发布了下一代Azure support。Octopus <code>2018.5</code>捆绑了最新的Azure SDK和Powershell模块，为Azure Web应用程序、云服务和服务结构集群引入了新的部署目标，并添加了使用PowerShell Cmdlets在Octopus中动态管理它们的能力。</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="release-tour">发布之旅</h2>
+
+<iframe src="https://www.youtube.com/embed/raepkFD7kx8" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="paas-targets-for-azure">Azure的PaaS目标</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/new-targets.png" class="zoom" data-title=""><img src="../Images/88b672cfb17a342a7c6b769316dbacd0.png" class="img-fluid center" alt="New Deployment Targets" data-original-src="https://i.octopus.com/blog/2018-05/new-targets.png"/>T2】</a></p>
+
+<p>该版本重新引入了被建模为部署目标的<strong> Azure Web应用</strong>和<strong> Azure云服务</strong>，并将<strong> Azure服务架构集群</strong>引入部署目标家族。这提高了您的基础架构和环境的可见性，使您能够轻松部署到多个目标/区域，并开启新的侧重运营的任务，如服务运行状况检查等。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/azure-targets.png" class="zoom" data-title=""><img src="../Images/ececc02b5195b1e3e1eba65858fdffdf.png" class="img-fluid center" alt="Production Deployment Targets Example" data-original-src="https://i.octopus.com/blog/2018-05/azure-targets.png"/>T2】</a></p>
+
+<p>有关PaaS目标的更多信息，请阅读介绍这些想法的<a href="https://octopus.com/blog/paas-targets">博客文章</a>。</p>
+
+<h2 id="managing-octopus-infrastructure">管理八达通基础设施</h2>
+
+<p>我们最初实现Azure Web App目标的一个问题是没有简单的方法来根据需要动态创建它们。你可以很容易地创建Azure Web应用程序，但是Octopus需要手动步骤来用Octopus表示它们。</p>
+
+<p>现在，使用我们新的内置PowerShell Cmdlets，您可以像创建Azure资源一样轻松地创建这些新的PaaS目标。</p>
+
+<p>这些cmdlets的初始版本将允许您创建<strong> Azure帐户</strong>和所有新的Azure部署目标。例如:</p>
+
+<pre><code class="language-powershell"># Octopus variables
+$serviceName = "MyNewServiceName"
+$accountName = "Developer Playground"
+$roleNames = "web"
+
+# Create new target in Octopus
+New-OctopusAzureWebAppTarget -Name $serviceName -AzureWebApp $serviceName -AzureResourceGroupName $serviceName -OctopusAccountIdOrName $accountName -OctopusRoles $roleNames
+</code></pre>
+
+<p>有关更多信息，请参见我们的PaaS targets <a href="https://octopus.com/blog/paas-targets">博客文章</a>和我们的动态基础设施<a href="https://octopus.com/docs/infrastructure/dynamic-infrastructure">文档</a>。</p>
+
+<h2 id="azure-accounts-as-variables">Azure账户作为变量</h2>
+
+<p>现在，您可以将Azure帐户设置为变量，包括项目变量、租户变量和库变量集。</p>
+
+<p>这将使您能够跨每个环境或租户确定不同客户的范围。你仍然可以在Azure PowerShell步骤上直接选择一个帐户，就像你一直做的那样，但现在你也可以将它绑定到Azure Account变量。</p>
+
+<p>Azure帐户的属性(客户端Id、订阅Id、租户Id等。)也可以在您的脚本中使用。只需打开<code>OctopusPrintVariables</code>选项到<a href="https://octopus.com/docs/support/debug-problems-with-octopus-variables#DebugproblemswithOctopusvariables-Writethevariablestothedeploymentlog">查看所有可用的变量</a>。</p>
+
+<h2 id="improved-support-for-pem-certificate-chains">改进了对PEM证书链的支持</h2>
+
+<p>以前，证书链(即一个主要证书加上一个或多个中间或权威证书)只能以PFX格式上传，而PFX是唯一包含证书链的出口格式。</p>
+
+<p>截至2018.5版:</p>
+
+<ul>
+<li>可以上传包含证书链的PEM文件。</li>
+<li>增加了一个新的扩展的<a href="https://octopus.com/docs/deployment-process/variables/certificate-variables#expanded-properties">证书变量</a>:<code>MyCertificate.ChainPem</code>(假设证书变量名为<code>MyCertificate</code>)，允许访问PEM格式的链证书</li>
+<li>当<a href="https://octopus.com/docs/deployments/certificates/export-certificate">导出包含链的证书</a>时，可以选择包含各种证书组件(见下图)</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/download-pem-chain.png" class="zoom" data-title=""><img src="../Images/ac12f5a18b1159e47dd5d1a035467bbd.png" class="img-fluid center" alt="Export certificate to PEM" data-original-src="https://i.octopus.com/blog/2018-05/download-pem-chain.png"/>T2】</a></p>
+
+<h2 id="licensing-changes">许可变更</h2>
+
+<p>Octopus 2018.5将有一些重要的许可更改:</p>
+
+<ul>
+<li>您现有的Azure <strong>步骤</strong>将不会计入您的许可限制，就像以前一样。这里什么都没变。</li>
+<li>就像Octopus中的其他目标一样，Azure目标将开始增加你的许可限制。          <ul>
+<li>任何现有的“旧”Azure目标都将升级到新的格式，并将开始计入您的许可限制。</li>
+</ul>
+</li>
+<li><strong>离线掉落</strong>目标将会像Octopus中的其他目标一样开始影响你的许可限制。</li>
+</ul>
+
+<p>如果您大量使用“旧的”Azure目标或离线Drop目标，请花时间确保您的Octopus服务器在升级后仍然符合您的许可证。八达通将在升级过程中为您检查这一点。如果你遇到麻烦，请联系我们的<a href="https://octopus.com/support" class="alert-link">支持团队</a>寻求帮助！</p>
+
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>如前所述，我们已经升级了Azure SDK库和Azure PowerShell模块，以支持最新的Azure功能。最值得注意的是缺少对嵌套ARM模板的支持，现在可以开箱即用了。</p>
+
+<p>这些升级也迫使Octopus服务器的最低支持环境转向微软。NET 4.5.2 和<strong> PowerShell 5.0 </strong>，所以你需要相应地计划你的升级。<strong> PowerShell 5.0 </strong>的要求只有在你运行Azure PowerShell脚本的情况下才有。</p>
+
+<p>Azure <a href="https://blogs.msdn.microsoft.com/appserviceteam/2018/03/12/deprecating-service-management-apis-support-for-azure-app-services/" rel="nofollow">最近宣布</a>从2018年6月30日起，他们将停止对服务管理API的支持(注:管理证书使用服务管理API)。这会影响Azure应用服务的部署。</p>
+
+<p><strong>请转而使用八达通Azure账户的服务原则</strong>:<a href="https://g.octopushq.com/AzureServicePrincipalAccount" rel="nofollow">https://g.octopushq.com/AzureServicePrincipalAccount</a></p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>像往常一样，升级Octopus Deploy的步骤<a href="https://octopus.com/docs/administration/upgrading">适用。更多信息请参见</a><a href="https://octopus.com/downloads/compare?to=2018.5.0">发行说明</a>。</p>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。欢迎给我们留下评论，让我们知道你的想法！前进并展开！</p>
+
+                    
+                    
+</body>
+</html>

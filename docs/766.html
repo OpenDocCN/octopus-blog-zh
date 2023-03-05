@@ -1,0 +1,386 @@
+<html>
+<head>
+<title>Upgrading from Octopus 3.x is easier than you think - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从Octopus 3.x升级比你想象的要容易——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/upgrading-octopus-3-easier-than-you-think#2021-11-26">https://octopus.com/blog/upgrading-octopus-3-easier-than-you-think#2021-11-26</a></blockquote>
+                        <p>“如果它没坏，就不要修理它”这句话在发展的世界里并不总是有效的。Octopus也不例外，这就是为什么我们的目标是通过我们自己的主要版本来改进您发布版本的方式。如果您没有更新Octopus，您可能会错过一些使部署更容易、更高效并帮助您的团队进行协调的功能。</p>
+
+<p>也就是说，我们理解为什么有些人更喜欢老版本的Octopus。您可能觉得您当前的版本可以满足您的需求，或者公司政策可能会要求您保留几个版本以避免风险。也许你落后于更新，担心时间和资源来获得最新的。</p>
+
+<p>特别是对于最后一类人，让我们看看我们是否能减轻你的恐惧。有了规划和适合您业务的正确方法，您可以对从我们最古老的“现代”版本升级充满信心。</p>
+
+<p>在这篇文章中，我浏览了:</p>
+
+<ul>
+<li>您因不升级而错过的功能</li>
+<li>升级前要备份什么，以及其他注意事项</li>
+<li>规划升级时避免风险的方法</li>
+<li>从3.x就地升级到我们最新版本的示例</li>
+<li>如果出现问题，如何回滚</li>
+<li>如果您有任何疑问或问题，我们如何帮助您</li>
+</ul>
+
+<h2 id="features-weve-introduced-since-octopus-3.1">自Octopus 3.1以来我们引入的功能</h2>
+
+<p>如果还在3.x版本上，你会错过Octopus的发展以及现代部署标准，还有一堆新特性。</p>
+
+<p>以下是我们在Octopus 3.1和2021.2之间添加的内容:</p>
+
+<ul>
+<li>改进的用户界面——新的流程编辑器、黑暗模式和全局搜索</li>
+<li>对配置文件的改进，包括对JSON、XML、YAML和属性文件的内置支持</li>
+<li>空间(Spaces)-不同团队只能看到和使用他们需要的东西</li>
+<li><a href="https://octopus.com/docs/runbooks">操作手册</a> -允许您自动执行日常维护和紧急操作任务</li>
+<li><a href="https://octopus.com/docs/tenants">租户</a> -为软件即服务(SaaS)或多区域部署创建客户特定的渠道</li>
+<li><a href="https://octopus.com/docs/projects/export-import">项目导出和导入</a> -导出一个或多个项目以导入到其他空间或实例中</li>
+<li><a href="https://octopus.com/docs/projects/version-control">代码为</a>的配置Octopus项目的版本控制(这是早期访问预览)</li>
+</ul>
+
+<p>我们还增加了新的平台集成，包括支持:</p>
+
+<ul>
+<li>主要云提供商——微软Azure、亚马逊网络服务(AWS)和谷歌云平台(GCP)</li>
+<li>Kubernetes和AWS弹性集装箱服务(ECS)</li>
+<li>Linux上的自托管Octopus</li>
+<li>Linux、ARM和ARM64的触角</li>
+<li>Chocolatey、Homebrew、APT和YUM的Octopus命令行(CLI)</li>
+<li>插件用于:</li>
+</ul>
+
+<h2 id="what-to-back-up-and-how">要备份什么以及如何备份</h2>
+
+<h3 id="master-key">万能钥匙</h3>
+
+<p>主密钥是一个独特的安全字符串，用于保护Octopus Deploy数据库中的敏感数据。没有它，您无法在干净的操作系统上恢复备份。</p>
+
+<p>除了数据库，这是升级前最重要的备份。我们无法找回丢失的万能钥匙。</p>
+
+
+<p>要备份主密钥:</p>
+
+<ol>
+<li>在你的服务器上打开Octopus Manager</li>
+<li>点击<strong>存储</strong>标题下的<strong>查看主密钥</strong></li>
+<li>在这里，您可以单击:          <ul>
+<li><strong>保存</strong>将主密钥保存在文本文件中</li>
+<li><strong>复制到剪贴板</strong>粘贴到某个安全的地方，比如密码管理器</li>
+</ul>
+</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/masterkey1.png" class="zoom" data-title=""><img src="../Images/70bc58f73aa64334ffd9d051443a15f7.png" class="img-fluid center" alt="The master key screen in Octopus Manager" data-original-src="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/masterkey1.png"/>T2】</a></p>
+
+<h3 id="license-key">许可密钥</h3>
+
+<p>您还需要许可证密钥来恢复实例。</p>
+
+<p>要备份许可证密钥，请执行以下操作:</p>
+
+<ol>
+<li>打开Octopus门户网站，点击顶部菜单中的<strong>配置</strong>。</li>
+<li>从左侧菜单中选择<strong>许可证</strong>。从XML框中复制所有文本并粘贴到安全的地方。</li>
+</ol>
+
+<p>如果您找不到或不知道您的许可证密钥，<a href="mailto:customersuccess@octopus.com" rel="nofollow">请发送电子邮件给我们的客户成功团队</a>，我们可以帮助您找回它。</p>
+
+<h3 id="database">数据库ˌ资料库</h3>
+
+<p>在升级Octopus之前，您应该备份您的数据库。大多数数据库管理工具都有向导来帮助您。</p>
+
+<p>例如，在微软的SQL Server Management Studio (SSMS)中备份数据库:</p>
+
+<ol>
+<li>在数据库服务器上展开<strong>数据库</strong>文件夹</li>
+<li>右击数据库，选择<strong>任务</strong>，点击<strong>备份… </strong></li>
+<li>使用<strong>目的地</strong>部分设置您想要存储备份的位置，并点击<strong>确定</strong></li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/database1.png" class="zoom" data-title=""><img src="../Images/51773cde0dc4b4a586d0f716fcfbf3a9.png" class="img-fluid center" alt="The backup and restore options in SQL Server Management Studio" data-original-src="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/database1.png"/>T2】</a></p>
+
+<p>对于那些喜欢使用T-SQL命令的人，您可以使用以下命令将备份保存到NAS或文件共享:</p>
+
+<pre><code>BACKUP DATABASE [OctopusDeploy]
+          TO DISK = '\\SomeServer\SomeDrive\OctopusDeploy.bak'
+             WITH FORMAT;
+</code></pre>
+
+<p>如果不确定，请咨询您的数据库管理员。</p>
+
+<h3 id="data-folders">数据文件夹</h3>
+
+<p>复制并存储下列文件夹及其所有数据:</p>
+
+<ul>
+<li>c:\章鱼\神器</li>
+<li>c:\八达通\套餐</li>
+<li>c:\章鱼\任务日志</li>
+</ul>
+
+<h3 id="download-the-same-version-of-octopus-you-already-use">下载你已经在使用的相同版本的Octopus</h3>
+
+<p>你需要现有的八达通版本:</p>
+
+
+
+<p>要检查您的版本，请打开Octopus门户网站，然后单击Octopus右上角的问号。版本号位于下拉列表的顶部。</p>
+
+<p>然后前往我们的<a href="https://octopus.com/downloads/previous">下载档案库</a>重新下载该版本。</p>
+
+<p>【T2 <img src="../Images/43d174240f3835b29f7de20b187215ba.png" class="img-fluid center" alt="Where to check the Octopus version in old and new versions" data-original-src="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/versioncheck1.png"/></p>
+
+<h2 id="other-things-to-think-about-before-upgrading">升级前需要考虑的其他事项</h2>
+
+<h3 id="octopus-licensing">八达通牌照</h3>
+
+<p>您可以在3个不同的实例上使用您的Octopus许可证(由它连接的数据库决定)。如果您认为您将超出您的Octopus实例限制，<a href="mailto:customersuccess@octopus.com" rel="nofollow">发送电子邮件给我们的客户成功团队</a>询问您的选择。</p>
+
+<h3 id="dont-do-too-much-at-once">不要一次做太多</h3>
+
+<p>虽然利用Octopus升级的停机时间来完成其他任务(比如更改Octopus服务器的操作系统或转移到高可用性实例)很有诱惑力，但我们建议只关注升级。</p>
+
+<p>这样做将:</p>
+
+<ul>
+<li>确保升级尽可能平稳运行</li>
+<li>防止其他任务使升级复杂化</li>
+<li>减少对八达通用户的影响</li>
+<li>如果您已经使用了我们的最新版本，那么让其他任务变得简单一点</li>
+</ul>
+
+<h2 id="strategies-to-avoid-risk">规避风险的策略</h2>
+
+<p>升级Octopus时，有两种推荐的方法可以避免风险。两者都很简单，但是你应该在开始之前考虑哪一个最适合你的生意。</p>
+
+<p>我们来分解一下选项。</p>
+
+<h3 id="method-1-clone-your-instance-and-upgrade">方法1:克隆您的实例并升级</h3>
+
+<p>克隆实例并升级克隆是我们推荐的方法，因为它允许您:</p>
+
+<ul>
+<li>测试时保持主实例可用</li>
+<li>在承诺升级之前，对升级有充分的信心</li>
+<li>不用担心出错时会回滚</li>
+</ul>
+
+<p>该方法的主要步骤是:</p>
+
+<ol>
+<li>将实例置于维护模式</li>
+<li>备份数据库</li>
+<li>使实例退出维护</li>
+<li>将备份作为新数据库恢复到所需的SQL Server上</li>
+<li>下载与主实例相同版本的Octopus，并将其安装在新的服务器上</li>
+<li>配置新实例以指向数据库的新副本</li>
+<li>从主实例的备份文件夹中复制所有文件</li>
+<li>可选:禁用所有部署目标</li>
+<li>升级克隆的实例</li>
+<li>测试克隆的实例，然后检查所有API脚本、CI集成和部署工作</li>
+<li>决定是迁移到新实例，还是执行新备份并升级主实例</li>
+</ol>
+
+<p>阅读我们的升级文档，更详细地了解这个方法的步骤。</p>
+
+<h4 id="considerations-for-this-method">此方法的注意事项</h4>
+
+<p>虽然这是平稳过渡的最佳选择，但这种方法非常耗时，而且在迁移过程中需要停机。它的成本也很高，因为您必须克隆整个环境。这意味着硬件、许可或云服务的成本翻倍。</p>
+
+<p>当团队在测试期间继续使用主实例时，您也有“漂移”的风险。如果你认为你需要一周以上的时间来理清事情，你可以:</p>
+
+<ul>
+<li>请选择方法2</li>
+<li>找出克隆实例上的任何问题，然后在合适的时候在新实例上重启</li>
+</ul>
+
+<h3 id="method-2-create-a-new-instance-to-test-the-process-then-update-with-confidence">方法2:创建一个新的实例来测试流程，然后放心地更新</h3>
+
+<p>一些客户可能没有时间或资源来完成第一种方法。相反，您可以用几个项目创建一个小的测试实例，以便在主实例上升级之前获得信心。</p>
+
+<p>这种方法:</p>
+
+<ul>
+<li>节省时间和资源</li>
+<li>停机时间更短</li>
+<li>消除漂移的风险</li>
+<li>如果出现问题，很容易回滚</li>
+</ul>
+
+<p>该方法的主要步骤是:</p>
+
+<ol>
+<li>下载与主实例相同版本的Octopus，并将其安装在新的虚拟机上</li>
+<li>从主实例中导出一些项目，并将它们导入到测试实例中</li>
+<li>下载最新版本的八达通</li>
+<li>备份测试实例数据库</li>
+<li>将测试实例升级到最新的Octopus版本</li>
+<li>测试并验证测试实例</li>
+<li>将主实例置于维护模式</li>
+<li>备份主实例上的数据库</li>
+<li>备份主实例上的所有文件夹</li>
+<li>对主实例进行就地升级</li>
+<li>测试升级后的主实例</li>
+<li>将主实例退出维护模式</li>
+</ol>
+
+<p>阅读我们的升级文档，更详细地了解该方法的步骤。</p>
+
+<h4 id="considerations-for-this-method-1">此方法的注意事项</h4>
+
+<p>对于旧版本的Octopus，您只能使用Octopus Manager导出所有数据，尽管您可以通过命令行获得部分导出。对您想要导出进行测试的每个项目运行以下命令:</p>
+
+<pre><code>Octopus.Migrator.exe partial-export --instance=OctopusServer --project=AcmeWebStore --password=5uper5ecret --directory=C:\Temp\AcmeWebStore --ignore-history --ignore-deployments --ignore-machines
+</code></pre>
+
+
+
+<h3 id="upgrading-a-high-availability-octopus-setup">升级高可用性Octopus设置</h3>
+
+<p>升级Octopus的高可用性实例与普通升级没有什么不同，但是由于额外的节点，需要注意一些事情。</p>
+
+<p>在升级其他节点之前，您必须只升级一个节点。Octopus安装程序会更新数据库，因此一次升级所有节点会导致数据库问题。</p>
+
+<p>高可用性升级的主要步骤是:</p>
+
+<ol>
+<li>下载最新版本的八达通</li>
+<li>启用维护模式</li>
+<li>停止所有节点</li>
+<li>备份数据库和Octopus文件夹</li>
+<li>升级1个节点</li>
+<li>升级剩余节点</li>
+<li>启动所有停止的节点</li>
+<li>测试升级的实例</li>
+<li>禁用维护模式</li>
+</ol>
+
+<p>由于高可用性，Octopus数据文件夹也可能存储在网络驱动器上，而不是节点上。升级前，您需要知道此位置才能备份文件。请记住，您应该备份的文件夹是:</p>
+
+<ul>
+<li>史前古器物</li>
+<li>包装</li>
+<li>任务日志</li>
+</ul>
+
+<h2 id="an-example-in-place-upgrade-from-3.1">从3.1就地升级的示例</h2>
+
+<p>无论是在克隆、测试还是生产实例上，Octopus的就地升级都是一样的。</p>
+
+<p>如果从a 3升级。x版本，您应该升级到3.17，然后再跳转到我们的最新版本。这提供了最可靠的升级途径，因为3.1版和3.17版之间有很大的差异。</p>
+
+<p>谢天谢地，不管你运行的是哪个版本的Octopus，升级过程都不会花很长时间。</p>
+
+<h3 id="before-you-start">开始之前</h3>
+
+<p>对于此升级示例，您应该:</p>
+
+
+
+<h3 id="step-1-enable-maintenance-mode">步骤1:启用维护模式</h3>
+
+<p>一旦所有东西都备份好了，您应该将实例置于维护模式。这意味着只有Octopus管理员可以部署。</p>
+
+<p>要设置维护模式，点击顶部菜单中的<strong>配置</strong>，从左侧选择<strong>维护</strong>。在上将<strong>维护模式</strong>切换到<strong>，点击<strong>保存</strong>。</strong></p>
+
+<h3 id="step-2-install-octopus-3.17">第二步:安装八达通3.17</h3>
+
+<ol>
+<li>关闭八达通管理器和八达通门户网站。</li>
+<li>运行Octopus 3.17的安装程序，完成后点击<strong>完成</strong>。</li>
+<li>八达通将自动更新您的配置和SQL数据库，然后打开八达通管理器。</li>
+<li>打开Octopus门户网站，点击右上角的问号，查看版本是否为3.17。版本在菜单的顶部。</li>
+<li>运行一个测试部署来检查一切是否正常。</li>
+</ol>
+
+<h3 id="step-3-install-the-latest-version-of-octopus">第三步:安装最新版本的八达通</h3>
+
+<ol>
+<li>关闭八达通管理器和八达通门户网站。</li>
+<li>运行Octopus最新版本的安装程序，完成后点击<strong>完成</strong>。</li>
+<li>八达通将自动更新您的配置和SQL数据库，然后打开八达通。</li>
+<li>打开Octopus门户网站，点击右上角的用户名，检查版本是否是最新的。版本在菜单的顶部。</li>
+<li>运行一个测试部署来检查一切是否正常。</li>
+</ol>
+
+<h3 id="step-4-take-octopus-out-of-maintenance-mode">第四步:让Octopus退出维护模式</h3>
+
+<p>要解除维护模式，点击顶部菜单中的<strong>配置</strong>并从左侧选择<strong>维护</strong>。点击<strong>禁用维护模式</strong>。</p>
+
+<h2 id="rolling-back-if-something-goes-wrong">出错时回滚</h2>
+
+<p>虽然我们对Octopus从现代版本的升级过程充满信心，但我们知道问题仍然会发生，特别是复杂的设置。</p>
+
+<p>如果发生意外，您可以轻松回滚到旧版本的Octopus。</p>
+
+<h3 id="step-1-uninstall-the-new-octopus-version">第一步:卸载新的八达通版本</h3>
+
+<ol>
+<li>关闭八达通门户网站和八达通管理器</li>
+<li>在Windows开始菜单中找到Octopus Manager或使用任务栏进行搜索，右键单击并选择<strong>卸载</strong></li>
+<li>从应用程序列表中选择Octopus并点击<strong>卸载</strong></li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/uninstall1.png" class="zoom" data-title=""><img src="../Images/3412b42a37f395833239f40bc3fd5ab1.png" class="img-fluid center" alt="The uninstall option in Windows" programs="" and="" features="" screen="" data-original-src="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/uninstall1.png"/></a>T2】</p>
+
+<h3 id="step-2-restore-the-database">步骤2:恢复数据库</h3>
+
+<p>使用您的数据库管理工具将数据库恢复到原始状态(例如，使用微软的SSMS):</p>
+
+<ol>
+<li>在数据库服务器上展开<strong>数据库</strong>文件夹。</li>
+<li>右击数据库，选择<strong>任务</strong>，<strong>恢复</strong>，选择<strong>数据库</strong>。</li>
+<li>使用向导选择正确的备份或文件。在我的情况下，它默认为我的最后一次备份。准备好后点击<strong>确定</strong>。</li>
+<li>在弹出的<strong>数据库恢复成功</strong>上点击<strong>确定</strong>完成。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/restore1.png" class="zoom" data-title=""><img src="../Images/d8bb4dd2034853fa0a2d5dfc806d28ae.png" class="img-fluid center" alt="The Restore Database screen in SQL Server Management Studio" data-original-src="https://i.octopus.com/blog/2021-11/upgrading-octopus-3-easier-than-you-think/restore1.png"/>T2】</a></p>
+
+<h3 id="step-3-restore-octopus-folders">步骤3:恢复Octopus文件夹</h3>
+
+<p>如果在原始服务器上回滚，我们建议您在恢复原始文件夹之前将升级的Octopus文件夹复制到新位置。一旦知道回滚成功，就可以删除它们。</p>
+
+<p>要恢复原始版本:</p>
+
+<ol>
+<li>删除以下文件夹的内容:          <ul>
+<li>c:\章鱼\神器</li>
+<li>c:\八达通\套餐</li>
+<li>c:\章鱼\任务日志</li>
+</ul>
+</li>
+<li>将旧版本的文件复制回相同的位置</li>
+</ol>
+
+<p>如果恢复到一个干净的服务器，你只需要复制文件夹到C:\Octopus。</p>
+
+<h3 id="step-4-reinstall-your-previous-version-of-octopus">第四步:重新安装之前版本的Octopus</h3>
+
+<p>你现在可以重新安装你的原始版本的八达通。</p>
+
+<ol>
+<li>运行你原来的章鱼版本的安装程序，完成后点击<strong>完成</strong>。如果回滚到干净的操作系统，Octopus安装向导将在安装前提示您输入许可证密钥和主密钥。</li>
+<li>Octopus Manager应该会自动打开。您可能需要手动启动Octopus服务器-只需点击左侧的<strong>启动</strong>。</li>
+<li>打开八达通门户网站。重新安装后第一次打开Web门户时，可能会出现与缓存相关的错误。如果发生这种情况，刷新标签，八达通应该加载罚款。</li>
+<li>运行部署以检查一切是否仍然正常。</li>
+</ol>
+
+<h2 id="whats-next">下一步是什么？</h2>
+
+<p>升级完Octopus实例后，可以选择为将来的升级节省一些工作。</p>
+
+<p>首先是自动升级八达通卡。这使得Octopus能够为自己部署新版本，执行所有必要的步骤并减少停机时间。</p>
+
+<p>如果Octopus服务器的本地实例不是业务需求，您可以<a href="https://octopus.com/docs/octopus-cloud/migrations">迁移到Octopus Cloud </a>。使用Octopus Cloud意味着您永远不必担心升级，并且您可以在我们的所有新功能可用时立即访问它们。</p>
+
+<h2 id="we-can-help">我们可以帮忙</h2>
+
+<p>如果您有任何问题或需要帮助规划您的最佳升级方法，我们随时恭候。我们的客户成功团队可以针对规划或升级后的问题提供实例审查和支持——我们距离<a href="mailto:customersuccess@octopus.com" rel="nofollow">只有一封电子邮件</a>的距离。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

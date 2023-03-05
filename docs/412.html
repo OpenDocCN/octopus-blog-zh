@@ -1,0 +1,117 @@
+<html>
+<head>
+<title>Manually push build information to Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>手动将构建信息推送到Octopus - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/manually-push-build-information-to-octopus#2021-08-12">https://octopus.com/blog/manually-push-build-information-to-octopus#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/manually-push-build-information-to-octopus/octopus-build-information.png" class="zoom" data-title=""><img src="../Images/bb3a016007bb285fb6a17a4bc71ed03c.png" class="img-fluid center" alt="Manually push build information to Octopus" data-original-src="https://i.octopus.com/blog/2020-02/manually-push-build-information-to-octopus/octopus-build-information.png"/>T2】</a></p>
+
+<p>Octopus Deploy集成了流行的构建服务器，如Azure DevOps、Jenkins和TeamCity，可用的插件使打包工件和将这些工件推送到Octopus、创建发布和启动部署变得容易。您还可以在构建中包含发行说明和提交信息，称为<code>build information</code>。</p>
+
+<p>不幸的是，并不是每种类型的构建技术都有插件，但是因为Octopus是API优先构建的，所以我们可以使用API以编程方式提交构建信息。</p>
+
+<h2 id="github">开源代码库</h2>
+
+<p>让我们以GitHub为例，当没有构建服务器时，使用API提交构建信息。我的<a href="https://github.com/twerthi/xCertificatePermission" rel="nofollow"> <code>xCertificatePermission</code> </a>回购有一个版本为1.0.0的发行版。因为没有构建服务器参与创建这个版本，所以没有插件可以让我将构建信息从GitHub推送到Octopus Deploy。</p>
+
+<h3 id="use-the-api">使用API</h3>
+
+<p>如前所述，Octopus Deploy是API优先编写的，所以我可以使用<code>/api/build-information</code> API将构建信息推入Octopus Deploy。在系统变量文档页面上，有一个专门用于构建信息的<a href="https://octopus.com/docs/projects/variables/system-variables#release-package-build-information">部分，它显示了API调用可以包含的基本信息。此外，Swagger文档显示了返回的JSON，它为我们提供了关于有效载荷应该是什么样子的更多信息:</a></p>
+
+<pre><code>{
+  "Id": "string",
+  "PackageId": "string",
+  "Version": "string",
+  "BuildEnvironment": "string",
+  "BuildNumber": "string",
+  "BuildUrl": "string",
+  "Branch": "string",
+  "VcsType": "string",
+  "VcsRoot": "string",
+  "VcsCommitNumber": "string",
+  "VcsCommitUrl": "string",
+  "IssueTrackerName": "string",
+  "WorkItems": [
+    {
+      "Id": "string",
+      "LinkUrl": "string",
+      "Source": "string",
+      "Description": "string"
+    }
+  ],
+  "Commits": [
+    {
+      "Id": "string",
+      "LinkUrl": "string",
+      "Comment": "string"
+    }
+  ],
+  "IncompleteDataWarning": "string",
+  "Created": "2020-02-20T05:28:07.028Z",
+  "LastModifiedOn": "2020-02-20T05:28:07.028Z",
+  "LastModifiedBy": "string",
+  "Links": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  }
+}
+</code></pre>
+
+<p>不幸的是，这两个资源都没有描绘出如何为API调用设置有效负载的全貌。</p>
+
+<h3 id="example-json">JSON示例</h3>
+
+<p>示例中缺少的是封装了有效负载的一些其他属性的<code>OctopusBuildInformation</code>散列表。对于我的<code>xCertificatePermission</code>示例，下面是有效载荷的样子:</p>
+
+<pre><code class="language-PS">$jsonBody = @{
+    PackageId = "twerthi/xCertificatePermission"
+    Version = "1.0.0"
+    OctopusBuildInformation =
+        @{
+            BuildEnvironment = "Jenkins"
+            VcsCommitNumber = "2350881a389517288b31432d469c5c4199a1fba9"
+            VcsType = "Git"
+            VcsRoot = "https://github.com/twerthi/xCertificatePermission.git"
+        }
+
+
+   } | ConvertTo-Json -Depth 10
+</code></pre>
+
+<p>如您所见，BuildEnvironment、VcsCommitNumber、VcsType和VcsRoot元素实际上嵌入在OctopusBuildInformation中。使用格式良好的JSON，我们可以调用API:</p>
+
+<pre><code class="language-PS">$OctopusServerUrl = "https://YourServerUrl"
+$ApiKey = "API-XXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+$Headers = @{"X-Octopus-ApiKey"="$ApiKey"}
+
+Invoke-RestMethod -Method Post -Uri "$OctopusServerUrl/api/build-information" -Headers $Headers -Body $jsonBody
+</code></pre>
+
+<p>随着构建信息被推送到Octopus Deploy，它现在与提交散列一起出现在发布中。</p>
+
+<p>【T2 <img src="../Images/1ac810ce30da1f094150e6c4e3e8f3bd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/manually-push-build-information-to-octopus/octopus-release-build-information.png"/></p>
+
+<h2 id="troubleshooting">解决纷争</h2>
+
+<p>插件确切地知道需要传递什么才能让一切正常工作。这有时会掩盖自己尝试编写时遇到的问题。下面是客户在尝试构建构建信息时遇到的一些常见问题。</p>
+
+<h3 id="commit-links-not-showing-up">提交未显示的链接</h3>
+
+<p>如果您的提交链接不显示或不起作用，请确保您已经将VcsType设置为<code>Git</code>或<code>TFSVC</code>。如果它是未知的，Octous Deploy将不知道如何正确设置它。</p>
+
+<h3 id="work-items-not-working">工作项目不工作</h3>
+
+<p>Octopus Deploy通过使用已配置的问题跟踪器集成，动态地确定哪些工作项与构建和/或提交相关联。上面的Swagger引用显示了POST返回中的工作项数组，然而，工作项数组是POST有效负载的<strong>而不是</strong>部分。即使它是作为有效载荷的一部分提供的，Octopus也会忽略它。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我向您展示了如何使用API向Octopus Deploy提交构建信息。</p>
+
+                    
+                    
+</body>
+</html>

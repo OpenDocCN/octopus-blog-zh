@@ -1,0 +1,92 @@
+<html>
+<head>
+<title>Checking Kubernetes pod CPU and memory - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>检查Kubernetes pod CPU和内存- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/kubernetes-pod-cpu-memory#2022-10-31">https://octopus.com/blog/kubernetes-pod-cpu-memory#2022-10-31</a></blockquote>
+                        <p>在Linux中，使用<code>top</code>或<code>htop</code>命令跟踪本地进程的资源使用相对容易。但是如何跟踪分布在Kubernetes集群中的pod的资源使用情况呢？</p>
+
+<p>在本文中，我将向您展示如何在Kubernetes中查看pods的CPU和内存使用情况。</p>
+
+<h2 id="the-metrics-server">度量服务器</h2>
+
+<p><a href="https://github.com/kubernetes-sigs/metrics-server" rel="nofollow"> metrics server </a>为Kubernetes集群提供了一个轻量级和高度可伸缩的解决方案，用于收集CPU和内存资源。尽管度量服务器没有内置到Kubernetes中，但是大多数集群要么捆绑它，要么提供一个简单的解决方案来实现它。</p>
+
+<p>安装度量服务后，将显示pod资源，命令如下:</p>
+
+<pre><code>kubectl top pod
+</code></pre>
+
+<p>节点资源使用情况可通过以下命令获得:</p>
+
+<pre><code>kubectl top node
+</code></pre>
+
+<p>以下错误表明没有安装度量服务器:</p>
+
+<pre><code>error: Metrics API not available
+</code></pre>
+
+<p>在这种情况下，您可以使用这里的指令<a href="https://github.com/kubernetes-sigs/metrics-server" rel="nofollow">安装metrics server。</a></p>
+
+<h2 id="cgroup-resource-usage">c组资源使用</h2>
+
+<p>如果度量服务不可用，仍然可以通过进入交互式会话并打印cgroup接口文件的内容来确定单个pod的内存使用情况。</p>
+
+<p>使用以下命令进入交互会话，将<code>podname</code>替换为您希望检测的pod的名称:</p>
+
+<pre><code>kubectl exec -it podname -- sh
+</code></pre>
+
+<p>使用以下命令打印当前的内存使用情况:</p>
+
+<pre><code>cat /sys/fs/cgroup/memory/memory.usage_in_bytes
+</code></pre>
+
+<p>使用以下命令打印当前的cpu使用情况:</p>
+
+<pre><code>cat /sys/fs/cgroup/cpu/cpuacct.usage
+</code></pre>
+
+<p>注意<code>cpuacct.usage</code>返回的值并不是立即有用的，因为<a href="https://www.kernel.org/doc/Documentation/cgroup-v1/cpuacct.txt" rel="nofollow">返回的是</a>:</p>
+
+<blockquote class="blockquote">
+<p>该组获得的CPU时间(纳秒)</p>
+</blockquote>
+
+<p>将这个值转换成更有用的度量标准，如CPU使用率，需要一些计算。这篇关于栈交换的文章提供了更多的细节，这篇T2的Python代码提供了一个有用的实例。</p>
+
+<p>您可以在Linux内核文档中找到关于这些文件<a href="https://www.kernel.org/doc/Documentation/cgroup-v1/00-INDEX" rel="nofollow">的更多信息。</a></p>
+
+<h2 id="cgroup2-resource-usage">cgroup2资源使用情况</h2>
+
+<p>如果目录<code>/sys/fs/cgroup/memory</code>或<code>/sys/fs/cgroup/cpu</code>不存在，您可能正在使用cgroups v2的系统上工作。</p>
+
+<p>在装有cgroups v2的系统上，使用以下命令打印当前的内存使用情况:</p>
+
+<pre><code>cat /sys/fs/cgroup/memory.current
+</code></pre>
+
+<p>使用以下命令打印当前的cpu使用情况:</p>
+
+<pre><code>cat /sys/fs/cgroup/cpu.stat
+</code></pre>
+
+<p>这将打印一个名为<code>usage_usec</code>的文件。与cgroup v1 <code>cpuacct.usage</code>文件返回的值一样，该值必须转换为CPU使用率百分比才能使用。</p>
+
+<p>注意，<code>usage_usec</code>值是以毫秒为单位测量的，不像<code>cpuacct.usage</code>文件返回的值是以纳秒为单位。通过将<code>usage_usec</code>值乘以1000将其转换为纳秒，此时它可以用于由<code>cpuacct.usage</code>文件返回的相同计算中。</p>
+
+<p>你可以在Linux内核文档中找到关于这些文件<a href="https://www.kernel.org/doc/Documentation/cgroup-v2.txt" rel="nofollow">的更多信息。</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>metrics server提供了一种方便的方法来检查Kubernetes pods和节点的CPU和内存资源。也可以通过检查cgroup接口文件来手动找到这些值，尽管需要一些手动计算来确定CPU使用率的百分比。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

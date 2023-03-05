@@ -1,0 +1,106 @@
+<html>
+<head>
+<title>Octopus Server 2019.6 with Long Term Support (LTS) - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通服务器2019.6与长期支持(LTS) -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2019.6-lts#2021-08-12">https://octopus.com/blog/octopus-release-2019.6-lts#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/blogimage-ltsrelease.png" class="zoom" data-title=""><img src="../Images/b3b753fdd4fb35ffc55e6dc3a932b98a.png" class="img-fluid center" alt="Cars on slow lane and fast lane" data-original-src="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/blogimage-ltsrelease.png"/>T2】</a></p>
+
+<h2>八达通部署2019.6 LTS</h2>
+
+<p>Octopus Deploy <code>2019.6 LTS</code>现在可用于运行Octopus Deploy自托管的团队，我们向我们的自托管客户推荐此版本。我们的<a href="https://octopus.com/docs/administration/upgrading/long-term-support">长期支持(LTS)计划</a>包括提供六个月支持的版本，包括关键错误修复和安全补丁。它们不包括新功能、次要增强或次要错误修复；这些都包含在下一个LTS版本中。</p>
+
+<p><a href="https://octopus.com/downloads" class="btn btn-primary btn-lg">立即下载</a></p>
+
+<p>这是我们提供六个月长期支持的第三个版本，下表显示了我们当前的LTS版本。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>释放；排放；发布</th>
+<th>长期支持</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>八达通2019.6</td>
+<td>是</td>
+</tr>
+<tr>
+<td>章鱼2019.3</td>
+<td>是</td>
+</tr>
+<tr>
+<td>章鱼2018.10</td>
+<td>期满</td>
+</tr>
+</tbody>
+</table>
+
+<p>请继续阅读，了解此版本中的内容以及任何重大变化。</p>
+
+<h2>在这篇文章中</h2>
+
+
+
+<h2 id="jira-integration">吉拉一体化</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/jira-issue-with-deployments.png" class="zoom" data-title=""><img src="../Images/076d322e4f1e397c378c3d751c3f9786.png" class="img-fluid center" alt="Atlassian Jira Integration" data-original-src="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/jira-issue-with-deployments.png"/>T2】</a></p>
+
+<p>完成意味着部署到生产中。我们针对吉拉云的新Octopus插件使团队能够直接在他们的吉拉问题中查看他们的发布和部署状态，并返回到Octopus以获得进一步的详细信息。这一功能使您的团队和公司能够在他们最熟悉的工具中获得更大的可见性和洞察力。</p>
+
+<p><a href="https://octopus.com/blog/octopus-jira-integration">了解更多信息</a></p>
+
+<h2 id="tracking-your-work-from-idea-to-production">从创意到生产全程跟踪您的工作</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/octopus-release-details.png" class="zoom" data-title=""><img src="../Images/d8d80f03e438b420f152984a21f8c761.png" class="img-fluid center" alt="Octopus Release Details with build and work items information" data-original-src="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/octopus-release-details.png"/>T2】</a></p>
+
+<p>此版本引入了构建信息和工作项跟踪。现在可以直接在Octopus中查看构建、提交和发布细节。该功能允许团队查看问题并构建有助于发布的细节，从而提供从问题到生产的端到端可追溯性。你甚至可以点击深层链接了解更多信息。我们支持GitHub问题，吉拉问题，对Azure DevOps的支持即将推出。</p>
+
+<p><a href="https://octopus.com/blog/metadata-and-work-items">了解更多</a></p>
+
+<h2 id="generate-and-share-release-notes-automatically">自动生成和共享发行说明</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/octopus-release-notes.png" class="zoom" data-title=""><img src="../Images/7c886d8ff03ba6d2458d7ccb1b198950.png" class="img-fluid center" alt="Octopus Deployment with release notes showing what" s="" new="" data-original-src="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/octopus-release-notes.png"/>T2】</a></p>
+
+<p>Octopus现在可以通过利用来自源代码提交和构建过程的元数据来确定环境中的新内容，从而生成发行说明。它可以向您显示自上次部署以来哪些问题和更改是新的。你甚至可以在Slack上与你的团队分享，或者通过电子邮件发送给你的客户。与工作项跟踪一样，我们支持GitHub问题、吉拉问题，对Azure DevOps的支持即将推出。</p>
+
+<p><a href="https://octopus.com/blog/release-notes-templates">了解更多信息</a></p>
+
+<h2 id="script-module-support-for-c-f-bash-and-python">对C#、F#、Bash和Python的脚本模块支持</h2>
+
+<p>我们在所有支持语言中增加了对脚本模块的支持。现在，您可以集中管理常见的Bash、C#、F#和Python脚本函数，甚至可以看到哪些项目正在使用这些脚本模块。</p>
+
+<p><a href="https://octopus.com/blog/script-modules">了解更多信息</a></p>
+
+<h2 id="linux-tentacle-early-access">Linux触手早期访问</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/linux-tentacle.png" class="zoom" data-title=""><img src="../Images/53ef2a77b99743a23b73f280d508af4b.png" class="img-fluid center" alt="Linux Tentacle configuration" data-original-src="https://i.octopus.com/blog/2019-07/octopus-release-2019.6-lts/linux-tentacle.png"/>T2】</a></p>
+
+<p>这个版本还包括我们即将推出的Linux触手的早期访问。<a href="https://octopus.com/blog/deployment-targets-in-octopus-3"> Octopus 3.0 </a>引入了对SSH上的Linux部署的支持；但是，在高度安全的环境中，不能在生产服务器上打开入站端口。我们的Linux触手代理解决了这个安全问题，它支持Octopus服务器和Linux部署目标之间在监听和轮询模式下的通信。轮询模式特别消除了对开放端口的需求，因为轮询触手与Octopus服务器建立了通信。</p>
+
+<p>我们喜欢反馈，所以请在<code>#linux-tentacle</code>频道中加入我们的<a href="https://octopus.com/slack">社区松弛</a>的讨论。</p>
+
+<p><a href="https://octopus.com/docs/infrastructure/deployment-targets/linux/tentacle">了解更多信息</a></p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>此版本包括一些小的突破性变化:</p>
+
+<ul>
+<li>由<code>Octopus.Server.exe</code> <code>show-configuration</code>命令返回的输出格式有一些<a href="https://github.com/OctopusDeploy/Issues/issues/5392" rel="nofollow">的细微变化</a>。这不太可能影响团队，但是如果您使用它来驱动自动化，请在升级之前测试新版本。</li>
+<li>为了支持一些拥有用户共享电子邮件地址的活动目录配置的客户，我们已经<a href="https://github.com/OctopusDeploy/Issues/issues/5549" rel="nofollow">取消了对用户电子邮件的唯一性限制</a>。</li>
+<li>机器策略的健康检查属性已经<a href="https://github.com/OctopusDeploy/Issues/issues/5544" rel="nofollow">改变</a>以适应Linux触手。<code>TentacleEndpointHealthCheckPolicy</code>更名为<code>PowerShellHealthCheckPolicy</code>,<code>SshEndpointHealthCheckPolicy</code>更名为<code>BashHealthCheckPolicy</code>。任何创建机器策略的自定义工具都应该使用新的属性名称。</li>
+<li>在SSH健康检查策略上配置的<code>OnlyConnectivity</code>选项现在是一个<a href="https://github.com/OctopusDeploy/Issues/issues/5544" rel="nofollow">策略范围的设置</a>。该设置通常用于SSH目标上的原始脚本。如果您使用此设置，将在Octopus服务器升级期间创建新的机器策略。</li>
+</ul>
+
+<h2 id="wrapping-up">包扎</h2>
+
+<p>八达通服务器2019.6已经到来，你可以指望它。长期部署愉快！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,243 @@
+<html>
+<head>
+<title>Create an AKS Cluster with Pulumi and Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Pulumi和Octopus Deploy - Octopus Deploy创建AKS集群</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/pulumi-and-aks-with-octopus-deploy#2021-08-12">https://octopus.com/blog/pulumi-and-aks-with-octopus-deploy#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/pulumi-and-aks-with-octopus-deploy/blogimage-infrastructure-development-k8-pulumi.png" class="zoom" data-title=""><img src="../Images/7cf3cf563452b52fbb4c0890599a73fb.png" class="img-fluid center" alt="Create an AKS Cluster with Pulumi and Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-12/pulumi-and-aks-with-octopus-deploy/blogimage-infrastructure-development-k8-pulumi.png"/>T2】</a></p>
+
+<p>创建软件定义的基础架构有许多不同的形式和大小，包括Terraform等流行的IaC工具和Ansible等配置管理工具。对于任何工具来说，都有一点是正确的，那就是你希望能够用自己喜欢的语言编写代码。</p>
+
+<p>Pulumi结合了作为代码的基础设施和通用编程的力量，使基础设施成为软件，它让你像在Go、Python、JavaScript等中一样编写代码。</p>
+
+<p>在这篇博文中，我解释了如何使用Pulumi、Python和Octopus Deploy创建Azure Kubernetes集群(AKS)。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>当您使用Pulumi将基础设施创建为软件时，您需要考虑一些硬性的先决条件。一旦你创建了一个新项目，你会被问及你正在使用哪种云和编程语言，因此，最好选择特定的技术。</p>
+
+<p>要跟进这篇博文，您需要以下内容:</p>
+
+<ul>
+<li>Pulumi项目已经定义为使用Azure和Python。</li>
+<li>Azure账户。如果你还没有，你可以注册一个30天的免费试用。</li>
+<li>Azure应用程序注册。如果你不知道如何创建一个，你可以遵循这些<a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal" rel="nofollow">指令</a>。</li>
+<li>Python的中级知识。</li>
+<li>一个GitHub帐户，你可以在那里开始Python代码。</li>
+<li>外部<a href="https://octopus.com/docs/packaging-applications/package-repositories/github-feeds"> GitHub馈送</a>。</li>
+</ul>
+
+<h2 id="creating-the-python-code">创建Python代码</h2>
+
+<p>下面几节将向您展示如何用Python编写代码。</p>
+
+<h3 id="writing-python-constants">编写Python常量</h3>
+
+<p>当您使用Pulumi时，有几个选项可以在运行时传递参数:</p>
+
+<ul>
+<li>配置文件</li>
+<li>从命令行</li>
+<li>硬编码在代码中</li>
+</ul>
+
+<p>我更喜欢创建一个常量文件，因为它可以让我避免对值进行硬编码，并给我一个可以更改值的位置。</p>
+
+<p>如果您决定采用这种方法，在您的Pulumi项目中，创建一个名为<code>aksParamConstants.py</code>的新文件。</p>
+
+<p>将下列常量添加到您的文件中。保持<code>keys</code>不变，但是<code>values</code>应该根据您的工作环境而变化:</p>
+
+<pre><code class="language-python">name = ('octoaks92')
+location = ('eastus')
+resource_group_name = ('resource_group')
+dns_prefix = ("dns_prefix")
+min_count = (1)
+max_count = (1)
+vm_size = ('Standard_D12_v2')
+auto_scaling = (True)
+clientID = ("azure_app_registration_client_id")
+</code></pre>
+
+<h3 id="writing-python-functions">编写Python函数</h3>
+
+<p>Python代码将使用Pulumi Azure Python SDK。</p>
+
+<p>首先，您需要导入将用于创建AKS集群的包。</p>
+
+<p>第一个库用于日志记录，将用于输出发生的任何错误。第二个导入是Pulumi SDK本身。第三个是您在上一节中创建的<code>[aksParamConstants.py](http://aksparamconstants.py)</code>文件，最后，您从<code>pulumi_azure</code>库中导入核心组件来管理Azure中的容器:</p>
+
+<pre><code class="language-python">import logging
+import pulumi
+import aksParamConstants as constants
+from pulumi_azure import containerservice, core
+</code></pre>
+
+<p>下一段代码是Python函数本身。</p>
+
+<p>该函数调用SDK中的<code>KubernetesCluster</code>类，并使用一些您可以初始化并赋值的属性:</p>
+
+<pre><code class="language-python">def createAKSCluster():
+    config = pulumi.Config()
+
+    if containerservice == None:
+        logging.warning("Check to ensure the containerservice import is accurate")
+
+    else:
+        try:
+            containerservice.KubernetesCluster(
+                resource_name = constants.name,
+                default_node_pool={
+                    'min_count': constants.min_count,
+                    'max_count': constants.max_count,
+                    'name': constants.name,
+                    'vm_size': constants.vm_size,
+                    'enable_auto_scaling': constants.auto_scaling
+                },
+                dns_prefix=constants.dns_prefix,    
+                resource_group_name=constants.resource_group_name,
+                service_principal={
+                    'client_id': constants.clientID,
+                    'client_secret': config.require_secret('clientSecret')
+                    }
+                )
+
+        except Exception as e:
+            logging.error(e)
+</code></pre>
+
+<p>要获得您可以使用的属性的下拉列表，请看一下<code>KubernetesCluster</code> <a href="https://github.com/pulumi/pulumi-azure/blob/master/sdk/python/pulumi_azure/containerservice/kubernetes_cluster.py" rel="nofollow">类</a>下的SDK本身。</p>
+
+<p>Pulumi项目中的<code>__main__.py</code>文件应该如下所示:</p>
+
+<pre><code class="language-python">import logging
+import pulumi
+import aksParamConstants as constants
+from pulumi_azure import containerservice, core
+
+
+def createAKSCluster():
+    config = pulumi.Config()
+
+    if containerservice == None:
+        logging.warning("Check to ensure the containerservice import is accurate")
+
+    else:
+        try:
+            containerservice.KubernetesCluster(
+                resource_name = constants.name,
+                default_node_pool={
+                    'min_count': constants.min_count,
+                    'max_count': constants.max_count,
+                    'name': constants.name,
+                    'vm_size': constants.vm_size,
+                    'enable_auto_scaling': constants.auto_scaling
+                },
+                dns_prefix=constants.dns_prefix,    
+                resource_group_name=constants.resource_group_name,
+                service_principal={
+                    'client_id': config.require('clientID'),
+                    'client_secret': config.require_secret('clientSecret')
+                    }
+                )
+
+        except Exception as e:
+            logging.error(e)
+
+createAKSCluster()
+</code></pre>
+
+<h3 id="storing-the-code-in-github">将代码存储在GitHub中</h3>
+
+<p>因为Octopus Deploy需要从提要中检索和提取Pulumi项目，并最终将代码推送到部署目标，所以您可以将Pulumi项目推送到GitHub repo。</p>
+
+<p>接下来，您可以在GitHub中创建代码的新版本。Octopus Deploy在使用外部提要拉入代码时会寻找特定的发布版本。</p>
+
+<h2 id="configure-the-deployment-in-octopus-deploy">在Octopus部署中配置部署</h2>
+
+<p>现在代码已经编写好并存储在GitHub中，是时候用Octopus Deploy部署这个包了。</p>
+
+<h3 id="authentication-in-octopus-deploy">Octopus部署中的身份验证</h3>
+
+<p>对于Pulumi步骤，您需要一个Azure帐户，该帐户被配置为项目变量中的一个变量，以便进行身份验证。</p>
+
+<ol>
+<li>在Octopus门户网站中，导航到项目。</li>
+<li>选择项目变量。</li>
+<li>创建一个名为Azure的新变量。</li>
+<li>在值下，转到<strong> <span class="path">更改➜ Azure帐户类型</span> </strong>。</li>
+<li>选择要用于身份验证的Azure帐户。</li>
+</ol>
+
+<h2 id="pulumi-password-and-secret-variable">Pulumi密码和秘密变量</h2>
+
+<p>当您从Pulumi代码向Azure进行身份验证时，您需要提供Azure应用注册和客户端密码。客户端机密非常敏感，因此您应该将其存储在安全的地方:</p>
+
+<ol>
+<li>转到<strong> <span class="path">项目➜变量</span> </strong>。</li>
+<li>创建一个名为<code>clientSecret</code>的新变量。</li>
+<li>确保类型是敏感的。</li>
+<li>添加Azure应用程序注册客户端机密的值。</li>
+</ol>
+
+<h3 id="the-code-package-step">代码包步骤</h3>
+
+<ol>
+<li>在Octopus Deploy门户中，创建一个新项目来部署Pulumi包。</li>
+<li>前往<strong> <span class="path">部署➜进程</span> </strong>。</li>
+<li>点击<strong>添加步骤</strong>按钮。</li>
+</ol>
+
+<p>您需要添加的第一步是<strong>部署包</strong>步骤。这允许您指定外部GitHub提要，指向Pulumi包所在的GitHub repo，并将其推送到部署目标。</p>
+
+<ol start="4">
+<li>在<code>.NET Configuration Transforms</code>下，点击<strong>配置功能</strong>按钮。</li>
+<li>取消选中所有。NET选项并勾选/选择<strong>自定义安装目录。</strong>自定义安装目录是Pulumi包将被推入并存储的位置，以便流程中的下一步可以使用它。</li>
+<li>保存该步骤。</li>
+</ol>
+
+<h3 id="installing-the-pulumi-sdk">安装Pulumi SDK</h3>
+
+<p>在运行任何Pulumi包之前，您需要确保Pulumi SDK存在。Pulumi SDK还包含Pulumi SDK的Azure。</p>
+
+<ol>
+<li>添加一个<strong>运行脚本</strong>的步骤。</li>
+<li>在<strong>内联源代码</strong>部分下，在Bash下添加以下代码:<code>pip install pulumi</code></li>
+</ol>
+
+<h3 id="the-pulumi-step">普鲁米舞步</h3>
+
+<p>接下来，是时候添加第一个Pulumi步骤了。Pulumi步骤将创建一个secret和AKS集群。您将使用<strong> RUN A SCRIPT </strong>模板来使用Bash中的Pulumi命令，而不是使用第三方步骤模板。</p>
+
+<p>对于<strong>运行脚本</strong>步骤，将以下代码添加到<strong>脚本</strong>下的<strong>内联源代码</strong>部分:</p>
+
+<pre><code class="language-bash">cd /home/mike/pulumiaks/AKS-Create
+secret=$(get_octopusvariable "clientSecret")
+sudo /root/.pulumi/bin/pulumi config set --secret clientSecret $secret
+sudo /root/.pulumi/bin/pulumi up --yes
+</code></pre>
+
+<h3 id="running-the-pulumi-deployment">运行Pulumi部署</h3>
+
+<p>现在是运行部署的时候了:</p>
+
+<ol>
+<li>点击<strong>保存</strong>。</li>
+<li>创建新版本。</li>
+<li>保存发布。</li>
+<li>选择要将Pulumi软件包部署到的生命周期和部署。</li>
+<li>点击<strong>部署到某_环境</strong>。</li>
+<li>点击<strong>部署</strong>。</li>
+</ol>
+
+<p>恭喜你。您已经成功地使用基础设施作为软件创建了一个AKS集群。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>凭借Pulumi的强大功能，您不仅可以使用通用编程语言定义基础设施和服务，还可以使用Octopus Deploy存储状态和部署功能，我们正在慢慢进入基础设施开发的新时代。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>Expanding Proxy Support - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>扩展代理支持- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/expanding-proxy-support#2020-05-20">https://octopus.com/blog/expanding-proxy-support#2020-05-20</a></blockquote>
+                        <p>这篇文章是我们Octopus 3.4博客系列的一部分。在我们的<a href="https://octopus.com/blog/octopus34-blog-series-kickoff">博客</a>或我们的<a href="https://twitter.com/OctopusDeploy">推特</a>上关注它。</p>
+
+<p><strong> Octopus Deploy 3.4已经发货！阅读<a href="https://octopus.com/blog/octopus-deploy-3.4">博文</a>和<a href="https://octopus.com/downloads">今天就下载</a>！</strong></p>
+
+<hr/>
+
+<h1>当前状态</h1>
+
+<p>在3.4版本之前，Octopus中的代理支持仅限于您的Octopus服务器或需要与其他服务器通信的触手。它仅限于在部署期间，如果您的触手需要在Powershell脚本中发出web请求，或者在Azure部署期间，当Octopus服务器连接到Azure时。Octopus服务器和Tentacles之间的通信通过我们的通信库<a href="https://github.com/OctopusDeploy/Halibut"> Halibut </a>进行，它不知道代理。</p>
+
+<p><img src="../Images/6b8c469b46d02008df1511e843acedc3.png" alt="Current state of proxy support" data-original-src="https://i.octopus.com/blog/201607-before-CH7V.png"/> <em>八达通中代理支持的当前状态</em></p>
+
+<p>这是因为Octopus依赖于。NET的<code>System.Net.WebRequest</code>，但是大比目鱼在<code>TcpClient</code>级别工作。</p>
+
+<h1>扩展代理支持</h1>
+
+<p>在3.4中，我们已经教会了比目鱼如何游过代理。这意味着您现在可以让轮询触角通过代理轮询服务器，让Octopus服务器通过代理连接到侦听触角。如果您的网络需要，您甚至可以为不同的触角使用不同的代理服务器。</p>
+
+<p>这将结束我们的用户需要乞求他们的公司IT部门只为八达通提供防火墙津贴。(在轮询是解决方法的某些情况下，它还允许使用监听触角。)</p>
+
+<p><img src="../Images/a229c9522adb6a76192ed56668f365c0.png" alt="Expanded proxy support" data-original-src="https://i.octopus.com/blog/201607-after-L85T.png"/><em>3.4即将到来——代理无处不在！</em></p>
+
+<h1>设置它</h1>
+
+<p>让我们快速浏览一下，在配置监听触手时，如何配置Octopus来使用代理。首先，您需要在Octopus的配置部分设置代理详细信息:</p>
+
+<p><img src="../Images/8cf9bd22f441016894afc68f349a7365.png" alt="Creating a proxy" data-original-src="https://i.octopus.com/blog/201606-create-proxy-5FHU.png"/></p>
+
+<p>然后，您可以在触手的通信设置区域中通过这个代理告诉Octopus与侦听触手进行通信:</p>
+
+<p><img src="../Images/e77532cca7c14beb50c191e6a24cf3b3.png" alt="Tell Octopus to use a Proxy for a Tentacle" data-original-src="https://i.octopus.com/blog/201606-tentacle-settings-BM89.png"/></p>
+
+<p>就是这样！现在，章鱼服务器和你的触手之间的所有通信都将通过这个代理。轮询触角有一点不同，因为轮询触角发起所有通信，我们需要在触角端设置代理。当您安装轮询触手时，您现在可以选择设置一个代理，触手将使用它进行轮询(它也将用于触手在设置期间进行的注册调用):</p>
+
+<p><img src="../Images/f7cb19f8548c5f10b97f4d94deaad191.png" alt="Setting up the polling tentacle proxy" data-original-src="https://i.octopus.com/blog/201606-polling-proxy-setup-L2N6.png"/></p>
+
+<p>所以你有它。更多的代理支持比你可以摇一棒。如果这是你认为对你的Octopus使用有用的东西，为什么不下载3.4测试版并试用一下，或者更多信息，请参见Octopus proxy <a href="https://octopus.com/support">支持页面</a>。</p>
+
+                    
+                    
+</body>
+</html>

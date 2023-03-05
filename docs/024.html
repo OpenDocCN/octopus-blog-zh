@@ -1,0 +1,175 @@
+<html>
+<head>
+<title>Scripting the creation of Octopus API keys - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>编写创建Octopus API密钥的脚本- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/apikey-creation-automation#2021-11-21">https://octopus.com/blog/apikey-creation-automation#2021-11-21</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/apikey-creation-automation/blogimage-scripting-api-key-creation-2021.png" class="zoom" data-title=""><img src="../Images/32a3e21541e34c5134a5e5034d6279ce.png" class="img-fluid center" alt="Octopus keyring" data-original-src="https://i.octopus.com/blog/2021-03/apikey-creation-automation/blogimage-scripting-api-key-creation-2021.png"/>T2】</a></p>
+
+<p>Octopus的高级用户应该已经熟悉了健壮的Octopus REST API。Octopus首先被设计成API，所以你可以在Octopus门户网站中做任何事情，你都可以用API来做。然而，在与API交互之前，您需要创建一个Octopus <a href="https://octopus.com/docs/octopus-rest-api/how-to-create-an-api-key"> API键</a>。这些步骤需要人工完成，但是自动化这个过程是可能的。</p>
+
+<p>在这篇博文中，我将通过脚本创建一个用于Octopus REST API的API键。</p>
+
+<p>最终的脚本可以在GitHub gist 中找到。</p>
+
+<h2 id="the-swagger-api-docs">Swagger API文档</h2>
+
+<p>当我想用Octopus API实现自动化时，我首先去的地方是Swagger docs。每个Octopus服务器都有一个内置的发布所有API文档的路径。只需将<code>/swaggerui</code>添加到您的Octopus服务器的基本URL路径中。比如:<a href="https://samples.octopus.app/swaggerui" rel="nofollow">samples.octopus.app/swaggerui</a>。</p>
+
+<p>生成的页面是由API <a href="https://cloud.google.com/apis/design/resources" rel="nofollow">资源</a>组织的，数量很多。让我们做一个<code>CTRL-F</code>来寻找<code>apikey</code>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/apikey-creation-automation/find-apikey.png" class="zoom" data-title=""><img src="../Images/84095e0a9b8573d191c222e9281e0369.png" class="img-fluid center" alt="Swagger ApiKeys resource screenshot" data-original-src="https://i.octopus.com/blog/2021-03/apikey-creation-automation/find-apikey.png"/>T2】</a></p>
+
+<p>ApiKeys: <code>POST /users/{userId}/apikeys</code>下的第一行允许我们为指定的用户创建一个新的API键。因为Octopus中的API键与Octopus用户相关联，所以这些键继承分配给该用户的权限。</p>
+
+<p>在提供新的API键时，最好设置专用于特定功能或集成的<a href="https://octopus.com/docs/security/users-and-teams/service-accounts" class="alert-link"> Octopus服务帐户</a>。</p>
+
+
+<p>让我们假设我们知道我们的<code>{userId}</code>,并使用一个快速的一行PowerShell cmdlet来创建一个API密钥:</p>
+
+<pre><code class="language-pwsh">&gt; Invoke-RestMethod -Method Post -Uri https://samples.octopus.app/api/users/Users-561/apikeys -Headers @{'X-Octopus-ApiKey'='API-XXXX...'} -Body (@{'Purpose'='Just blogging'} | ConvertTo-Json)
+
+Id      : apikeys-I6D74k9rh7eyoqXDlqJCvlsVgU
+Purpose : Just blogging
+UserId  : Users-561
+ApiKey  : API-XXXX...
+Created : 2/18/2021 2:25:49 PM
+Expires :
+Links   : @{Self=/api/users/Users-561/apikeys/apikeys-I6D74k9rh7eyoqXDlqJCvlsVgU}
+</code></pre>
+
+<p>您可能会注意到，在这个例子中，我们已经有了一个API来创建一个新的API键。</p>
+
+<h2 id="creating-an-api-key-when-you-dont-already-have-an-api-key">当您还没有API密钥时创建API密钥</h2>
+
+<p>假设您正在编写自动化程序来供应Octopus服务器本身。您已经使用<a href="https://chocolatey.org/packages/OctopusDeploy/" rel="nofollow"> Octopus Deploy Chocolatey包</a>、<a href="https://octopus.com/docs/octopus-rest-api/octopus.server.exe-command-line">Octopus.Server.exe命令行工具</a>，甚至新的<a href="https://octopus.com/blog/octopusdeploy-terraform-provider"> Octopus Deploy Terraform提供者</a>编写了脚本。您不希望在您的供应自动化过程中中断，因为您需要登录到您的Octopus服务器，创建一个API密匙，然后手动将密匙插入到自动化的其余部分。</p>
+
+<p>当您在Octopus中创建新用户时，这些用户没有API密钥，但是Octopus Web门户允许他们在登录时创建API密钥。如果浏览器能做到，我们也能。以下是要做的事情:</p>
+
+<ol>
+<li>使用用户名和密码模拟浏览器登录。</li>
+<li>从Octopus服务器取回任何必要的cookies。</li>
+<li>当创建用户的第一个API密钥时，使用cookies发出与浏览器相同的请求。</li>
+</ol>
+
+<p>当您第一次<a href="https://octopus.com/docs/installation#install-octopus">安装Octopus服务器</a>时，安装程序会要求您创建一个<em>本地系统帐户</em>或<em>自定义域帐户</em>。为简单起见，我们假设您有一个本地系统帐户。您也可以使用<strong>Octopus.Server.exe</strong>命令行界面的<a href="https://octopus.com/docs/octopus-rest-api/octopus.server.exe-command-line/admin"> <code>admin</code> </a>命令创建一个。</p>
+
+
+
+<p>当你登录到你的Octopus门户网站时，你需要检查浏览器中发生了什么。让我们使用<a href="https://developers.google.com/web/tools/chrome-devtools" rel="nofollow"> Chrome内置的DevTools </a>。</p>
+
+<ol>
+<li>浏览你的八达通网站登入页面。</li>
+<li>在页面上点击右键，选择<strong> Inspect </strong>，或者使用热键<strong> Ctrl-Shift-i </strong>打开DevTools。</li>
+<li>选择截图中显示的<strong>网络</strong>选项卡。</li>
+<li>输入用户名和密码后，点击<strong>登录</strong>。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/apikey-creation-automation/chrome-devtools.png" class="zoom" data-title=""><img src="../Images/8b8c7e45a64d4f8a1c3723e0af8ebd0a.png" class="img-fluid center" alt="Chrome DevTools screenshot" data-original-src="https://i.octopus.com/blog/2021-03/apikey-creation-automation/chrome-devtools.png"/>T2】</a></p>
+
+<p>在DevTools窗口中，你应该看到Chrome记录了登录过程中发生的许多请求。这些请求包括必要的资产文件(js、css等)。)、初始化Octopus仪表板的资源请求等等。向上滚动到序列的顶部，查找标记为<strong>登录</strong>的请求:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/apikey-creation-automation/login-recorded.png" class="zoom" data-title=""><img src="../Images/0fe0f602ab36fba425f867f32beaf0e8.png" class="img-fluid center" alt="Login Recorded screenshot" data-original-src="https://i.octopus.com/blog/2021-03/apikey-creation-automation/login-recorded.png"/>T2】</a></p>
+
+<p>点击<strong>登录</strong>请求。请求列表右侧将出现一个窗口，显示附加信息。该窗口有自己的一组选项卡，您需要选择<strong>标题</strong>。</p>
+
+<p>滚动到Headers页面的底部会显示所使用的确切请求正文。当您在PowerShell中构建请求时，这将非常重要。检查<strong>响应头</strong>还会给您一些重要信息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/apikey-creation-automation/set-cookie.png" class="zoom" data-title=""><img src="../Images/6db7a46c9a22242ecdd0d37d5af0b270.png" class="img-fluid center" alt="Response headers screenshot" data-original-src="https://i.octopus.com/blog/2021-03/apikey-creation-automation/set-cookie.png"/>T2】</a></p>
+
+<p>Octopus服务器在登录后向浏览器发回两个<strong> Set-Cookie </strong>头，浏览器将其存储在其Cookie存储器中。在对同一个域的后续请求中，浏览器被编程为在<strong> Cookie </strong>头中发送这些Cookie。这就是Octopus服务器识别您的独特会话的方式。</p>
+
+<p>让我们编写一些PowerShell来模拟这个过程的一部分:</p>
+
+<pre><code class="language-pwsh">$octopusUrl = 'https://samples.octopus.app'
+$username = 'admin'
+$password = 'your-password'
+
+$loginPath = "$octopusUrl/api/users/login"
+
+$response = Invoke-WebRequest -Method Post `
+    -Uri $loginPath `
+    -Body (@{'Username' = $username;'Password' = $password} | ConvertTo-Json) `
+    -SessionVariable 'session'
+</code></pre>
+
+<p>这里需要注意一些事情:</p>
+
+<ul>
+<li>我们在这里使用<code>Invoke-WebRequest</code> cmdlet而不是<code>Invoke-RestRequest</code>,因为我们需要直接访问响应头来获取cookies。</li>
+<li><code>-SessionVariable</code>参数创建了一个类型为<a href="https://docs.microsoft.com/en-us/dotnet/api/microsoft.powershell.commands.webrequestsession?view=powershellsdk-7.0.0" rel="nofollow"> WebRequestSession </a>的变量<code>$session</code>，这使得获取cookies变得很容易，我们接下来会看到。</li>
+<li>响应体包含了<code>User ID</code>，下一个请求也需要它。</li>
+</ul>
+
+<p>让我们存储我们需要的变量:</p>
+
+<pre><code class="language-pwsh">$userId = ($response.Content | ConvertFrom-Json).Id
+$csrfToken = $session.Cookies.GetCookies($loginPath) | Where-Object { $_.Name.StartsWith('Octopus-Csrf-Token') }
+$sessionToken = $session.Cookies.GetCookies($loginPath) | Where-Object { $_.Name.StartsWith('OctopusIdentificationToken') }
+</code></pre>
+
+<p>现在，您可以将这两个令牌添加到<code>Cookie</code>头中，并希望它能够工作。但是由于我们已经在使用Chrome DevTools，我们可以记录生成API键的请求，并理解浏览器如何使用这些值。</p>
+
+<p>在Octopus门户网站中，导航到您的个人资料页面，然后是<strong>我的API密钥</strong>页面。在DevTools仍然打开并记录的情况下，让我们创建一个API键并查找下面截图中显示的<code>apikeys</code> POST请求。仔细看看请求头:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-03/apikey-creation-automation/generate-apikey-recorded.png" class="zoom" data-title=""><img src="../Images/f34d833a10b75ed1161e76dc191792f0.png" class="img-fluid center" alt="API key generation headers screenshot" data-original-src="https://i.octopus.com/blog/2021-03/apikey-creation-automation/generate-apikey-recorded.png"/>T2】</a></p>
+
+<p>如果比较您在登录请求后收到的两个<code>Set-Cookie</code>响应头，您可以看到浏览器是如何使用这些值的。现在您可以完成您的请求:</p>
+
+<pre><code class="language-pwsh">$headers = @{
+    'Cookie' = $sessionToken.Name + '=' + $sessionToken.Value
+    'X-Octopus-Csrf-Token' = $csrfToken.Value
+}
+
+Invoke-RestMethod -Method Post `
+    -Uri "$octopusUrl/api/users/$userId/apikeys" ` # $octopusUrl is defined at the top of the script
+    -Headers $headers `
+    -Body (@{'Purpose'='Just Blogging'} | ConvertTo-Json)
+</code></pre>
+
+<h3 id="the-complete-script">完整的剧本</h3>
+
+<pre><code class="language-pwsh">$octopusUrl = 'https://samples.octopus.app'
+$username = 'admin'
+$password = 'your-password'
+
+$loginPath = "$octopusUrl/api/users/login"
+
+$response = Invoke-WebRequest -Method Post `
+    -Uri $loginPath `
+    -Body (@{'Username' = $username;'Password' = $password} | ConvertTo-Json) `
+    -SessionVariable 'session'
+
+$userId = ($response.Content | ConvertFrom-Json).Id
+$csrfToken = $session.Cookies.GetCookies($loginPath) `
+    | Where-Object { $_.Name.StartsWith('Octopus-Csrf-Token') }
+$sessionToken = $session.Cookies.GetCookies($loginPath) `
+    | Where-Object { $_.Name.StartsWith('OctopusIdentificationToken') }
+
+$headers = @{
+    'Cookie' = $sessionToken.Name + '=' + $sessionToken.Value
+    'X-Octopus-Csrf-Token' = $csrfToken.Value
+}
+
+Invoke-RestMethod -Method Post `
+    -Uri "$octopusUrl/api/users/$userId/apikeys" `
+    -Headers $headers `
+    -Body (@{'Purpose'='Automation'} | ConvertTo-Json)
+</code></pre>
+
+<h2 id="conclusion">结论</h2>
+
+<p>为API密钥的创建编写脚本对于新的服务用户、提供Octopus实例或与Octopus Terraform提供程序一起使用非常有用。</p>
+
+<p>使用Chrome DevTools(或Firefox、Edge或Safari等效软件)是查看Octopus前端门户网站(一个单页React应用程序)和Octopus REST API之间的交互的强大方法。偶尔，您可能会发现Swagger文档只是稍微有些偏离，或者没有您需要的所有信息，使用浏览器的工具可以给您一个明确的答案。</p>
+
+<p>有兴趣了解更多关于Octopus REST API的信息吗？查看我们最近的网络研讨会:<a href="https://www.youtube.com/watch?v=ACb2sHWoZto" rel="nofollow">使用Octopus API通过自动化重复任务节省时间</a>。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

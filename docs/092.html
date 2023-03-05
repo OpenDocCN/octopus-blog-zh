@@ -1,0 +1,237 @@
+<html>
+<head>
+<title>Beyond Hello World: Build a real-world Kubernetes CI/CD pipeline - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>超越Hello World:构建一个真实的Kubernetes CI/CD管道- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/build-a-real-world-kubernetes-cicd-pipeline#2022-12-20">https://octopus.com/blog/build-a-real-world-kubernetes-cicd-pipeline#2022-12-20</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/build-a-real-world-kubernetes-cicd-pipeline.png" class="zoom" data-title=""><img src="../Images/37c5905ad9299068e9dd46dfd3fceb16.png" class="img-fluid center" alt="Beyond Hello World - Build a real-world Kubernetes CI/CD pipeline" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/build-a-real-world-kubernetes-cicd-pipeline.png"/>T2】</a></p>
+
+<p>Docker容器和Kubernetes是您DevOps工具箱中的优秀技术。这个<strong>超越Hello World </strong>博客系列涵盖了如何在现实应用中使用它们。</p>
+
+
+
+<hr/>
+
+<p>在<a href="/blog/kubernetes-for-the-uninitiated">的上一篇文章</a>中，我向您展示了如何使用我们的OctoPetShop容器建立一个Kubernetes集群。我们为web前端、产品服务和购物车服务创建了YAML文件。</p>
+
+<p>在这篇文章中，我调整了YAML文件并建立了持续集成和持续交付(CI/CD)管道。</p>
+
+<h2 id="create-the-build-definition">创建构建定义</h2>
+
+<p>Kubernetes没有任何需要构建的东西，除了它使用的Docker图像。但是，我们创建的YAML文件可以放在源代码控制中并进行版本控制，因此使用构建服务器仍然是有意义的。我们的<a href="https://github.com/OctopusSamples/OctoPetShop" rel="nofollow"> OctoPetShop </a> repo包含一个k8s文件夹，我们在其中放置了创建集群所需的所有YAML文件。我们会用这个回购作为我们的来源。为了一致性，我们使用TeamCity作为我们的构建服务器。</p>
+
+<h3 id="set-the-version-number">设置版本号</h3>
+
+<p>在Docker CI/CD帖子中，我们将容器的版本号硬编码为1.0.0.0。在这篇文章中，我们将为YAML文件的每个版本创建唯一的版本号。为简单起见，我将把版本号设置为四位数字的年份、两位数字的月份、两位数字的月份日期和修订版(yyyy。MM.dd.r)。</p>
+
+<p>将PowerShell步骤添加到我们的构建定义中</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-add-build-step.png" class="zoom" data-title=""><img src="../Images/2143afb174ab3f274e530ec3f540e7db.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-add-build-step.png"/>T2】</a></p>
+
+<p>输入以下PowerShell来设置版本号</p>
+
+<pre><code class="language-PS">Write-Host "##teamcity[buildNumber '$(Get-Date -Format "yyyy.MM.dd").%build.counter%']"
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-step-powershell.png" class="zoom" data-title=""><img src="../Images/e96a14d2c9dd181a217cc315aa956c0e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-step-powershell.png"/>T2】</a></p>
+
+<p>这将允许我们在后续步骤中使用<code>%build.number%</code>来指定版本号。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-version-number.png" class="zoom" data-title=""><img src="../Images/99348b8af976f8f55232311ae91d9a75.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-version-number.png"/>T2】</a></p>
+
+<h3 id="tweak-the-yaml">调整YAML</h3>
+
+<p>我们的repo中的YAML拥有SQL Server的SA帐户的明文密码。让我们利用Octopus部署文件中的替代变量特性，用Octopus部署项目中的变量替换密码。首先，我们将占位符包含在YAML文件中。例如，打开octopetshop-database-job.yaml，更改连接字符串的密码部分:</p>
+
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: octopetshop-dbup
+spec:
+  template:
+    spec:
+      containers:
+        - name: dbup
+          image: octopussamples/octopetshop-database
+          command: [ "dotnet", "run", "--no-launch-profile" ]
+          env:
+            - name: DbUpConnectionString
+              value: Data Source=octopetshop-sqlserver-cluster-ip-service;Initial Catalog=OctoPetShop; User ID=sa; Password=#{Project.SA.Password}
+      restartPolicy: Never
+</code></pre>
+
+<p>对以下文件重复此过程:</p>
+
+<ul>
+<li>章鱼小铺-产品服务-部署。YAML</li>
+<li>octopetshop-shoppingcartservice-部署。YAML</li>
+<li>octopetshop-SQL-deployment。YAML</li>
+</ul>
+
+<p>如果要运行本地k8s实例，可能需要在octopetshop-loadbalancer.yaml文件中指定外部IP地址(托管解决方案如Azure或AWS通常会自动为您连接)。将externalIPs组件添加到YAML文件中，并将其设置为占位符:</p>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web-loadbalancer
+spec:
+  selector:
+    component: web
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http-port
+    - port: 5001
+      targetPort: 5001
+      name: https-port
+  type: LoadBalancer
+  externalIPs:
+  - #{Project.Kubernetes.LoadBalancer.ExertnalIp}
+</code></pre>
+
+<h3 id="pack-the-yaml">打包YAML</h3>
+
+<p>使用Octopus Deploy Pack步骤，我们可以将所有用于部署的YAML打包到一个NuGet包中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-step-pack.png" class="zoom" data-title=""><img src="../Images/73eab57fc96712b6e921ea2a14f7eea4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-step-pack.png"/>T2】</a></p>
+
+<h3 id="push-the-package-to-octopus-deploy">将包推至Octopus部署</h3>
+
+<p>通过Octopus Deploy推送步骤，我们可以将NuGet包发送到Octopus Deploy。</p>
+
+<p>出于演示的目的，我们使用Octopus Deploy的内置NuGet存储库。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-step-push.png" class="zoom" data-title=""><img src="../Images/504bfdd907cfc3e292fd899e4afe3f13.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/teamcity-build-step-push.png"/>T2】</a></p>
+
+<p>我们的构建定义现在将为我们的部署打包所有的YAML文件，并将它们发送到我们的Octopus Deploy服务器！现在是<a href="https://octopus.com/devops/continuous-delivery/">连续交付</a>的部分。</p>
+
+<h2 id="configure-continuous-delivery-with-octopus-deploy">使用部署的Octopus配置连续交付</h2>
+
+<p>使用Octopus Deploy中的YAML文件包，我们可以创建我们的部署过程。在本节中，我们将执行以下操作:</p>
+
+<ul>
+<li>创建新项目。</li>
+<li>定义我们的部署步骤。</li>
+</ul>
+
+<h3 id="create-the-octopus-deploy-project">创建Octopus部署项目</h3>
+
+<p>要创建新项目，点击<strong>项目</strong>选项卡，并点击<strong>添加项目</strong>按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-new.png" class="zoom" data-title=""><img src="../Images/495562a06de78b7899e7a47bfefae227.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-new.png"/>T2】</a></p>
+
+<p>给项目命名，点击<strong>保存</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-k8s.png" class="zoom" data-title=""><img src="../Images/56c4762837a8e42f96c140487aa7c54f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-k8s.png"/>T2】</a></p>
+
+<p>让我们为我们的项目添加一些步骤。在项目的<strong>流程</strong>选项卡上，点击<strong>添加步骤</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-add-step.png" class="zoom" data-title=""><img src="../Images/29fd5d3afda31c181873b8e8908331b1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-add-step.png"/>T2】</a></p>
+
+<p>除了指定的文件之外，我们的过程中的步骤几乎是相同的。我会带你看第一个。</p>
+
+<p>在我们的流程中添加一个部署原始Kubernetes YAML步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-raw-yaml.png" class="zoom" data-title=""><img src="../Images/a3242a364d11479647a3133276ad2215.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-raw-yaml.png"/>T2】</a></p>
+
+<p>第一步将部署SQL Server群集IP服务。部署到Kubernetes是通过它的REST API完成的，它使用了幕后的<code>kubectl</code> CLI工具。Octopus在<a href="https://octopus.com/docs/infrastructure/workers"> workers </a>上执行这个部署工作，而不是在部署目标上，所以你需要确保在workers上安装了一个版本的kubectl来完成这个工作。</p>
+
+<p>对于YAML源，选择包内文件，指定包和包内的文件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-raw-yaml2.png" class="zoom" data-title=""><img src="../Images/f88b4af2e0d1967451d0dffd0f096d7c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-raw-yaml2.png"/></a>T2】</p>
+
+<p>如果您要部署到一个名称空间，请确保填写表单的该部分。</p>
+
+<p>这一步就到此为止！除了文件名之外，其余步骤完全相同。完成后，您应该会看到这样的内容:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-all.png" class="zoom" data-title=""><img src="../Images/fe153c6dda443c2feb915f37f62f1557.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-all.png"/>T2】</a></p>
+
+<p>我们现在剩下要做的就是添加项目变量。单击左侧的变量选项卡:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-variables.png" class="zoom" data-title=""><img src="../Images/e991f44865c394092dbe4b2bb73db916.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-variables.png"/>T2】</a></p>
+
+<p>创建一个名为Project的新变量。SA .密码并使其敏感:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-variable-password.png" class="zoom" data-title=""><img src="../Images/83d09ac6c8cb4e3b7cc9d2a38dfdc65f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-variable-password.png"/>T2】</a></p>
+
+<p>给它一个符合SQL Server 2017密码复杂性要求的值。</p>
+
+<p>在我们准备好创建一个发布之前，最后要做的是改变发布的编号以匹配我们的构建版本。这将允许我们将一个发布直接绑定到创建它的构建中。为此，请单击设置选项卡:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-settings.png" class="zoom" data-title=""><img src="../Images/dbb4185928d62d0db16340a60a710052.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-settings.png"/>T2】</a></p>
+
+<p>展开“版本控制”部分:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-settings-versioning.png" class="zoom" data-title=""><img src="../Images/034a72bd2fdc599585996d6fcf332cf5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-settings-versioning.png"/></a>T2】</p>
+
+<p>选择使用随附软件包中的版本号，然后选择我们的OctoPetShop。K8s包装:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-settings-versionpackage.png" class="zoom" data-title=""><img src="../Images/261f263e4d1cce1f437b30bdaec9c5b1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-settings-versionpackage.png"/>T2】</a></p>
+
+<p>我们现在准备创建一个版本！点击<strong>创建发布</strong>按钮！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-create-release.png" class="zoom" data-title=""><img src="../Images/2dd9ed3744fcd3fbec847838667a86e7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-create-release.png"/>T2】</a></p>
+
+<p>在此页面上不需要做任何更改，只需点击<strong>保存</strong>然后点击<strong>部署</strong>开发环境:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-deploy.png" class="zoom" data-title=""><img src="../Images/16da05fdf6c29d8d913c3a0d7fa84184.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-deploy.png"/>T2】</a></p>
+
+<p>最后，通过点击<strong>部署</strong>确认我们想要部署:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-deploy2.png" class="zoom" data-title=""><img src="../Images/f0835963ea567402bafe200df6491148.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-deploy2.png"/>T2】</a></p>
+
+<p>部署完成后，您应该会看到类似这样的内容:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-deploy-complete.png" class="zoom" data-title=""><img src="../Images/35a859bd05bf3ca95b145cec651ade10.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-deploy-complete.png"/>T2】</a></p>
+
+<p>通过部署，我们可以导航到我们的服务器来查看我们的应用程序。</p>
+
+<p>我们的。NET核心应用程序将重定向到SSL，如果你得到一个关于网站不安全的警告，在这种情况下是可以的。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/k8s-running.png" class="zoom" data-title=""><img src="../Images/f1c4e691b15058b6864b30cfec2bd515.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/k8s-running.png"/></a>T2】</p>
+
+<h2 id="continuous-delivery-only-alternative">只能选择连续交货</h2>
+
+<p>到目前为止，我们的过程依赖于我们创建YAML来定义我们的Kubernetes集群。使用Octopus Deploy，有一种替代的方法部署到Kubernetes，不需要使用构建服务器或了解YAML。</p>
+
+<p>部署Kubernetes容器步骤模板包含一个表单，我们可以使用它来定义我们的Kubernetes集群所需的所有属性，而无需编写一行YAML:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-kubernetes.png" class="zoom" data-title=""><img src="../Images/253c04c58d623a8e5e887b2ecd656df9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-kubernetes.png"/>T2】</a></p>
+
+<p>该表单非常广泛，允许您创建Kubernetes集群所需的一切，例如:</p>
+
+<ul>
+<li>集群IP服务</li>
+<li>入口服务</li>
+<li>部署</li>
+<li>服务端口映射</li>
+<li>配置映射</li>
+<li>秘密</li>
+<li>卷</li>
+<li>容器</li>
+<li>容器环境变量</li>
+<li>容器端口映射</li>
+<li>还有更多！</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form1.png" class="zoom" data-title=""><img src="../Images/69ab431516b6877b13c63d9c585e93f3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form1.png"/></a><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form2.png" class="zoom" data-title=""><img src="../Images/d08700d214e5d0fb49f62836659892a4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form2.png"/></a><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form3.png" class="zoom" data-title=""><img src="../Images/aa27c672fd988f2ad01e2fac99aa63e3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form3.png"/></a><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form4.png" class="zoom" data-title=""><img src="../Images/0a059b9e00faa122cc4e7ab222500948.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-01/build-a-real-world-kubernetes-cicd-pipeline/octopus-project-step-k8s-form4.png"/>T11</a></p>
+
+<p>这种方法让我们可以完全跳过CI部分，专注于Kubernetes管道中的CD部分。</p>
+
+<p>form方法在部署时动态编写YAML，您需要确保安装在worker上的kubectl版本使用与您要部署到的Kubernetes版本相同的API格式。在我的情况下，我在Ubuntu 18.04上使用MicroK8s，它似乎没有引用相同的API版本。</p>
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本文中，我演示了如何在CI/CD管道中使用Kubernetes。我还演示了一种部署到Kubernetes的方法，该方法只使用管道的CD部分。</p>
+
+<p>浏览<a href="https://octopus.com/devops/"> DevOps工程师手册</a>以了解有关DevOps、CI/CD和部署管道的更多信息。</p>
+
+                    
+                    
+</body>
+</html>

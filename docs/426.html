@@ -1,0 +1,233 @@
+<html>
+<head>
+<title>Multi-environment deployments with Jenkins and Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Jenkins和Octopus - Octopus部署的多环境部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/multi-environment-deployments-jenkins#2023-01-19">https://octopus.com/blog/multi-environment-deployments-jenkins#2023-01-19</a></blockquote>
+                        <p>在部署过程中，构件在部署之前由构建服务器构建。Jenkins是为多环境设置设计的构建服务器。Jenkins可以将您的工件打包并推送到一个中央存储库。从这里开始，连续交付(CD)工具可以获取工件并部署它。</p>
+
+<p>Octopus Deploy是帮助完成这一过程的最佳CD工具。Octopus可以与Azure、Google和Amazon等主要云提供商进行交互和部署。</p>
+
+<p>在这篇文章中，我将向您展示如何构建Octopus underwater app并将其推送到亚马逊弹性容器注册中心(ECR)。詹金斯将在章鱼部署中触发部署。Octopus随后会将该应用部署到亚马逊弹性Kubernetes服务(EKS)。</p>
+
+<h2 id="prerequisites">先决条件</h2>
+
+<p>要跟进，您需要:</p>
+
+
+
+<p>这个帖子使用了<a href="https://github.com/OctopusSamples/octopus-underwater-app" rel="nofollow"> Octopus水下应用库</a>。您可以分叉存储库，并使用主分支来跟进。</p>
+
+<p>jenkins-octopus分支包含完成本文步骤所需的模板文件。你必须用你自己的价值观来代替一些价值观，但是我已经在这篇文章中列出了我的价值观作为参考。</p>
+
+<h2 id="amazon-web-services-setup">亚马逊网络服务设置</h2>
+
+<p>要为Jenkins设置AWS，您需要创建一个访问密钥和一个ECR存储库来存储图像。</p>
+
+<p>要创建访问密钥，请转到<strong>亚马逊控制台</strong>，然后<strong> IAM </strong>，然后<strong>用户</strong>、<code>[your user]</code>，然后<strong>安全凭证</strong>，然后<strong>创建访问密钥</strong>。</p>
+
+<p>您的浏览器下载一个包含访问密钥ID和秘密访问密钥的文件。Jenkins使用这些值向Amazon认证。</p>
+
+<p>要创建存储库，请转到<strong>亚马逊控制台</strong>，然后转到<strong> ECR </strong>，然后转到<strong>创建存储库</strong>。</p>
+
+<p>您需要为发布的每个图像建立一个图像存储库。给存储库起一个您想让图像起的名字。</p>
+
+<p>你会在<strong>亚马逊ECR </strong>下看到你的仓库，然后是<strong>仓库</strong>。记下它所在的区域，在URI场。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/ecr-repository.png" class="zoom" data-title=""><img src="../Images/639a2699063b9c6eec0357493d1c358d.png" class="img-fluid center" alt="ECR Repository" data-original-src="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/ecr-repository.png"/>T2】</a></p>
+
+<h3 id="aws-cluster-setup">AWS集群设置</h3>
+
+<p>使用我们上一篇文章<a href="https://octopus.com/blog/eks-cluster-aws">在AWS中创建ESK集群</a>中的指南在AWS中设置集群。</p>
+
+<p>用Octopus <code>release</code>和<code>deploy</code>命令扩展管道。创建一个Jenkinsfile并粘贴以下代码:</p>
+
+<pre><code>
+
+
+pipeline {
+    agent any
+    options {
+        skipStagesAfterUnstable()
+    }
+    stages {
+         stage('Clone repository') { 
+            steps { 
+                script{
+                checkout scm
+                }
+            }
+        }
+
+        stage('Build') { 
+            steps { 
+                script{
+                 app = docker.build("octopus-underwater-app")
+                }
+            }
+        }
+        stage('Test'){
+            steps {
+                 echo 'Empty'
+            }
+        }
+        stage('Push') {
+            steps {
+                script{
+                        docker.withRegistry('https://720766170633.dkr.ecr.us-east-2.amazonaws.com', 'ecr:us-east-2:aws-credentials') {
+                    app.push("${env.BUILD_NUMBER}")
+                    app.push("latest")
+                    }
+                }
+            }
+        }
+        stage('Deploy'){
+            steps {
+                script{
+                    octopusCreateRelease additionalArgs: '', cancelOnTimeout: false, channel: '', defaultPackageVersion: '', deployThisRelease: false, deploymentTimeout: '', environment: "Development", jenkinsUrlLinkback: false, project: "underwater-octo", releaseNotes: false, releaseNotesFile: '', releaseVersion: "1.0.${BUILD_NUMBER}", tenant: '', tenantTag: '', toolId: 'Default', verboseLogging: false, waitForDeployment: false
+                    octopusDeployRelease cancelOnTimeout: false, deploymentTimeout: '', environment: "Development", project: "underwater-octo", releaseVersion: "1.0.${BUILD_NUMBER}", tenant: '', tenantTag: '', toolId: 'Default', variables: '', verboseLogging: false, waitForDeployment: true
+                }
+            }
+        }
+
+    }
+}
+
+</code></pre>
+
+<h2 id="octopus-deploy-setup">Octopus部署设置</h2>
+
+<p>在您的Octopus Deploy实例中，您需要创建一个名为<code>aws-jenkins</code>的项目:</p>
+
+<ul>
+<li>转到<strong>项目</strong>，然后<strong>添加项目</strong>。</li>
+<li>添加<code>aws-jenkins</code>标题，点击<strong>保存</strong>。</li>
+</ul>
+
+<p>接下来，设置开发、测试和生产环境:</p>
+
+<ul>
+<li>转到<strong>基础设施</strong>，然后是<strong>环境</strong>，然后是<strong>添加环境</strong>。</li>
+<li>将其命名为<code>Development</code>，点击<strong>保存</strong>。</li>
+<li>对测试和生产环境进行同样的操作。</li>
+</ul>
+
+<p>您需要设置亚马逊帐户以部署到EKS:</p>
+
+<ul>
+<li>进入<strong>基础设施</strong>，然后<strong>账户</strong>，然后<strong>添加账户</strong>，然后<strong> AWS账户</strong>。</li>
+<li>给它起一个名字，并填写前面的<strong>访问密钥ID </strong>和<strong>秘密访问密钥</strong>。</li>
+</ul>
+
+<p>现在您需要在Octopus Deploy中将AWS Kubernetes集群设置为部署目标:</p>
+
+<ul>
+<li>转到<strong>基础设施</strong>，然后<strong>部署目标</strong>，然后<strong>添加部署目标</strong>，然后<strong> Kubernetes集群</strong>，然后<strong>添加</strong>。</li>
+</ul>
+
+<p>遵循我们的文档中的<a href="https://octopus.com/docs/infrastructure/deployment-targets#adding-deployment-targets">步骤，这些步骤指出了要添加的字段以设置部署目标。在本节中，您将为部署目标指定一个目标角色。这将在后面的Octopus部署步骤中引用。</a></p>
+
+<p>您需要将Amazon提要添加到Octopus实例中:</p>
+
+<ul>
+<li>进入<strong>库</strong>，然后<strong>外部进给</strong>，然后<strong>添加进给</strong>，然后选择<strong> AWS弹性容器注册表</strong>。</li>
+<li>输入您的<strong>访问密钥ID </strong>、<strong>秘密访问密钥</strong>，以及您的注册表的<strong>区域</strong>。</li>
+</ul>
+
+<h2 id="deploying-to-eks-step">部署到EKS步骤</h2>
+
+<p>在您的<code>aws-jenkins</code>项目中，转到<strong>流程</strong>，然后<strong>添加部署步骤</strong>，然后<strong> Kubernetes </strong>，然后<strong>部署Kubernetes容器</strong>。添加您之前为部署目标指定的目标角色。</p>
+
+<p>将以下内容添加到YAML部分:</p>
+
+<pre><code>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octopus-underwater-app-jenkins
+  labels:
+    app: octopus-underwater-app
+spec:
+  selector:
+    matchLabels:
+        app: octopus-underwater-app
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: octopus-underwater-app
+    spec:
+      containers:
+        - name: octopus-underwater-app
+          image: 720766170633.dkr.ecr.us-east-2.amazonaws.com/octopus-underwater-app
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          imagePullPolicy: Always
+</code></pre>
+
+<p>点击<strong>保存</strong>。</p>
+
+<h2 id="deploying-in-jenkins">部署在詹金斯</h2>
+
+<p>要将Jenkins连接到Octopus，您需要安装<a href="https://plugins.jenkins.io/octopusdeploy/" rel="nofollow"> Octopus部署插件</a>。</p>
+
+<p>转到<strong>仪表板</strong>，然后<strong>管理插件</strong>。如果没有安装插件，在<strong>可用的</strong>选项卡中搜索Octopus插件并安装插件。遵循我们文档中的<a href="https://octopus.com/docs/packaging-applications/build-servers/jenkins">指南，该指南解释了如何设置Jenkins和Octopus插件</a>。</p>
+
+<p>在设置了Octopus插件之后，对GitHub中的代码进行更改将会触发Jenkins和Octopus中的构建。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/jenkins-octo-icon.png" class="zoom" data-title="Jenkins Octopus Icon"><img src="../Images/67cb89e7bf6ade090b20c7af696c4f7d.png" class="img-fluid center" alt="Jenkins Octopus Icon" title="Jenkins Octopus Icon" data-original-src="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/jenkins-octo-icon.png"/>T2】</a></p>
+
+<p>导航回您的Octopus实例和<strong>项目</strong>，然后是<strong>概述</strong>，您将会看到部署到开发环境的版本。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/development-success.png" class="zoom" data-title=""><img src="../Images/db61822ad575f44c98c5f5ad3f79f32f.png" class="img-fluid center" alt="Development Success" data-original-src="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/development-success.png"/>T2】</a></p>
+
+<p>现在，当您准备好的时候，您就可以将产品发布到测试和生产环境中了。点击<strong>部署</strong>进行发布。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/production-success.png" class="zoom" data-title=""><img src="../Images/942fff2bcfb667bab3be2b0c3f232bbb.png" class="img-fluid center" alt="Development Success" data-original-src="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/production-success.png"/>T2】</a></p>
+
+<p>您需要本地端口转发来检查服务。使用此命令检查web应用程序。端口28015基于Kubernetes文档中的示例:</p>
+
+<pre><code>kubectl port-forward deployment/octopus-underwater-app-jenkins  28015:80
+</code></pre>
+
+<p>在浏览器中转至IP地址<code>http://127.0.0.1:28021/</code>查看您的web应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/octopus-underwater-app.png" class="zoom" data-title=""><img src="../Images/6047fc3877ae9fe55f7944b7e35383fe.png" class="img-fluid center" alt="Octopus Underwater App" data-original-src="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/octopus-underwater-app.png"/>T2】</a></p>
+
+
+
+<p>Octopus Deploy是一个专用的连续交付(CD)工具，它本身支持发布管理。Jenkins通过管道文件定义环境。它们是管道代码的分隔符。</p>
+
+<p>在Octopus中，环境是专用空间。Octopus Deploy使得在将部署推向生产环境之前，可以很容易地停止部署。下面的仪表板展示了这种能力——不同的版本出现在不同的环境中，并且很容易看到版本在生命周期中的位置。</p>
+
+<p>Jenkins是一个持续集成(CI)工具，它只能完成持续交付的某些部分。Jenkins通常用于构建图像并将其推送到中央存储库。Octopus Deploy可以与几个不同的存储库接口，并管理部署过程。这种关注点的分离使Jenkins和Octopus部署能够专注于他们最擅长的领域，从而实现更愉快的部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/release-management.png" class="zoom" data-title="Release Management"><img src="../Images/6a07f3bf807a8a7923587fee06364a11.png" class="img-fluid center" alt="Release Management" title="Release Management" data-original-src="https://i.octopus.com/blog/2022-02/multi-environment-deployments-jenkins/release-management.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在本文中，您使用Jenkins构建了一个web应用程序，将其推送到ECR，并使用Octopus Deploy管理对Kubernetes的部署。</p>
+
+<p>Octopus Deploy提供了一个专用的仪表板来查看不同阶段的部署。仪表板强调Octopus Deploy如何补充像Jenkins这样的CI工具。</p>
+
+<p>Octopus Deploy支持所有主要的云提供商，包括Azure、Google和Amazon。如果你还没有使用八达通，你可以开始一个<a href="https://octopus.com/start">免费试用</a>。</p>
+
+<p>查看我们关于使用Jenkins、Kubernetes和Octopus Deploy进行部署的其他帖子:</p>
+
+
+
+<p>试试我们免费的Jenkins管道生成器工具用Groovy语法创建一个管道文件。这是您启动管道项目所需的一切。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,300 @@
+<html>
+<head>
+<title>Managing Dynamic Targets - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>管理动态目标- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/dynamic-infrastructure#2021-08-12">https://octopus.com/blog/dynamic-infrastructure#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/blogimage-dynamic-targets.png" class="zoom" data-title=""><img src="../Images/9674015550e1071cf74e3ff0f38bfe03.png" class="img-fluid center" alt="Dynamic targets" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/blogimage-dynamic-targets.png"/>T2】</a></p>
+
+<p>在这篇文章中，我们将通过一个动态创建和拆除Azure基础设施的例子，为每个测试人员创建按需Web应用。我们还将了解如何在多个地理区域部署网站，以及如何拆除这些网站。这也将是在<a href="https://octopus.com/blog/paas-targets"> PaaS部署目标</a>和我们的<a href="https://www.youtube.com/watch?v=raepkFD7kx8" rel="nofollow">发布视频</a>中讨论的一些主题的技术概述。</p>
+
+<p>在2018.5中，我们引入了从您的部署流程中轻松管理您的Azure部署目标的能力。以前在Octopus中，你可以使用Azure PowerShell模块，你可以在你的Azure订阅中创建资源组和Web应用程序，但如果不做一些繁重的工作，你就无法向它们部署应用程序。新的动态目标cmdlets使这变得简单明了。</p>
+
+<p>显然，您将需要部署一个应用程序，但是我将把它作为读者的<a href="https://octopus.com/blog/deploying-an-octopus-pi#build-the-application">练习。</a></p>
+
+<h2 id="setup">设置</h2>
+
+<p>首先，我们需要配置Octopus来管理我们的新项目。</p>
+
+<h3 id="create-an-azure-account">创建Azure帐户</h3>
+
+<p>参见关于<a href="https://octopus.com/docs/infrastructure/azure/creating-an-azure-account/creating-an-azure-service-principal-account">创建Azure服务主体帐户</a>的文档以获取说明。</p>
+
+<h3 id="create-an-environment-and-configure-dynamic-infrastructure">创建环境并配置动态基础架构</h3>
+
+<p>创建一个新的环境，如果你还没有的话。默认情况下，环境<strong>不允许</strong>创建或删除动态目标，因此您需要通过编辑环境设置来启用它。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/dynamic-infrastucture-environment-setting.png" class="zoom" data-title=""><img src="../Images/9b2582ee2368af14c71afef920105038.png" class="img-fluid center" alt="Environment configuration" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/dynamic-infrastucture-environment-setting.png"/>T2】</a></p>
+
+<h3 id="create-a-new-lifecycle">创造新的生命周期</h3>
+
+<p>为了简化我们的QA部署，并防止它部署到其他环境(如生产)，我们可以创建一个新的<a href="https://octopus.com/docs/infrastructure/lifecycles">生命周期</a>，只允许部署到我们的新环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/qa-only-lifecycle.png" class="zoom" data-title=""><img src="../Images/bda00153659c82749094e7b5ce5c11fb.png" class="img-fluid center" alt="QA Only Lifecycle" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/qa-only-lifecycle.png"/></a>T2】</p>
+
+<h3 id="create-a-script-module">创建脚本模块</h3>
+
+<p>脚本模块使您能够创建可以跨项目共享的函数。要生成唯一的站点名称，请将以下PowerShell函数放入<strong>脚本模块</strong>中，该模块位于<strong>库</strong>部分下:</p>
+
+<pre><code class="language-powershell">function GetSiteName($prefix)
+{
+    # Octopus variables
+    $environment = $OctopusParameters['Octopus.Environment.Name'].Replace(" ", "").Replace(".", "-")
+    $tenant = $OctopusParameters['Octopus.Deployment.Tenant.Name'].Replace(".", "-")
+
+    # A unique name based on the Octopus environment, release, and tenant
+    $uniqueName = "$prefix-$environment-$tenant"
+
+    return $uniqueName
+}
+</code></pre>
+
+<h3 id="create-a-variable-set">创建变量集</h3>
+
+<p>因为我们在安装和拆卸项目之间需要一个公共变量值，所以我们可以把它放在一个<strong>变量集</strong>中，也可以在<strong>库</strong>部分中找到。</p>
+
+<p>添加一个新的<strong>变量集</strong>，并创建一个变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/variable-set.png" class="zoom" data-title=""><img src="../Images/b21f8a13f8fe8870f66e057f821c52d6.png" class="img-fluid center" alt="Variable Set" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/variable-set.png"/>T2】</a></p>
+
+<h3 id="create-the-setup-project">创建安装项目</h3>
+
+<p>我们需要创建的第一个项目是创建所有基础设施和部署应用程序的项目。</p>
+
+<p>创建一个新项目并进行一些初始设置:</p>
+
+<ul>
+<li>在<em>进程</em>下，将<em>生命周期</em>从<em>默认</em>更改为新的生命周期，并包含新的<em>脚本模块</em></li>
+<li>在<em>变量</em>-&gt;-<em>库集</em>下，点击<em>包含库变量集</em>，选择上一步创建的<strong>变量集</strong>。</li>
+<li>在<em>设置下</em>:          <ul>
+<li>将<em>部署目标</em>更改为<em>允许在没有部署目标时创建部署</em></li>
+<li>将<em>跳过部署目标</em>更改为<em>如果部署目标不可用或变得不可用</em>。如果不更改此设置，任何已从Azure中删除但未在Octopus中清理的Web应用目标都将导致部署失败。这是可选的，取决于您的要求，更多信息请参见<a href="https://octopus.com/docs/deployment-patterns/elastic-and-transient-environments/deploying-to-transient-targets">文档</a>。</li>
+</ul>
+</li>
+</ul>
+
+<p>在为这个项目设置流程时，我们将需要一个<strong> Azure帐户</strong>，有几种不同的方式为步骤提供帐户:</p>
+
+<ol>
+<li><p>直接上台阶。</p>
+</li>
+<li><p>通过租户变量，如果您的租户有不同的Azure帐户。</p>
+<ul>
+<li>转到<em>变量</em> - &gt; <em>项目模板</em>点击<em>添加模板</em>，将<em>控件类型</em>设置为<em> Azure Account </em>并给变量起个名字。稍后当我们设置<em>租户</em>时，这个变量将被赋予一个值。</li>
+</ul>
+</li>
+<li><p>通过项目变量。</p>
+<ul>
+<li>进入<em>变量</em>页面，新建一个变量，将其类型设置为<em> Azure Account </em>，然后选择之前创建的Azure账号。</li>
+</ul>
+</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/azure-account-project-variable.png" class="zoom" data-title=""><img src="../Images/0a5ba2c4ea949a52f7cbe6045304b144.png" class="img-fluid center" alt="Account Project Variable" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/azure-account-project-variable.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/azure-account-variable-value-selector.png" class="zoom" data-title=""><img src="../Images/807d3dc13869b60ca2b28e1d3ea86332.png" class="img-fluid center" alt="Account Variable Value Selector" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/azure-account-variable-value-selector.png"/>T2】</a></p>
+
+<h3 id="the-deployment-process">部署流程</h3>
+
+<p>让我们配置一个部署流程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/deployment-process.png" class="zoom" data-title=""><img src="../Images/541891c394bd89653c07c9fc3b2aee83.png" class="img-fluid center" alt="Deployment process" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/deployment-process.png"/>T2】</a></p>
+
+<p>这里的第一步是一个Azure PowerShell脚本。该步骤应该配置为在Octopus服务器上运行，此时它不需要角色。</p>
+
+<p>该脚本将查询Azure以检查目标资源组是否存在，并在需要时创建资源组、应用服务计划和Web应用。我们还在资源组上使用一个<em>标签</em>设置了一个截止日期，这将在以后的拆卸项目中使用。</p>
+
+<p>脚本中的最后一行是让我们下一步工作的魔法，它将在Octopus服务器中创建一个新的<strong> Azure Web应用目标</strong>，并为其分配一个角色<em> QATest </em>。<code>-updateIfExisting</code>参数将允许命令创建或更新一个同名的现有目标。</p>
+
+<pre><code class="language-powershell">$uniqueName = GetSiteName($Prefix)
+Set-OctopusVariable -name "SiteName" -value $uniqueName
+Set-OctopusVariable -name "Url" -value "https://$uniqueName.azurewebsites.net/"
+
+# Check for resource group
+Get-AzureRmResourceGroup -Name $uniqueName -ErrorVariable notPresent -ErrorAction SilentlyContinue;
+
+if ($notPresent) {
+  # Create resources in Azure
+
+  # set expiry tag on resource group to be used by our teardown script
+  # this could be calculated to be a the end of the week or a specific future date
+  $expiry =  ([System.DateTime]::Today.AddDays(7)).ToShortDateString();
+
+  New-AzureRmResourceGroup -Name $uniqueName -Location "WestUS" -Tag @{Expiry="$expiry"}
+  New-AzureRmAppServicePlan -Name $uniqueName -Location "WestUS" -ResourceGroupName $uniqueName -Tier Free
+  New-AzureRmWebApp -Name $uniqueName -Location "WestUS" -AppServicePlan $uniqueName -ResourceGroupName $uniqueName
+
+  # Create new target in Octopus
+  Set-OctopusVariable -name "Action" -value "NewSite"
+}
+else {
+  Set-OctopusVariable -name "Action" -value "ExistingSite"
+}
+
+# create a new Octopus Azure Web App Target
+New-OctopusAzureWebAppTarget -Name $uniqueName `
+                             -AzureWebApp $uniqueName `
+                             -AzureResourceGroupName $uniqueName `
+                             -OctopusAccountIdOrName $OctopusParameters["Azure Account"] `
+                             -OctopusRoles "QATest" `
+                             -updateIfExisting
+</code></pre>
+
+<p>下一步是<strong>部署Azure Web应用</strong>步骤。这是我们将应用程序部署到我们在上一步中创建的目标的地方。您需要将目标角色设置为<em> QATest </em>，它不会出现在列表中，您需要键入它并选择<em> Add </em>。</p>
+
+<p>未来将会改进对<em>角色</em>的管理，但是现在，你需要手动输入角色名称</p>
+
+
+<p>最后一步是通知步骤，可以是Slack、电子邮件或其他内容。</p>
+
+<p>在我的时差通知步骤中，我设置了以下自定义设置:</p>
+
+<p><em>标题</em>是<code>Deployment to #{Octopus.Deployment.Tenant.Name}</code></p>
+
+<p><em>消息</em>是<code>#{Octopus.Project.Name} release #{Octopus.Release.Number} to #{Octopus.Environment.Name} for #{Octopus.Deployment.Tenant.Name} Deployed #{Octopus.Action[Setup Azure Web App].Output.Action} to #{Octopus.Action[Setup Azure Web App].Output.Url}</code>。</p>
+
+<p>在第一个脚本步骤中创建了<code>Url</code>和<code>Action</code>输出参数。</p>
+
+<h3 id="create-tenants">创建租户</h3>
+
+<p>在这个例子中，我利用租户来演示如何构建QA环境。一个租户可能代表一个测试人员或者一个客户。通过应用这种模式，您可以将您的部署从几个测试人员扩展到数百个测试人员，为每个测试人员部署Azure基础设施和最新的应用程序。</p>
+
+<p>在<strong>租户</strong>菜单下，添加两个新租户，并将它们连接到<strong> Web App Setup </strong>项目，以及我们之前创建的环境。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/tenants.png" class="zoom" data-title=""><img src="../Images/28ba2c34426f4f7455e2d889f8f1701b.png" class="img-fluid center" alt="Tenants" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/tenants.png"/>T2】</a></p>
+
+<p>对于每个租户，您需要单击<strong>连接项目</strong>并选择我们刚刚创建的安装项目。如果您已经选择将您的Azure帐户变量创建为一个<strong>项目模板</strong>变量，您将需要在这一步提供实际的Azure帐户。这允许您在需要时为每个租户提供不同的帐户。</p>
+
+<p>将<strong>租户</strong>用于您的部署将允许您使用租户变量为每个租户的每个部署提供配置。例如，每个测试人员/客户可能有他们自己的数据库，数据库名称由每个租户的变量提供，以在web app部署项目中构建数据库连接字符串。有关更多信息和示例，请参见我们的<a href="https://octopus.com/docs/deployment-patterns/multi-tenant-deployments">文档</a>。</p>
+
+<h2 id="teardown">拆卸</h2>
+
+<p>所有这些Azure资源都可能让你花钱，即使没有人使用它们，所以我们可以使用第二个项目来拆除Azure和Octopus的应用程序。</p>
+
+<p>创建一个新项目，并在<em>设置</em>中进行一些设置配置:</p>
+
+<ul>
+<li>将<em>部署目标</em>更改为<em>允许在没有部署目标</em>时创建部署。</li>
+<li>将<em>跳过部署目标</em>更改为<em>如果部署目标不可用或变得不可用</em>。</li>
+</ul>
+
+<p>在<em>变量</em>-&gt;-<em>下，库集合</em>包括我们之前创建的库变量集合。这将在我们的拆卸脚本中使用。</p>
+
+<p>使用另一个新的Octopus infra structure cmdlet<code>Remove-OctopusTarget</code>，我们可以在单个<em> Azure PowerShell脚本</em>步骤中拆除Octopus目标和Azure资源。</p>
+
+<p>该脚本使用Azure资源组上的到期标签来确定要删除哪些资源。</p>
+
+<pre><code class="language-powershell">$date = [System.DateTime]::Today
+# find all resource groups marked for expiry, with a name starting with #{Prefix}
+Write-Host "Checking for resources expiring on or before $date"
+$resourceGroups = Get-AzureRmResourceGroup | `
+                        Where { $_.ResourceGroupName.StartsWith($Prefix) `
+                                -and $_.Tags -ne $null `
+                                -and $_.Tags.ContainsKey("Expiry") `
+                                -and [DateTime]::Parse($_.Tags["Expiry"]) -ile $date }
+
+Write-Host "Found $($resourceGroups.Count) resource groups"
+
+foreach ($rg in $resourceGroups) {
+  Write-Host "Removing $($rg.ResourceGroupName)"
+  Remove-AzureRmResourceGroup -Name $rg.ResourceGroupName -Force
+  Remove-OctopusTarget -targetIdOrName $rg.ResourceGroupName
+}
+</code></pre>
+
+<p>在运行拆除项目后，所有带有执行日期或更早到期标记的资源组将被移除，相应的Octopus <em> Azure Web App </em>目标也将被移除。</p>
+
+<p>使用最近推出的<a href="https://octopus.com/docs/deployment-process/project-triggers/scheduled-project-trigger">计划项目触发器</a>你可以触发每晚或每周执行的拆卸脚本。</p>
+
+<h2 id="azure-resource-manager-templates-and-cloud-regions">Azure资源管理器模板和云区域</h2>
+
+<p>即使在<code>2018.5</code>中添加了所有新的目标，<strong>云区域</strong>仍然在确定您的部署脚本的范围中发挥作用，以支持<a href="https://octopus.com/docs/deployment-patterns/multi-region-deployment-pattern">多区域部署模式</a>。例如，您可以整合<strong>云区域</strong>来运行不同地理区域的PowerShell脚本或Azure资源管理器模板。</p>
+
+<h3 id="setup-1">设置</h3>
+
+<p>对于这个例子，我们将创建两个<strong>云区域</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/cloud-regions.png" class="zoom" data-title=""><img src="../Images/33fd843d9527875778cc3708a2fb4e5e.png" class="img-fluid center" alt="Cloud Regions" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/cloud-regions.png"/>T2】</a></p>
+
+<p>然后，我们可以使用这些<em>云区域</em>来创建跨越两个不同Azure地理区域的基础设施，并为每个区域部署一个<a href="https://octopus.com/docs/deployment-examples/azure-deployments/resource-groups"> ARM模板</a>。</p>
+
+<p>现在，让我们创建一个新项目来运行我们的Azure资源管理器模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/deployment-process-arm.png" class="zoom" data-title=""><img src="../Images/354cb8fd5412be62542f4756887bc4f6.png" class="img-fluid center" alt="ARM deployment process" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/deployment-process-arm.png"/>T2】</a></p>
+
+<p>第一步是<strong>部署Azure资源组</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/arm-template-step.png" class="zoom" data-title=""><img src="../Images/ebaac4637eb242483da5c29c701b448b.png" class="img-fluid center" alt="ARM Step" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/arm-template-step.png"/>T2】</a></p>
+
+<p>将步骤设置为根据我们分配给新的<strong>云区域</strong>的角色运行，该云区域是在上一步骤中创建的。</p>
+
+<p>在帐户部分，您可以直接选择一个帐户，也可以将其绑定到Azure帐户变量。</p>
+
+<p>ARM步骤还要求目标资源组存在于Azure中，然后才能部署模板在资源组中创建资源。以前，这必须在更早的步骤中完成，在2018.5中，我们允许在该步骤中运行配置脚本。这些可以通过该步骤顶部的<em>配置功能</em>选项打开。一旦打开，您就可以添加预部署和后部署<em> PowerShell </em>部署脚本。</p>
+
+<p>因为我们希望每个地理区域的资源组有不同的名称和位置，所以我们可以使用变量来提供区域名称和资源组名称，这样它们就可以不同。在资源组名称字段中，添加变量语法<code>#{SiteResourceGroup}</code>，并在预部署脚本部分添加以下<em> PowerShell </em>命令:</p>
+
+<pre><code class="language-powershell">New-AzureRmResourceGroup -Name $SiteResourceGroup -Location $SiteLocation -Force
+</code></pre>
+
+<p>对于ARM模板本身来说，最简单的入门方式就是去Azure门户，在你的模板中创建你想要的所有资源。对于这个例子，我创建了一个<em>资源组</em>、<em>应用服务</em>和<em>应用服务计划</em>。然后，在<em>资源组</em>的<em>自动化脚本</em>部分，您可以获取重新创建资源所需的模板。或者你可以抓一个<a href="https://github.com/Azure/azure-quickstart-templates" rel="nofollow">样品</a>。</p>
+
+<p>您还需要对模板进行一处修改，以允许区域作为输入参数，将以下JSON添加到parameters部分，不要忘记前一个参数后面的逗号:</p>
+
+<pre><code class="language-json">"location": {
+    "defaultValue": "Australia Southeast",
+    "type": "String"
+}
+</code></pre>
+
+<p>然后将模板中所有出现的<code>location</code>值替换为<code>"location": "[parameters('location')]"</code>。</p>
+
+<p>当您将最终模板放入步骤的模板源中时，它将提取参数并允许您用自己的值替换这些值。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/arm-template-parameters.png" class="zoom" data-title=""><img src="../Images/d7d892e5bf1b88a83d0dc9ef42a60a47.png" class="img-fluid center" alt="ARM Parameters" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/arm-template-parameters.png"/>T2】</a></p>
+
+<p>ARM模板流程的最后一部分是添加一个后期部署脚本，以在Octopus中创建新的<strong> Azure Web App目标</strong>:</p>
+
+<pre><code class="language-powershell">New-OctopusAzureWebAppTarget -name $SiteName `
+                             -azureWebApp $SiteName `
+                             -azureResourceGroupName $SiteResourceGroup  `
+                             -octopusAccountIdOrName "azure" `
+                             -octopusRoles "CloudWebSite" `
+                             -updateIfExisting
+</code></pre>
+
+<p>现在，创建支持我们的流程所需的所有变量，注意不同云区域目标的一些值的范围:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/arm-template-variables.png" class="zoom" data-title=""><img src="../Images/75fa089b8523c171a80db343a364876c.png" class="img-fluid center" alt="Arm template project variables" data-original-src="https://i.octopus.com/blog/2018-05/dynamic-infrastructure/arm-template-variables.png"/>T2】</a></p>
+
+<p>最后，我们需要在流程中添加一个<em>部署Azure Web App </em>步骤，该步骤将针对<code>CloudWebSite</code>角色运行。这与我们在上面第一个例子中使用的过程完全相同。</p>
+
+<h3 id="teardown-1">拆卸</h3>
+
+<p>您可以使用与前面的拆卸示例相同的脚本，通过在ARM模板步骤的预部署脚本中向<code>New-AzureRmResourceGroup</code>命令添加一个<code>Expiry</code>标记，或者您可以将一个空的ARM模板部署到同一个资源组:</p>
+
+<pre><code class="language-json">{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "variables": {},
+    "resources": []
+}
+</code></pre>
+
+<h2 id="auto-deployment">自动部署</h2>
+
+<p>随着新的<em> Azure </em>目标的引入，您还可以利用<a href="https://octopus.com/docs/deployment-process/project-triggers/automatic-deployment-triggers">自动部署触发器</a>，允许您在应用程序流程的单独部署流程中拥有基础架构脚本/模板。<em>自动部署触发器</em>可以设置为在创建web应用程序的新实例时触发部署。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>新的动态目标供应cmdlets填补了我们在版本3中首次实现Azure Web App目标的空白。现在，您可以对您的目标进行全面的端到端管理。对于动态目标来说，这也不是路的尽头，随着动态环境和维护任务等功能的出现，它们将开始发挥更大的作用。我们甚至可以添加一个用户界面，这样你就可以少写一行代码。</p>
+
+<p>愉快的部署。</p>
+
+                    
+                    
+</body>
+</html>

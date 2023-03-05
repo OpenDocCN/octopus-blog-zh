@@ -1,0 +1,122 @@
+<html>
+<head>
+<title>Octopus Deploy 2018 Roadmap - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通部署2018路线图-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/roadmap-2018#2021-08-12">https://octopus.com/blog/roadmap-2018#2021-08-12</a></blockquote>
+                        <p>昨天我贴出了我们对2017年的反思。我写了一些我们完成的事情，一些我们没有完成的事情和原因，以及我们面临的一些挑战。今天，我想分享我们的2018年路线图。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-01/blogimage-roadmap2018.png" class="zoom" data-title=""><img src="../Images/147b2c98f6670c1319304c52ba277c6d.png" class="img-fluid center" alt="Roadmap for 2018" data-original-src="https://i.octopus.com/blog/2018-01/blogimage-roadmap2018.png"/>T2】</a></p>
+
+<h2 id="themes">主题</h2>
+
+<p>我们将在2018年开展的工作有四个关键主题。</p>
+
+<ol>
+<li>将云托管版本的Octopus推向市场</li>
+<li>在微软生态系统之外扩展Octopus</li>
+<li>将Octopus发展成一个完整的DevOps工具</li>
+<li>不断提高性能、可扩展性、稳定性和用户体验</li>
+</ol>
+
+<h2 id="cloud-octopus">云章鱼</h2>
+
+<p>当我们第一次构建Octopus时，世界上大部分地区仍在内部部署应用程序。Octopus是您在企业中与数百个其他虚拟机一起运行的虚拟机。当我们与较大的客户交谈时，这实际上仍然是常态——不管云供应商希望您相信什么，仍然有大量的本地服务器。</p>
+
+<p>也就是说，如果你部署的每一个应用都是Lambda函数、Azure网站或Docker容器，那么仅仅为了Octopus而必须照看一个VM就是一种拖累。我们的朋友杰里米·凯德曾经说过:</p>
+
+<blockquote class="blockquote">
+<p>Octopus是我用的最重要的东西，也是我仅剩的VM。</p>
+</blockquote>
+
+<p>一个云托管版本的Octopus需要做大量的工作，这是我们致力于很快交付的东西。与该路线图中的许多努力不同，这些努力往往是具有“完成”定义理念的项目，这个云托管版本的Octopus将是一项长期投资，也是我们组织上的一个重大变化。</p>
+
+<p>我们已经为此工作了几个月，我们将在2018年1月推出一个封闭的alpha版本，然后在3月底之前推出一个开放的beta版本。最初，我们将尽可能保持它与Octopus的本地版本相似，随着我们从生产中运行它中学到更多，我们将针对云对它进行改进和优化。</p>
+
+<h2 id="expanding-outside-of-the-microsoft-ecosystem">扩展到微软生态系统之外</h2>
+
+<p>在过去的几年里，我们有微软商店和Java商店，大多数公司的立场非常明确。Octopus最初只是一个. NET部署工具，但是几年前我们就意识到这需要改变。人们和公司更少认同“一个”。NET开发人员"和更多的作为"开发人员，谁碰巧做。NET以及一些节点和一些其他平台。</p>
+
+<p>我们已经支持通过SSH(没有Mono依赖)部署到非Windows平台，运行Bash脚本，2017年我们在部署Java应用程序方面取得了很大进展。迄今为止，我们的成功主要是与偶尔使用非微软技术的微软商店。</p>
+
+<p>今年我们将继续这个主题:</p>
+
+<ul>
+<li>我们将带来一流的AWS支持，达到Azure支持的水平</li>
+<li>我们将把触手引入Linux(以允许轮询连接)</li>
+<li>我们将增加对运行Python和Ruby脚本的支持(除了PowerShell、C#、Bash等。今天)</li>
+<li>我们将扩展现有的Docker支持来与Kubernetes合作</li>
+</ul>
+
+
+
+<p>Octopus部署应用程序，但它可以用来部署更多应用程序。当你想一想:</p>
+
+<ul>
+<li>Octopus对你的应用程序了如指掌——它们是用什么语言编写的，在什么网络服务器上运行</li>
+<li>您的部署管道(开发、测试、生产等。)</li>
+<li>在所有这些环境中，您的应用程序是如何配置的</li>
+<li>一切赖以运行的基础设施</li>
+</ul>
+
+<p>有了这一切，我们可以做的不仅仅是“仅仅”部署:</p>
+
+<ul>
+<li>借助AWS云形成、Azure资源组模板或Terraform，我们可以为您创建的每个功能分支提供和部署到环境中</li>
+<li>我们可以为测试人员提供测试环境，并在下午5点后取消提供</li>
+<li>我们可以运行部署之外的流程。任何类型的“维护”或“操作”过程或操作手册都可以在Octopus中建模:          <ul>
+<li>灾难恢复故障转移流程</li>
+<li>运行状况检查和合规性检查流程</li>
+<li>将生产数据库备份恢复到您的测试环境</li>
+<li>针对最近部署的环境运行自动化UI测试</li>
+</ul>
+</li>
+<li>按计划运行这些程序，使用参数手动运行，或者在监控工具发出警报时作为挂钩运行</li>
+</ul>
+
+<p>我们已经花了很多时间来设计这些想法和故事，我们相信我们可以在不损害章鱼“做一件事并把它做好”的哲学的情况下实现这一点。</p>
+
+<h2 id="scalability-and-continual-improvements">可扩展性和持续改进</h2>
+
+<p>Octopus正在成为越来越多公司的标准部署工具，我们希望确保这是一种无缝的体验。今年，我们将为那些经常使用八达通的人做出重大改进:</p>
+
+<ul>
+<li>一个新的“空间”功能可以让你把你的Octopus服务器按团队或部门分开，给每个人独立的项目、环境、授权等等。</li>
+<li>“工人”将允许今天标记为“在Octopus上运行”的脚本在其他地方运行(就像构建代理)。这将使你的八达通服务器更容易隔离副作用。</li>
+<li>我们将对Octopus的可扩展性和性能进行重大改进。这对于拥有云托管Octopus的我们来说是必要的，但也将使Octopus客户受益匪浅。管理云托管的Octopus将让我们更深入地了解大规模运行Octopus是什么样子。</li>
+<li>我们将继续寻求性能、质量和用户体验的改进。</li>
+<li>我们将建立<a href="https://octopus.com/blog/remote-release-promotions-rfc">远程发布促销</a>。</li>
+<li>我们将继续处理用户意见建议，我们将确保对任何进入前10名的事情做些事情(或者，明确决定我们不做这些事情)。今天这些是:          <ul>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/12948603" rel="nofollow"> 700票</a> </strong>复合步骤模板</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/6169634" rel="nofollow"> 570票</a></strong>‘演习’部署</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/6599104" rel="nofollow"> 447票</a> </strong>周期性预定部署</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/15698781" rel="nofollow"> 442票</a> </strong>版本控制配置</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/6986441" rel="nofollow"> 365票</a> </strong>权限属性为变量集，库变量集，甚至变量</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/9196032" rel="nofollow"> 317票</a> </strong>输出变量为离线滴</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/9811932" rel="nofollow"> 310票</a> </strong>允许项目依赖——因此部署一个项目将自动部署所有依赖的项目</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/5731235" rel="nofollow"> 288票</a> </strong>环境组</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/17930755" rel="nofollow"> 263票</a> </strong>支持Kubernetes</li>
+<li><strong> <a href="https://octopusdeploy.uservoice.com/forums/170787/suggestions/6298548" rel="nofollow"> 257票</a> </strong>允许预定部署的批准步骤发生在实际部署之前</li>
+</ul>
+</li>
+</ul>
+
+<h2 id="wrapping-up">包扎</h2>
+
+<blockquote class="blockquote">
+<p>“没有一个作战计划能在与敌人的第一次接触中幸存”</p>
+<p>赫尔穆特·冯·毛奇</p>
+</blockquote>
+
+<p>我们可能无法在2018年完成清单上的所有事情，随着时间的推移，我们可能会做一些清单上没有的事情。我相信每个阅读这篇文章的人都会理解这就是路线图的本质——这是我们试图勾勒出今年的计划和目标，而且很可能会改变。也就是说，我希望这个清单上有适合每个人的东西。愉快的部署！</p>
+
+<h2 id="learn-more">了解更多信息</h2>
+
+
+
+                    
+                    
+</body>
+</html>

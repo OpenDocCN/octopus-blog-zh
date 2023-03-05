@@ -1,0 +1,99 @@
+<html>
+<head>
+<title>Exposing Octopus variables to a Kubernetes container - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>向Kubernetes容器公开Octopus变量——Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/k8s-envfrom#2021-08-12">https://octopus.com/blog/k8s-envfrom#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/blogimage-exposing-octopus-variables-kubernetes-container-2020.png" class="zoom" data-title=""><img src="../Images/43ac9fd3ba5b8f0e6580ff250b11b707.png" class="img-fluid center" alt="Exposing Octopus variables to a Kubernetes container" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/blogimage-exposing-octopus-variables-kubernetes-container-2020.png"/>T2】</a></p>
+
+<p>如果您遵循最佳实践指南，如<a href="https://12factor.net/" rel="nofollow">十二因素应用</a>，您的Kubernetes应用程序可能会使用环境变量将配置值具体化。在pods中有许多方法来定义这些环境变量，但是直到最近，它们都涉及到逐个显式地定义每个环境变量。</p>
+
+<p>Kubernetes 1.16的新特性是<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables" rel="nofollow">将配置映射或秘密的所有值作为环境变量暴露在pod </a>中的能力。在Octopus 2020.5中，这些新的<code>envFrom</code>字段已经通过<strong>部署Kubernetes容器</strong>步骤公开。当与从原始YAML部署资源的能力相结合时，我们可以创建一个工作流，在这个工作流中，多组Octopus变量被暴露给一个容器，而不需要繁琐地将它们一一映射。</p>
+
+<p>在这篇博文中，我们将看看如何以一种简化的方式将多组Octopus变量直接传递给容器。</p>
+
+<h2 id="defining-the-environment-variables">定义环境变量</h2>
+
+<p>对于这个例子，我们将定义三个环境变量:<code>DATABASEPASSWORD</code>、<code>EXTERNALSERVICE</code>和<code>PORT</code>。</p>
+
+<p>在Octopus中，我们以一种格式捕获这些变量，这种格式允许我们用一个模板循环访问它们，看起来像<code>GroupName[VariableName].Property</code>。这意味着我们最终有三个章鱼变量，称为:</p>
+
+<ul>
+<li><code>EnvironmentVariables[DATABASEPASSWORD].Value</code></li>
+<li><code>EnvironmentVariables[EXTERNALSERVICE].Value</code></li>
+<li><code>EnvironmentVariables[PORT].Value</code>:</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/variables.png" class="zoom" data-title=""><img src="../Images/ed7ce8fe9eae61749ac3c3fb32d3cb5a.png" class="img-fluid center" alt="Environment variables" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/variables.png"/>T2】</a></p>
+
+<h2 id="enabling-custom-resources">启用自定义资源</h2>
+
+<p>在<strong>部署Kubernetes容器</strong>步骤中的一个特性叫做<strong>定制资源</strong>。我们将使用这个特性来创建保存环境变量的秘密。</p>
+
+<p><strong>自定义资源</strong>功能默认不启用，所以我们必须先通过点击<strong>配置功能</strong>按钮将其启用:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/custom-resource-feature.png" class="zoom" data-title=""><img src="../Images/af788af8db0145ff3fc0453bebb4d7b1.png" class="img-fluid center" alt="Customer resource feature" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/custom-resource-feature.png"/>T2】</a></p>
+
+<h2 id="making-resources-immutable">使资源不可变</h2>
+
+<p><strong>部署Kubernetes容器</strong>步骤是一种自以为是的部署Kubernetes资源的方式，其中一种观点是支持主部署的资源，如秘密和配置映射，被视为不可变的。</p>
+
+<p>您可以想象这样一种情况，新部署更改了它在配置映射或密码中预期的数据，如果新部署覆盖了现有的支持资源，那么任何旧部署都将处于未定义状态。使用重新创建策略时，这通常不是问题，因为在创建新的pod之前，所有旧的pod都会被删除。但是对于滚动部署或蓝/绿部署，新旧部署必须并行运行一段时间，因此它们的支持资源也应该并行运行。</p>
+
+<p>在实践中，支持资源被视为不可变的这一观点意味着由<strong>Deploy Kubernetes containers</strong>步骤创建的配置映射、秘密或定制资源在每个Octopus部署中都被赋予了唯一的名称。这是由Octopus自动完成的，但是重要的是要理解分配给定制资源的名称并不是资源部署时的最终名称。</p>
+
+<h2 id="creating-the-secret">创造秘密</h2>
+
+<p>自定义资源是用原始YAML创建的。我们还可以使用Octopus模板特性，我们将使用它来循环前面定义的每个变量。生成的自定义资源如下所示:</p>
+
+<pre><code class="language-YAML">apiVersion: v1
+data:
+#{each var in EnvironmentVariables}
+  #{var}: "#{var.Value | ToBase64}"
+#{/each}
+kind: Secret
+metadata:  
+  name: mysecret
+type: Opaque
+</code></pre>
+
+<h2 id="defining-the-container">定义容器</h2>
+
+<p>为了将秘密公开为环境变量，我们展开容器定义的<strong>秘密环境变量</strong>部分，并单击<strong>从秘密</strong>按钮添加所有环境变量。</p>
+
+<p>为了引用作为定制资源创建的秘密，我们采用在YAML定义的资源名称，并在它后面附加<code>-#{Octopus.Deployment.Id | ToLower}</code>。在我们的例子中，最后的秘密名是<code>mysecret-#{Octopus.Deployment.Id | ToLower}</code>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/env-from-container.png" class="zoom" data-title=""><img src="../Images/23645bec3afc41c0405ad6bb409432e3.png" class="img-fluid center" alt="Secret environment variables" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/env-from-container.png"/>T2】</a></p>
+
+<p>为了证明环境变量已经正确配置，我们将部署Docker image<a href="https://hub.docker.com/r/mcasperson/printenvironment" rel="nofollow">mcasperson/print environment</a>(源代码在<a href="https://github.com/mcasperson/PrintEnvironment" rel="nofollow"> GitHub </a>上)，这是一个简单的web应用程序，它将环境变量打印到网页上。此图像显示端口8080:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/container.png" class="zoom" data-title=""><img src="../Images/88d915dca875789eaf6e53db719d5190.png" class="img-fluid center" alt="Add a container" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/container.png"/>T2】</a></p>
+
+<h2 id="exposing-the-container">露出容器</h2>
+
+<p>为了方便起见，我们将创建一个负载平衡器服务来公开我们的容器。这将为我们提供一个公共IP，让我们的浏览器指向这个IP来测试示例web应用程序:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/service.png" class="zoom" data-title=""><img src="../Images/b311e1d7c6079d03125e98b8f02231e1.png" class="img-fluid center" alt="Add a load balancer service" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/service.png"/>T2】</a></p>
+
+<h2 id="verifying-the-results">验证结果</h2>
+
+<p>在web浏览器中打开负载平衡器IP地址会显示通过秘密暴露的三个环境变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-12/k8s-envfrom/sample-app.png" class="zoom" data-title=""><img src="../Images/b5b9f16eead76f6eea561840bc119f1e.png" class="img-fluid center" alt="Sample app output" data-original-src="https://i.octopus.com/blog/2020-12/k8s-envfrom/sample-app.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过精心设计我们的Octopus变量，使我们能够在创建自定义资源时循环访问它们，并利用2020.5中的<strong>部署Kubernetes容器</strong>步骤所公开的新的<code>envFrom</code>字段，我们有了一个工作流，使我们能够直接将任意数量的Octopus变量映射为Kubernetes容器中的环境变量。</p>
+
+<p>由于<strong>Deploy Kubernetes containers</strong>步骤确保了每个定制资源都有一个惟一的名称，因此基本上是不可变的(至少就部署过程而言)，我们还可以确信，滚动或蓝/绿部署等更高级的策略不会使旧的Kubernetes部署处于未定义的状态。</p>
+
+<p>这种组合对于外部化许多变量的常见问题是一个强大而方便的解决方案，我们希望它将在部署Kubernetes应用程序时增强团队的能力。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

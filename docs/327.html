@@ -1,0 +1,59 @@
+<html>
+<head>
+<title>Improving PowerShell compatibility - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>提高PowerShell兼容性- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/improving-powershell#2015-09-17">https://octopus.com/blog/improving-powershell#2015-09-17</a></blockquote>
+                        <p>Octopus允许在部署期间执行<a href="http://octopusdeploy.com/documentation/features/powershell"> PowerShell脚本</a>。PowerShell非常强大，是实现部署自动化的一个很好的工具，所以它是我们非常依赖的一个特性。</p>
+
+<p>为了调用PowerShell脚本，我们目前使用<a href="http://msdn.microsoft.com/en-us/library/system.management.automation.runspaces.runspace(v=vs.85).aspx"> Runspace </a>类在Octopus触手进程中托管PowerShell。我们将PowerShell脚本从一个文件读入一个字符串并执行它，就像您在PowerShell控制台中输入它一样。</p>
+
+<h2>虫子，哦，虫子...</h2>
+
+<p>通过在我们自己的进程中托管PowerShell，与直接使用PowerShell.exe运行脚本相比有一些不同。自从Octopus首次发布以来，我们一直在不断提高兼容性水平，我们已经进行了大量的集成测试，这些测试是在不同的Windows配置上运行的(2003、2008，包括R2和2012、x86和x64)。大多数时候，它只是工作。除了它不在的时候！</p>
+
+<p>几乎每周我们都会收到一份类似于以下内容的错误报告:</p>
+
+<blockquote>
+  <p>我有一个PowerShell脚本，当我从PowerShell运行它时运行良好，但是当我在触手下运行它时，我得到...</p>
+</blockquote>
+
+<p>示例:</p>
+
+
+
+<p>虽然有很多关于“如何托管PowerShell是一个. NET应用程序”的例子，但我从未见过关于“如何托管一个100%兼容PowerShell.exe的‘一切正常工作’！”的权威指南. NET应用程序中的主机”，这两者之间有很大的区别。有很多开源应用程序使用与我们非常相似的托管代码，但是它们似乎都有这些问题。</p>
+
+<h2>过程。开始救援！</h2>
+
+<p>为了避免看到更多的错误报告，从Octopus 1.4开始，我们将切换到一个新的PowerShell调用模型。我们要打电话给PowerShell.exe，告诉他结果。</p>
+
+<p>如果你有兴趣大致了解我们将如何调用PowerShell，<a href="https://gist.github.com/PaulStovell/5037973">查看这个要点</a>。它还有一个好处，就是比我们目前的模型简单一百倍。</p>
+
+<p>这带来的一个问题是向后兼容性和对现有脚本的支持，现有脚本可能会在新模型下崩溃。</p>
+
+<h2>多种PowerShell模式？</h2>
+
+<p>最初，我计划支持多种PowerShell调用模式，这样就可以选择是否使用内存(当前)模式还是PowerShell(新)模式。用户可以在设置包或脚本步骤时进行选择。</p>
+
+<p>但是这太复杂了。谁想在调用PowerShell脚本的四种方法中进行选择？我们想要处理四种不同PowerShell调用mdoels的错误报告吗？此外，就Octopus而言，在进程中托管PowerShell没有任何优势。它实际上更慢，因为我们必须创建和拆除AppDomain。除了遗留支持之外，我根本找不到任何保留现有模型的理由。</p>
+
+<p>退一步说，鼓励人们编写只在触手下运行时有效，而在PowerShell.exe下运行时无效的脚本是个好主意吗？如果“锁定”是我们的策略那么也许。但我们在NuGet和PowerShell等标准平台上构建Octopus正是为了避免这种情况。</p>
+
+<h2>这意味着什么</h2>
+
+<p>目前的计划是:</p>
+
+<ol>
+<li>从1.4开始，使新模型成为调用PowerShell脚本的默认模型(因此它应该“适合”所有人)</li>
+<li>通过设置一个特殊变量来请求“遗留”PowerShell模式，使旧模型可用，然后在未来的版本(可能是1.5或1.6)中删除该选项</li>
+</ol>
+
+<p>我不认为在我们的“遗留”(托管)模式下会有很多人依赖某个行为的情况，但如果有，我们会在一两个版本中支持他们。否则，人们应该准备转向新的PowerShell模式。在99%的情况下，它会工作。在那1%没有的地方，无论如何都应该修复。</p>
+
+                    
+                    
+</body>
+</html>

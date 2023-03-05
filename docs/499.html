@@ -1,0 +1,62 @@
+<html>
+<head>
+<title>Octopus integration with TFS Build vNext - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus与TFS集成构建vNext - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-integration-with-tfs-build-vnext#2015-09-25">https://octopus.com/blog/octopus-integration-with-tfs-build-vnext#2015-09-25</a></blockquote>
+                        <p>如果您是使用Team Foundation Server或Visual Studio Online的Octopus Deploy用户，您可能非常熟悉<a href="http://docs.octopusdeploy.com/display/OD/Using+OctoPack">octoppack</a>。它是一个挂钩到您的MSBuild过程的工具，用来打包您的项目，以便与Octopus一起使用。</p>
+
+<p>目前，TFS一个项目的CI流程包括使用OctoPack打包并推送您的应用程序，然后在您推送至Octopus时自动创建新版本，最后是一个将该版本自动部署到环境中的生命周期。如果你想了解更多，我们的<a href="http://octopusdeploy.com/learn/videos">培训视频页面</a>上有一个演示。</p>
+
+<p>这个场景对于90%的项目来说都非常有效，但是它模糊了过程中<em>构建</em>和<em>部署</em>阶段之间的界限。这些阶段应该是分开的。例如，如果您的构建成功了，但是有一半的集成测试失败了，您希望进行部署吗？</p>
+
+<p>如果你足够专注，你可以<a href="https://msdn.microsoft.com/en-us/library/dd647551.aspx">修改构建过程模板</a>来添加额外的步骤，但是没有人愿意这样做:</p>
+
+<p><a href="https://i.octopus.com/blog/migrated/BuildProcessTemplate_y1yjd6.png"><img src="../Images/4c835f9f340552cf7516d5069375fe77.png" alt="Process Build Template" data-original-src="https://i.octopus.com/blog/migrated/BuildProcessTemplate_y1yjd6.png"/>T2】</a></p>
+
+<h3>团队构建vNext</h3>
+
+<p>令人欣慰的是，微软在替换Team Build方面投入了大量精力。如果你是Visual Studio Online用户，或者你玩过TFS 2015预发布版本，你可能会看到新的<em>版本。预览菜单中的</em>选项(它将很快被合并到现有的<em>构建</em>选项中)。</p>
+
+<p><img src="../Images/24cd3bc9d02e54fc8706608de1f71a70.png" alt="Build Preview" data-original-src="https://i.octopus.com/blog/migrated/BuildPreviewMenu_u4480p.png"/></p>
+
+<p>如果你想知道它是如何工作的，<a href="https://channel9.msdn.com/Events/Build/2015/3-671"> Chris Patterson在今年</a>的//build/上做了一个很棒的演示，微软也在网上向<a href="http://vsalmdocs.azurewebsites.net/library/vs/alm/build/overview">提供了一些信息。</a></p>
+
+<p>作为一个长期的TFS用户，我非常有信心你会想尽快转移到新的构建系统。</p>
+
+<h3>章鱼集成</h3>
+
+<p>Team Build的新结构给了我们一个很好的机会来更好地与您的构建过程集成。为此，我们在GitHub 中创建了一个新的公共<a href="https://github.com/OctopusDeploy/OctoTFS"> OctoTFS库。</a></p>
+
+<p>它目前包含两个选项，用于在Octopus中创建一个发布，作为构建定义中的一个独立步骤。它们都可以让您很好地分离构建和部署阶段。请注意，您仍然需要打包您的Nuget包并将其推送到Octopus服务器(或另一个Nuget repo)——这些步骤只是创建发布。你仍然可以使用<a href="http://docs.octopusdeploy.com/display/OD/Using+OctoPack"> OctoPack </a>进行打包和推送。</p>
+
+<p>我最兴奋的集成是<a href="https://github.com/OctopusDeploy/OctoTFS/tree/master/source/CustomBuildSteps">定制构建步骤</a>。它给了你一个非常好的用户界面，甚至包括从变更集和工作项中提取的发布说明——这是我们经常被要求的。</p>
+
+<p>不幸的是，因为您需要将这个包上传到TFS/VSO，所以在新的构建系统到达RTM之前，它是不可用的。那应该不会太远。至少这样你就可以从RTM的第一天开始使用它，而不是等待！</p>
+
+<p><em>更新:可以使用<code>TFX-CLI</code>工具上传定制构建任务。说明可以在GitHub页面 </em>上找到<a href="https://github.com/Microsoft/tfs-cli/blob/master/docs/buildtasks.md"/></p>
+
+<p><img src="../Images/2968e1114f963979a2338d5116014183.png" alt="Custom Build Step" data-original-src="https://github.com/OctopusDeploy/OctoTFS/raw/master/img/tfsbuild-configurebuildstep.png"/></p>
+
+<p><img src="../Images/663e5c0eefff1a3df56b25804863505b.png" alt="Release Notes" data-original-src="https://github.com/OctopusDeploy/OctoTFS/raw/master/img/tfsbuild-releasenotes.png"/></p>
+
+<p>另一个选项是一个可以包含在项目中的<a href="https://github.com/OctopusDeploy/OctoTFS/tree/master/source/BuildPowershellScripts"> PowerShell脚本</a>。这个你现在就可以使用，它几乎也能工作<em>到</em>(还没有发布说明)。这不是很好的工作，但它现在的工作。</p>
+
+<p><img src="../Images/a06d7edb006ff8dff0813cb34caa189a.png" alt="Powershell Step" data-original-src="https://github.com/OctopusDeploy/OctoTFS/raw/master/img/ps-configurepowershellstep.png"/></p>
+
+<h3>支持</h3>
+
+<p>我们将继续致力于这些集成，使它们对尽可能多的人有用且易于使用。尽管我们的首要任务总是放在核心产品上，所以我们会尽可能地改进和添加。</p>
+
+<p>当然<a href="https://github.com/OctopusDeploy/OctoTFS"> OctoTFS库</a>是开源的，我们将接受拉请求，所以如果你看到一个bug，一个潜在的改进，或者甚至是一个全新的集成选项，我们很乐意你的贡献！</p>
+
+<h3>其他TFS集成</h3>
+
+<p>我预计我们将在未来开始与TFS建立更多的集成。微软开始用REST API(T1)、T2服务挂钩(T3)、甚至T4扩展(T5)打开一些令人敬畏的机会。TFS内部的八达通仪表板有人吗？</p>
+
+                    
+                    
+</body>
+</html>

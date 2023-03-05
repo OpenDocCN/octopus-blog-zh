@@ -1,0 +1,448 @@
+<html>
+<head>
+<title>Deploying database changes to Cassandra - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>将数据库更改部署到Cassandra - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-to-cassandra#2021-12-06">https://octopus.com/blog/deploying-to-cassandra#2021-12-06</a></blockquote>
+                        <p>NoSQL仍然是数据库世界的颠覆者。像MongoDB、Couchbase、Azure Cosmos DB和Amazon DynamoDB这样的名字是NoSQL实现最容易识别的名字。然而，我们越来越多地听到客户谈论Cassandra。</p>
+
+<p>这篇文章向您展示了如何使用Octopus Deploy和<a href="https://liquibase.org" rel="nofollow"> Liquibase </a>将数据库更改部署到Cassandra服务器。</p>
+
+<h2 id="sample-project-sakila">示例项目:Sakila</h2>
+
+<p>这篇文章使用了<a href="https://bitbucket.org/octopussamples/sakila/src/master/" rel="nofollow"> Sakila </a>示例项目。Sakila项目包含使用不同数据库部署技术将Sakila数据库部署到不同数据库服务器的示例。</p>
+
+<p><a href="https://bitbucket.org/octopussamples/sakila/src/master/src/liquibase/cassandra/" rel="nofollow"> Cassandra </a>文件夹包含一个XML文件，该文件是为使用Liquibase产品在keyspace中创建表而构建的。</p>
+
+<p><details> <summary> dbchangelog.xml </summary> </details></p>
+
+<p> </p><pre><code class="language-xml">&lt;?xml version="1.1" encoding="UTF-8" standalone="no"?&gt;
+&lt;databaseChangeLog  xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext" xmlns:pro="http://www.liquibase.org/xml/ns/pro" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-3.9.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.9.xsd"&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-1"&gt;
+        &lt;createTable tableName="category"&gt;
+            &lt;column name="category_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_category_category_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-2"&gt;
+        &lt;createTable tableName="language"&gt;
+            &lt;column  name="language_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_language_language_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-3"&gt;
+        &lt;createTable tableName="address"&gt;
+            &lt;column  name="address_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_address_address_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="address" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="address2" type="varchar"/&gt;
+            &lt;column name="district" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="city_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="postal_code" type="varchar"/&gt;
+            &lt;column name="phone" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-4"&gt;
+        &lt;createTable tableName="film"&gt;
+            &lt;column  name="film_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_film_film_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="title" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="description" type="varchar"/&gt;
+            &lt;column name="release_year" type="int"/&gt;
+            &lt;column name="language_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="original_language_id" type="int"/&gt;
+            &lt;column name="rental_duration" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="rental_rate" type="decimal"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="length" type="int"/&gt;
+            &lt;column name="replacement_cost" type="decimal"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="rating" type="varchar"/&gt;
+            &lt;column name="special_features" type="varchar"/&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-5"&gt;
+        &lt;createTable tableName="staff"&gt;
+            &lt;column  name="staff_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_staff_staff_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="first_name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="address_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="picture" type="blob"/&gt;
+            &lt;column name="email" type="varchar"/&gt;
+            &lt;column name="store_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="active" type="boolean"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="username" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="password" type="varchar"/&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-6"&gt;
+        &lt;createTable tableName="store"&gt;
+            &lt;column  name="store_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_store_store_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="manager_staff_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="address_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-7"&gt;
+        &lt;createTable tableName="rental"&gt;
+            &lt;column  name="rental_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_rental_rental_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="rental_date" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="inventory_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="customer_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="return_date" type="date"/&gt;
+            &lt;column name="staff_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-8"&gt;
+        &lt;createTable tableName="city"&gt;
+            &lt;column  name="city_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_city_city_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="city" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="country_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-9"&gt;
+        &lt;createTable tableName="film_actor"&gt;
+            &lt;column name="actor_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_film_actor_actor_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="film_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_film_actor_actor_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-10"&gt;
+        &lt;createTable tableName="film_category"&gt;
+            &lt;column name="film_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_film_category_film_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="category_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_film_category_film_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-11"&gt;
+        &lt;createTable tableName="film_text"&gt;
+            &lt;column name="film_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_film_text_film_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="title" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="description" type="varchar"/&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-12"&gt;
+        &lt;createTable tableName="actor"&gt;
+            &lt;column  name="actor_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_actor_actor_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="first_name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-13"&gt;
+        &lt;createTable tableName="inventory"&gt;
+            &lt;column  name="inventory_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_inventory_inventory_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="film_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="store_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-14"&gt;
+        &lt;createTable tableName="customer"&gt;
+            &lt;column  name="customer_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_customer_customer_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="store_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="first_name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_name" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="email" type="varchar"/&gt;
+            &lt;column name="address_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="active" type="boolean"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="create_date" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"/&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-15"&gt;
+        &lt;createTable tableName="country"&gt;
+            &lt;column  name="country_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_country_country_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="country" type="varchar"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+    &lt;changeSet author="Shawn.Sesna (generated)" id="1603898648791-16"&gt;
+        &lt;createTable tableName="payment"&gt;
+            &lt;column  name="payment_id" type="int"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="PK_payment_payment_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="customer_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="staff_id" type="int"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="rental_id" type="int"/&gt;
+            &lt;column name="amount" type="decimal"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="payment_date" type="date"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="last_update" type="date"/&gt;
+        &lt;/createTable&gt;
+    &lt;/changeSet&gt;
+ &lt;/databaseChangeLog&gt;
+
+</code></pre>
+<p>在本文中，您使用构建服务器或<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli"> Octopus命令行界面(CLI) </a>将dbchangelog.xml文件打包成. zip包以进行部署。</p>
+
+
+<p>Cassandra部署流程</p>
+
+<h2 id="cassandra-deployment-process">本文假设您知道如何创建Octopus项目并向部署过程添加步骤。如果你是Octopus的新手，可以考虑阅读我们的<a href="https://octopus.com/docs/getting-started">入门文档</a>来熟悉这些概念。</h2>
+
+<p>在之前的文章中，<a href="https://library.octopus.com/step-templates/6a276a58-d082-425f-a77a-ff7b3979ce2e/actiontemplate-liquibase-apply-changeset" rel="nofollow"> Liquibase - Apply changeset </a>模板被用来更新数据库。然而，这个模板只包含了Liquibase产品的一小部分功能，已经被替换为<a href="https://library.octopus.com/step-templates/36df3e84-8501-4f2a-85cc-bd9eb22030d1/actiontemplate-liquibase-run-command" rel="nofollow"> Liquibase - Run命令</a>。</p>
+
+<p><strong> Liquibase - Run命令</strong>更加灵活，已经实现了许多可用于Liquibase产品的命令。这个模板还有更多的<strong>数据库类型</strong>选项，包括<strong>雪花</strong>和<strong>卡珊德拉</strong>。</p>
+
+<p>Cassandra的部署过程如下所示:</p>
+
+<p><strong>发送开始通知</strong></p>
+
+<ul>
+<li><strong> Cassandra -如果数据库不存在，则创建数据库</strong></li>
+<li><strong> Liquibase -运行更新SQL命令</strong></li>
+<li><strong>数据库管理员批准</strong></li>
+<li><strong> Liquibase -运行更新命令</strong></li>
+<li><strong>发送成功通知</strong></li>
+<li><strong>发送失败通知</strong></li>
+<li><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/octopus-deploy-process.png" class="zoom" data-title=""><img src="../Images/055dee33360e4628c6b4790ce1f7c2b4.png" class="img-fluid center" alt="Deployment process steps for Cassandra in the Octopus UI" data-original-src="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/octopus-deploy-process.png"/>T2】</a></li>
+</ul>
+
+<p>发送开始通知</p>
+
+<h3 id="send-start-notification"><strong>发送开始通知</strong>步骤使用<a href="https://library.octopus.com/step-templates/99e6f203-3061-4018-9e34-4a3a9c3c3179/actiontemplate-slack-send-simple-notification" rel="nofollow">Slack-Send Simple Notification</a>社区步骤模板，在Slack中发送消息让渠道知道部署已经开始。</h3>
+
+<p><strong>挂钩网址</strong>:您的Slack账户的挂钩链接</p>
+
+<ul>
+<li><strong>通道手柄</strong>:要置入的通道</li>
+<li><strong>图标网址</strong>:发布时使用的图标网址</li>
+<li><strong>用户名</strong>:发帖用户的姓名</li>
+<li><strong>职称</strong>:职务职称</li>
+<li><strong>消息</strong>:帖子详细消息</li>
+<li><strong>颜色</strong>:颜色为帖</li>
+<li>卡桑德拉-创建数据库(如果不存在)</li>
+</ul>
+
+<h3 id="cassandra-create-database-if-not-exists">卡桑德拉的数据库被称为<strong>键空间</strong>。<a href="https://library.octopus.com/step-templates/8ab26143-22d7-4e2f-83a8-f0e2d74a4de2/actiontemplate-cassandra-create-database-if-not-exists" rel="nofollow"> Cassandra - Create database如果不存在的话</a>模板自动在Cassandra服务器上创建<strong>键空间</strong>。</h3>
+
+<p><strong>服务器名称</strong>:Cassandra服务器的名称或IP地址</p>
+
+<ul>
+<li><strong>端口</strong>:卡桑德拉端口正在监听</li>
+<li><strong>(可选)用户名</strong>:具有创建密钥空间足够权限的用户名</li>
+<li><strong>(可选)密码</strong>:有足够权限创建密钥空间的用户密码</li>
+<li><strong>服务器模式</strong>:网络拓扑或简单</li>
+<li><strong>键空间</strong>:要创建的键空间的名称</li>
+<li><strong>复制品数量</strong>:要创建的复制品数量</li>
+<li>Liquibase -运行updateSQL命令</li>
+</ul>
+
+<h3 id="liquibase-run-updatesql-command">Liquibase中的<code>updateSQL</code>命令分析更改日志，并生成一个包含运行<code>update</code>命令时将执行的SQL的文件。该文件随后作为工件上传到章鱼服务器。</h3>
+
+<p><strong>专业许可证密钥</strong>:某些Liquibase命令需要专业许可证密钥。</p>
+
+<ul>
+<li><strong>数据库类型</strong>:您要部署到的数据库服务器*的类型。</li>
+<li>*数据库技术列表并不是利基市场可以部署的完整列表，只是章鱼部署已经过测试。覆盖下拉列表将导致失败，因为模板不知道如何构造JDBC连接字符串。</li>
+</ul>
+
+<p><strong>命令</strong>:命令下拉列表*。如果命令不存在，可通过点击链(<a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/octopus-chain-icon.png" class="zoom" data-title=""> <img src="../Images/7d321f44b37ed6974f090b7a06f74040.png" class="img-fluid center" alt="chain icon" data-original-src="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/octopus-chain-icon.png"/> </a>)图标并输入所需命令来覆盖下拉菜单。</p>
+
+
+<ul>
+<li>*这不是Liquibase可用命令的完整列表，只是那些用Octopus Deploy测试过的命令。</li>
+</ul>
+
+<p><strong>附加开关</strong> : Liquibase具有可提供的附加开关，例如设置loglevel(例如，<code>--logLevel=debug</code>)。</p>
+
+
+<ul>
+<li><strong>更改日志文件名</strong>:这是包含Liquibase更改日志的文件。</li>
+<li><strong>变更集包</strong>:包含变更日志的包。</li>
+<li><strong>服务器名称</strong>:要连接的服务器的名称或IP地址。</li>
+<li><strong>服务器端口</strong>:服务器监听的端口。</li>
+<li><strong>数据库名称</strong>:要更新的数据库名称(在Cassandra的情况下为keyspace)。</li>
+<li><strong>用户名</strong>:用于更新的可选用户名。如果省略用户名和密码，将使用工人/触手的身份。</li>
+<li><strong>密码</strong>:可选用户名的密码。</li>
+<li><strong>连接查询字符串参数</strong>:有些数据库服务器需要设置额外的连接参数。在Cassandra的例子中，你可以输入<a href="https://downloads.datastax.com/jdbc/cql/2.0.4.1004/Simba%20Cassandra%20JDBC%20Install%20and%20Configuration%20Guide.pdf#page=31" rel="nofollow">；AuthMech=1 </a>如果你想使用用户名/密码。</li>
+<li><strong>数据库驱动路径</strong>:数据库驱动所在的文件夹。在需要扩展驱动的情况下，使用一个<code>;</code>作为分隔符(Cassandra需要一个)。如果您使用<strong>下载Liquibase </strong>选项，请留空。</li>
+<li><strong>可执行文件路径</strong>:liqui base . bat所在的位置</li>
+<li><strong>下载Liquibase </strong>:如果您的软件包中没有包含Liquibase产品，使用此选项动态下载Liquibase、所选<code>Database type</code>的驱动程序和扩展，以及运行Liquibase的Java。</li>
+<li><strong> Liquibase版本</strong>:默认情况下<strong>下载Liquibase </strong>下载最新版本。使用此选项下载特定版本的Liquibase。</li>
+<li>DBA批准</li>
+</ul>
+
+<h3 id="dba-approval">这一步是可选的，取决于您的DBA对自动化部署过程的信心。它暂停您的部署，并允许DBA查看由<strong> Liquibase - Run updateSQL命令</strong>步骤生成的SQL文件，并批准或拒绝部署。</h3>
+
+<p>Liquibase -运行更新命令</p>
+
+<h3 id="liquibase-run-update-command">这个步骤使用与<strong> Liquibase - Run updateSQL命令</strong>相同的模板，但是使用<code>update</code>命令而不是<code>updateSQL</code>。</h3>
+
+<p>发送成功通知</p>
+
+<h3 id="send-success-notification">该步骤使用与<strong>发送开始通知</strong>相同的模板，并在部署成功执行时执行。</h3>
+
+<p>发送失败通知</p>
+
+<h3 id="send-failure-notification">这个步骤使用与<strong> Send start notification </strong>相同的模板，仅在部署失败时向Slack发送消息。</h3>
+
+<p>部署结果</p>
+
+<h2 id="deployment-results">部署完成后，您会看到类似这样的内容:</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/octopus-deploy-success.png" class="zoom" data-title=""><img src="../Images/3f2bb20690feb88fb4da5a04e1f48902.png" class="img-fluid center" alt="Deploy Liquibase deployment results in Octopus" data-original-src="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/octopus-deploy-success.png"/>T2】</a></p>
+
+<p>使用类似于<a href="https://tableplus.com/" rel="nofollow"> TablePlus </a>的工具，您可以连接到Cassandra服务器，并查看用dbchangelog.xml文件中的表填充的密钥空间。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/tableplus-sakila-tables.png" class="zoom" data-title=""><img src="../Images/b6b9f80dcffae245c95335419503753a.png" class="img-fluid center" alt="keyspace populated with the tables from dbchangelog.xml file" data-original-src="https://i.octopus.com/blog/2021-12/deploying-to-cassandra/tableplus-sakila-tables.png"/>T2】</a></p>
+
+<p>结论</p>
+
+<h2 id="conclusion">这篇文章演示了如何使用Octopus Deploy和Liquibase自动部署到Cassandra数据库服务器。</h2>
+
+<p>愉快的部署！</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

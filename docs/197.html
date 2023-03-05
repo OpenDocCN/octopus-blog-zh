@@ -1,0 +1,195 @@
+<html>
+<head>
+<title>Deploying SQL Server Integration Services (SSIS) packages with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus - Octopus Deploy部署SQL Server Integration Services(SSIS)包</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-ssis#2021-08-12">https://octopus.com/blog/deploying-ssis#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/deploying-ssis.png" class="zoom" data-title=""><img src="../Images/cad15f1f1bc5404199df5a15b3fe18e3.png" class="img-fluid center" alt="Deploying SSIS with Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/deploying-ssis.png"/>T2】</a></p>
+
+<p>当您想到自动化应用程序部署时，通常想到的是自动化部署web代码、容器和/或数据库。在本系列中，我将演示如何自动化支持组件，如SQL Server Integration Services(SSIS)包和SQL Server Reporting Services(SSRS)报表。</p>
+
+
+
+<hr/>
+
+<p>提取、转换和加载(ETL)流程通常由数据库管理员(DBA)或集成专家部署。在较低级别的环境中，允许开发人员直接部署到SSIS服务器并不罕见，但是当涉及到较高级别的环境时，比如生产环境，他们通常是手动完成的。DBA有时可以运行脚本进行部署，但是它通常不包含在自动化应用程序部署的工具中。使用Octopus Deploy，可以将ETL部署添加到部署堆栈中。</p>
+
+<h2 id="building-the-ssis-package">打造SSIS套餐</h2>
+
+<p>为了在部署过程中包含我们的SSIS包，您首先需要构建项目来生产用于部署的工件。没有一个流行的构建服务器可以开箱即用地构建SSIS，并且需要一些配置。所有构建服务器的步骤大致相同。</p>
+
+<p>您的SSIS项目<strong>必须</strong>在项目部署模型中，包部署模型将不适用于此解决方案。</p>
+
+
+<h3 id="configuring-the-build-agent">配置生成代理</h3>
+
+<p>MSBuild不知道如何生成SSIS项目类型。为了执行构建，您需要配置构建代理。</p>
+
+<h4 id="visual-studio">可视化工作室</h4>
+
+<p>要构建SSIS项目，我们需要在构建代理上安装Visual Studio。Visual Studio的社区版应该够用了。</p>
+
+<p>请咨询社区版的EULA，以确保您或您的组织可以使用它。</p>
+
+
+
+
+<p>在我们的构建代理上有了Visual Studio之后，我们需要安装一个名为SQL Server数据工具(SSDT)的扩展。安装完成后，我们的构建代理将能够进行构建。dtsproj项目。</p>
+
+<h3 id="build-ssis-task">构建SSIS任务</h3>
+
+<p>默认情况下，大多数(如果不是全部的话)构建服务器没有构建SSIS的任务。您需要安装或配置自定义任务来执行构建。</p>
+
+<h4 id="azure-devopsteam-foundation-server">azure devo PS/Team Foundation Server</h4>
+
+<p>Azure DevOps (ADO)或Team Foundation Server (TFS)的市场有社区创建的几个任务。如果你用的是ADO/TFS，我建议用这个:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/build-ado-ssis-task.png" class="zoom" data-title=""><img src="../Images/b969db836d3c8f55858dbd04d1230e35.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/build-ado-ssis-task.png"/></a>T2】</p>
+
+<h4 id="teamcity">团队城市</h4>
+
+<p>TeamCity没有可用于执行构建的插件，但是Pavel Hofman有一篇关于如何在TeamCity上配置构建SSIS项目的很棒的<a href="https://blog.codetitans.pl/post/howto-setup-ssis-project-to-build-via-teamcity/" rel="nofollow">博客文章</a>。</p>
+
+<h4 id="jenkins">詹金斯</h4>
+
+<p>与TeamCity类似，Jenkins没有任何插件可用于执行Visual Studio构建。然而，执行类似于TeamCity解决方案的步骤应该会产生相同的结果。</p>
+
+<h3 id="building-the-project">构建项目</h3>
+
+<p>在这篇文章中，我使用Azure DevOps来执行构建。</p>
+
+<h4 id="build-task">构建任务</h4>
+
+<p>填写构建任务详细信息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/ado-ssis-task.png" class="zoom" data-title=""><img src="../Images/51471777ea01fb710701df0a2146e240.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/ado-ssis-task.png"/>T2】</a></p>
+
+<h4 id="packaging-the-artifact">包装工件</h4>
+
+<p>SSIS项目建成后，将产生一个。ispac文件，其中包含部署所需的组件。。ispac不像。拉链还是。nupkg，所以需要一个额外的步骤将其打包成支持的格式。对于ADO、TeamCity和Jenkins，Octopus Deploy具有插件或扩展，其中包含执行以下操作的步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/ado-package-task.png" class="zoom" data-title=""><img src="../Images/f8842cebe02bcd9b881cd49a51ab2211.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/ado-package-task.png"/>T2】</a></p>
+
+<h4 id="pushing-the-artifact-to-a-repository">将工件推送到存储库</h4>
+
+<p>之后。ispac文件已经打包，您需要打包它并将其发送到一个存储库，例如:</p>
+
+<ul>
+<li>Octopus部署内置存储库</li>
+<li>艺术工厂</li>
+<li>关系</li>
+<li>ADO/TFS知识库</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/ado-push-task.png" class="zoom" data-title=""><img src="../Images/046ddbb152b3a8a7a8d504b96ab48921.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/ado-push-task.png"/>T2】</a></p>
+
+<h2 id="octopus-deploy">章鱼部署</h2>
+
+<p>现在我们已经准备好了包，我们可以创建和配置我们的Octopus Deploy项目了。</p>
+
+<h3 id="create-the-project">创建项目</h3>
+
+<p>要创建我们的项目，请单击<strong>项目</strong>和<strong>添加项目</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-create-project.png" class="zoom" data-title=""><img src="../Images/1d3b569b33367f5e525f39824574d665.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-create-project.png"/>T2】</a></p>
+
+<h4 id="add-ssis-deployment-step">添加SSIS部署步骤</h4>
+
+<p>用于部署SSIS包的唯一步骤模板在社区步骤库中。点击<strong>添加步骤</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-add-step.png" class="zoom" data-title=""><img src="../Images/00b6add871502cb35f7b28194746db27.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-add-step.png"/>T2】</a></p>
+
+<p>按SSIS过滤将显示可用的SSIS步骤模板。对于这个演示，我使用<code>Deploy ispac SSIS project from Referenced Package</code>。该模板将允许我们使用工作进程进行部署，而不是在SSIS服务器上安装代理。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis.png" class="zoom" data-title=""><img src="../Images/1f5f599e3763ec5e75d2a9c5ac1bfcd2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis.png"/>T2】</a></p>
+
+<h4 id="fill-in-the-step-details">填写步骤细节</h4>
+
+<p>这一步允许我们在部署目标或工作者上运行这一步。在这个演示中，我使用了一个工人，所以我们不需要在SSIS服务器上安装触手。展开<code>Execution Location</code>部分并选择<code>Run once on a worker</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-worker.png" class="zoom" data-title=""><img src="../Images/300d00727e316370b1b73edeeba68881.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-worker.png"/>T2】</a></p>
+
+<p>现在填写参数:</p>
+
+<ul>
+<li><strong>数据库服务器名称(\实例)</strong>:要连接的SSIS服务器的名称。(即SSISServer1或SSISServer1\Instance1)。</li>
+<li><strong> SQL认证用户名(可选)</strong>:SQL账户用户名。留空以使用集成身份验证。</li>
+<li><strong> SQL认证密码(可选)</strong>:SQL账户的密码。留空以使用集成身份验证。</li>
+<li><strong>启用SQL CLR</strong>:SQL Server的SSISDB特性要求启用SQL CLR。如果该功能尚未启用，请将其设置为true。</li>
+<li><strong>目录名称</strong>:ssis db的目录名称，建议不要更改该值。只有在尚未安装SSISDB功能的情况下，才需要这样做。</li>
+<li><strong>目录密码</strong>:ssis db目录的密码。只有在尚未安装SSISDB功能的情况下，才需要这样做。</li>
+<li><strong>文件夹名称</strong>:SSISDB目录中放置SSIS项目的文件夹名称。</li>
+<li><strong>项目名称</strong>:SSIS项目名称。该名称必须与Visual Studio中的项目名称完全匹配。</li>
+<li><strong>使用环境</strong>:如果要在SSISDB中使用环境变量，设置为true。</li>
+<li><strong>环境名</strong>:要使用的环境名。</li>
+<li><strong>将项目参数引用到环境变量</strong>:设置为true，将项目变量链接到环境变量。</li>
+<li><strong>将包参数引用到环境变量</strong>:设置为true，将包变量链接到环境变量。</li>
+<li><strong>使用全限定变量名</strong>:为真时，包变量名必须用<code>dtsx_name_without_extension.variable_name</code>表示。</li>
+<li><strong>为连接管理器属性使用自定义过滤器</strong>:自定义过滤器应包含正则表达式，用于在自动映射期间进行设置时忽略属性。</li>
+<li><strong>连接管理器属性的自定义过滤器</strong>:在自动映射过程中过滤连接管理器属性的正则表达式。当<code>UseCustomFilter</code>设置为真时使用该字符串。</li>
+<li><strong>包ID </strong>:用于部署的包的ID。</li>
+<li><strong>包Feed ID </strong>:包所在的Feed的ID。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis1.png" class="zoom" data-title=""><img src="../Images/1617baf3db0af83809662c81359a6454.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis1.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis2.png" class="zoom" data-title=""><img src="../Images/5ecfe133bd415eb16e271f0212c2f03b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis2.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis3.png" class="zoom" data-title=""><img src="../Images/8dadd58dff64322cb24b3c77549927c7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-step-ssis3.png"/>T2】</a></p>
+
+<p>填写完表单后，我们现在可以部署我们的包了。</p>
+
+<h3 id="deploy">部署</h3>
+
+<p>让我们创建我们的发布。点击<strong>创建释放</strong>按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release.png" class="zoom" data-title=""><img src="../Images/ea18be2afbc0b38205aa164664571475.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release.png"/>T2】</a></p>
+
+<p>点击<strong>保存</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release-save.png" class="zoom" data-title="">T35【T36】T1】</a></p>
+
+<p>选择要部署到的环境:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release-deploy.png" class="zoom" data-title=""><img src="../Images/4050b666914e8f82ccbe8167317d58a4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release-deploy.png"/>T2】</a></p>
+
+<p>然后确认部署:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release-deploy2.png" class="zoom" data-title=""><img src="../Images/8d302d960864fe53f0a7aa2fd22a30a9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-create-release-deploy2.png"/>T2】</a></p>
+
+<p>我们的包已经部署:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-deploy-complete.png" class="zoom" data-title=""><img src="../Images/f890d618d6e57cae500c548250106c73.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/octopus-project-deploy-complete.png"/>T2】</a></p>
+
+<h4 id="deployment-log">部署日志</h4>
+
+<p>如果您已经将项目参数引用到环境变量中，您会在部署日志中注意到如下内容:</p>
+
+<pre><code>- Adding environment variable CM.WWI_Source_DB.ConnectionString
+**- OctopusParameters collection is empty or CM.WWI_Source_DB.ConnectionString not in the collection -**
+</code></pre>
+
+<p>这条消息表明您已经引用了一个环境变量的项目参数，但是在Octopus Deploy项目变量中没有找到变量<code>CM.WWI_Source_DB.ConnectionString</code>。这意味着您可以创建一个同名的Octopus Deploy项目变量来控制从一个环境到另一个环境的值，就像部署应用程序一样。</p>
+
+
+
+<h4 id="viewing-the-results">查看结果</h4>
+
+<p>让我们使用SQL Server Management Studio (SSMS)来看看我们的SSISDB:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/ssms-ssisdb-ssispackage.png" class="zoom" data-title=""><img src="../Images/f6bc9b147aeb8b9592a0bed8e8e1e587.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/ssms-ssisdb-ssispackage.png"/>T2】</a></p>
+
+<p>打开环境，我们看到我们的变量已经创建:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-04/deploying-ssis/ssms-ssisdb-environmentvariables.png" class="zoom" data-title=""><img src="../Images/912f7f31c6d3c66dd31252cc5e1e01cb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-04/deploying-ssis/ssms-ssisdb-environmentvariables.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我演示了如何使用Octopus Deploy部署SSIS包。使用这种方法，您现在可以使用相同的工具来包含支持应用程序组件。</p>
+
+                    
+                    
+</body>
+</html>

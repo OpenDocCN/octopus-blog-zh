@@ -1,0 +1,165 @@
+<html>
+<head>
+<title>Create a private AWS VPC with CloudFormation - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用CloudFormation - Octopus Deploy创建一个私有AWS VPC</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/aws-vpc-private#2022-07-04">https://octopus.com/blog/aws-vpc-private#2022-07-04</a></blockquote>
+                        <p>虚拟专用云(VPC)是部署到AWS的任何基础设施的支柱。几乎所有的资源都需要一个VPC，并且大多数资源隔离都是通过VPC完成的。</p>
+
+<p>不幸的是，尽管它们无处不在，创建VPC并不像想象的那么简单。</p>
+
+<p>在本文中，您将了解AWS中可用的不同类型的VPC，并找到一个示例CloudFormation模板，该模板可用于部署带有私有子网的简单VPC。</p>
+
+<h2 id="types-of-aws-subnets">AWS子网的类型</h2>
+
+<p>AWS有两种类型的子网:公共子网和私有子网。</p>
+
+<p>公共子网通过<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html" rel="nofollow">互联网网关</a>连接到互联网，并且可以托管具有公共IP地址的资源。</p>
+
+<p>AWS将互联网网关定义为:</p>
+
+<blockquote class="blockquote">
+<p>一个水平扩展、冗余且高度可用的VPC组件，允许您的VPC和互联网之间的通信。</p>
+</blockquote>
+
+<p>私有子网不会将流量路由到互联网网关。私有子网中的资源没有公共IP地址，只能与同一VPC中的其他子网中的资源通信。</p>
+
+<p>一个或多个子网可以放在一个VPC中。可以在VPC中混合搭配公共和私有子网，允许VPC中的一些资源访问互联网，而一些资源只能访问VPC中的其他资源。</p>
+
+<p>带有专用子网的VPC是最容易配置的，您将在下一节中进行配置。</p>
+
+<h2 id="creating-a-vpc-with-private-subnets">创建带有私有子网的VPC</h2>
+
+<p>以下CloudFormation模板创建了一个带有两个专用子网的VPC:</p>
+
+<pre><code class="language-yaml">Parameters:
+  Tag:
+    Type: String
+
+Resources: 
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      Tags:
+      - Key: "Name"
+        Value: !Ref "Tag"
+
+  SubnetA:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.0.0/24"
+
+  SubnetB:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.1.0/24"
+
+  RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref "VPC"
+
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref VPC
+</code></pre>
+
+<p>VPC的名称由<code>Tag</code>参数定义:</p>
+
+<pre><code class="language-yaml">  Tag:
+    Type: String
+</code></pre>
+
+<p>VPC被定义为一种<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpc.html" rel="nofollow"> AWS <span> EC2 </span> VPC </a>资源。</p>
+
+<p><code>CidrBlock</code>属性定义无类域间路由IP块，该块定义与VPC相关联的子网可用的IP地址范围。<code>10.0.0.0/16</code>定义了一组以<code>10.0</code>开头的IP地址。</p>
+
+<p>请注意，VPC有一个名为<code>Name</code>的标签。此标记的值显示在AWS web控制台中:</p>
+
+<pre><code class="language-yaml">  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      Tags:
+      - Key: "Name"
+        Value: !Ref "Tag"
+</code></pre>
+
+<p>接下来，使用<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet.html" rel="nofollow"> AWS <span> EC2 </span>子网</a>资源定义两个子网。</p>
+
+<p>子网被放置在<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html" rel="nofollow">可用区域</a> (AZs)中，这些区域是一个区域中的隔离位置。az具有类似于<code>us-east-1</code>或<code>ap-southeast-2</code>的代码，这些代码基于az所在的区域。</p>
+
+<p>您可以使用<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-select.html" rel="nofollow"> <code>Select</code>内在函数</a>从<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-getavailabilityzones.html" rel="nofollow"> <code>GetAZs</code>数组</a>中返回项目，这将返回您的VPC正在创建的区域的可用AZ，而不是硬编码这些AZ名称。</p>
+
+<p>每个子网都有自己唯一的CIDR块。</p>
+
+<ul>
+<li><p>第一个子网定义了块<code>10.0.0.0/24</code>，这意味着该子网中的所有资源都有以<code>10.0.0</code>开头的IP地址。</p>
+</li>
+<li><p>第二个子网定义了块<code>10.0.1.0/24</code>，这意味着第二个子网中的所有资源都有以<code>10.0.1</code>开头的IP地址:</p>
+</li>
+</ul>
+
+<pre><code class="language-yaml">  SubnetA:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.0.0/24"
+
+  SubnetB:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.1.0/24"
+</code></pre>
+
+<p>子网之间的网络连接由路由表定义，路由表由<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-routetable.html" rel="nofollow">AWS<span>EC2</span>route table</a>资源创建。默认路由表允许每个子网中实例之间的连接，因此您无需在此处指定任何其他路由:</p>
+
+<pre><code class="language-yaml">  RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref "VPC"
+</code></pre>
+
+<p>要部署该模板，请使用<a href="https://octopus.com/docs/deployments/aws/cloudformation">部署AWS CloudFormation模板</a>步骤。</p>
+
+<p>下面的屏幕截图显示了创建后AWS控制台中的VPC:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/aws-vpc-private/vpc.png" class="zoom" data-title=""><img src="../Images/9da321f54deca2f277a1c86821bbf066.png" class="img-fluid center" alt="AWS VPC Console" data-original-src="https://i.octopus.com/blog/2022-q2/aws-vpc-private/vpc.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>带有专用子网的VPC最容易创建。在本文中，您看到了一个简单的CloudFormation模板来创建一个带有两个私有子网的VPC。</p>
+
+<p>在下一篇文章中，你将学习如何创建带有公共子网的VPC。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/Runbooks%20Series"> Runbooks系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,411 @@
+<html>
+<head>
+<title>Deploying a Ruby web application - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>部署Ruby web应用程序——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-ruby#2021-10-14">https://octopus.com/blog/deploying-ruby#2021-10-14</a></blockquote>
+                        <p>Twitter、Airbnb、Shopify和GitHub是科技行业的知名企业。除了一眼就能认出来，它们还有一些共同之处；都是用红宝石写的。</p>
+
+<p>在这篇文章中，我演示了如何使用Octopus Deploy部署用Ruby编写的web应用程序，包括数据库迁移。</p>
+
+<h2 id="sample-application">示例应用程序</h2>
+
+<p>在这篇文章中，我使用的是<a href="https://github.com/morinoko/veggie_tracker" rel="nofollow"> Veggie Tracker </a>示例应用程序。</p>
+
+<p>此示例包括用于创建数据库和执行数据库迁移的web应用程序和代码。通过对项目的一些修改，我让这个应用程序在我的本地环境中运行得相当快(修改后的版本见<a href="https://github.com/OctopusSamples/VeggieTracker" rel="nofollow"> GitHub </a>)。</p>
+
+<h3 id="ruby-application-servers-and-web-servers">Ruby应用服务器和Web服务器</h3>
+
+<p>对于Ruby来说，理解<strong>应用服务器</strong>和<strong> Web服务器</strong>之间的区别很重要。</p>
+
+<p>应用服务器运行Ruby应用程序，并且通常在没有Web服务器的情况下工作。这种方法的缺点是应用服务器只能服务于它正在运行的应用程序，而不能像Web服务器那样处理多个应用程序。</p>
+
+<p>此外，应用服务器通常不处理请求压缩或SSL/TLS之类的事情。出于这个原因，Ruby web应用程序最典型的配置是在应用程序服务器前面有一个类似Apache或NGINX的web服务器。</p>
+
+<h3 id="selecting-an-app-server">选择应用服务器</h3>
+
+<p>当用Ruby语言开发时，你有许多应用服务器可供选择，例如Unicorn、Thin、Puma、Passenger等。</p>
+
+<p>Veggie Tracker应用程序的原始应用服务器叫做<strong> Shotgun </strong>。该项目的自述文件指出，您只需从命令行运行<code>Shotgun</code>就可以让应用程序在您的本地机器上运行。如果您在Linux上开发，这是可行的。</p>
+
+<p>虽然我的服务器是Linux，但我的开发机器是Windows，所以我需要既能用于Windows又能用于Linux的东西。Puma 应用服务器兼容Linux和Windows。切换到<strong>美洲狮</strong>就像从Gemfile中移除散弹枪并添加<code>Puma</code>一样简单。</p>
+
+<h4 id="configuring-puma-for-use-with-sockets">配置Puma用于套接字</h4>
+
+<p>在这篇文章中，我希望Puma使用套接字而不是服务器上的另一个端口。要配置Puma使用套接字，您需要在<code>config</code>子文件夹中创建一个包含以下内容的<code>puma.rb</code>文件:</p>
+
+<pre><code class="language-Ruby"># Change to match your CPU core count
+#workers 2
+
+# Min and Max threads per worker
+threads 1, 6
+
+app_dir = File.expand_path("../..", __FILE__)
+shared_dir = "#{app_dir}/shared"
+
+# Default to production
+rails_env = ENV['RAILS_ENV'] || "production"
+environment rails_env
+
+# Set up socket location
+bind "unix://#{shared_dir}/sockets/puma.sock"
+
+# Logging
+stdout_redirect "#{shared_dir}/logs/puma.stdout.log", "#{shared_dir}/logs/puma.stderr.log", true
+
+# Set master PID and state locations
+pidfile "#{shared_dir}/pids/puma.pid"
+state_path "#{shared_dir}/pids/puma.state"
+activate_control_app
+
+on_worker_boot do
+  require "active_record"
+  ActiveRecord::Base.connection.disconnect! rescue ActiveRecord::ConnectionNotEstablished
+  ActiveRecord::Base.establish_connection(YAML.load_file("#{app_dir}/config/database.yml")[rails_env])
+end
+</code></pre>
+
+<p>上面的代码被配置为与它将要被部署到的Linux NGINX服务器一起工作。请删除此文件，以便在Windows上本地运行它。</p>
+
+
+<h4 id="configuring-database.yml">配置database.yml</h4>
+
+<p>最初的应用程序被配置为使用<strong> SqlLite </strong>作为数据库，然而，它可以很容易地被修改为使用类似于<strong> Postgres </strong>的东西。有两个修改来实现这一点:</p>
+
+<p><strong> 1。</strong>在<code>Gemfile</code>中增加对Postgres gem的引用:</p>
+
+<pre><code class="language-Ruby">gem 'pg'
+</code></pre>
+
+<p><strong> 2。</strong>在<code>config</code>文件夹中创建一个<code>database.yml</code>文件:</p>
+
+<pre><code class="language-yaml"># If you want to change this file, please keep the changes in your working
+# copy by using
+#
+#     git update-index --skip-worktree config/database.yml
+#
+# or just use DATABASE_URL, in which case Rails will happily skip the whole
+# file.
+#
+# See https://github.com/coopdevs/timeoverflow/wiki/Keeping-your-local-files
+# for more information
+#
+
+defaults: &amp;defaults
+  adapter: postgresql
+  username: 'postgres'  # default is null
+  database: 'veggietracker'
+  password: 'mypassword'
+  host: 'my posgresl server'
+  port: 5432
+
+development:
+  &lt;&lt;: *defaults
+
+
+test:
+  &lt;&lt;: *defaults
+
+
+staging:
+  &lt;&lt;: *defaults
+
+production:
+  &lt;&lt;: *defaults
+</code></pre>
+
+<p><code>database.yml</code>文件允许您根据定义的环境覆盖连接属性。然而，在这篇文章中，我配置了<code>database.yml</code>文件来继承<code>defaults</code>的所有内容，因为我将在Octopus Deploy中使用<a href="https://octopus.com/docs/projects/steps/configuration-features/structured-configuration-variables-feature">结构化配置变量</a>特性。</p>
+
+<h2 id="building-your-ruby-application">构建Ruby应用程序</h2>
+
+<p>由于Ruby是一种脚本语言，所以不需要构建应用程序。然而，在Ruby应用程序中使用构建服务器有明显的优势:</p>
+
+<ul>
+<li>为应用程序执行收集所有相关的gem</li>
+<li>使用构建服务器Octopus Deploy插件或集成以便于集成，例如:          <ul>
+<li>打包应用程序</li>
+<li>将包推送到Octopus Deploy服务器或第三方包解决方案(Nexus、Artifactory等)。)</li>
+<li>将构建信息推送到Octopus部署</li>
+<li>创建版本</li>
+<li>部署和/或推广版本</li>
+</ul>
+</li>
+</ul>
+
+<p>在这篇文章中，我使用GitHub Actions作为构建服务器。下面是执行以下操作的YAML:</p>
+
+<ul>
+<li>配置GitHub操作以使用Ruby</li>
+<li>设置软件包版本号</li>
+<li>安装依赖gem，将gem放在<strong>供应商</strong>子文件夹中——这允许应用程序包含它需要的所有依赖项，而不需要直接在服务器上安装gem</li>
+<li>配置GitHub操作以使用Octopus CLI</li>
+<li>创建工件文件夹</li>
+<li>打包VeggieTracker应用程序并将归档文件放在artifacts文件夹中</li>
+<li>将VeggieTracker工件推送到Octopus部署服务器</li>
+</ul>
+
+<pre><code class="language-yaml"># This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run. 
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.6
+
+      # Set the build version number
+      - name: Set Version
+        run: echo "PACKAGE_VERSION=$(date +'%Y.%m.%d').$GITHUB_RUN_NUMBER" &gt;&gt; $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          # Set the default gem installation path to a directory alongside the Ruby application code.
+          # This allows the dependencies to be packaged with the application.
+          export WORKSPACE="$(pwd)"
+          export GEM_HOME="$WORKSPACE/vendor"
+          export GEM_PATH="$WORKSPACE/vendor"
+          export PATH="$PATH:$WORKSPACE/vendor/bin"
+
+          # Install the specific version of Bundler defined in the Gemfile.lock file
+          gem install bundler -v "$(grep -A 1 "BUNDLED WITH" Gemfile.lock | tail -n 1)"
+
+          # Use bundler to install the other dependencies
+          bundle install
+
+      # Install Octopus action
+      - name: Install Octopus CLI
+        uses: OctopusDeploy/install-octopus-cli-action@v1.1.1
+        with:
+          version: latest
+
+      # Create artifacts folder
+      - name: Create artifacts folder
+        run: mkdir "$GITHUB_WORKSPACE/artifacts"
+
+      # Package VeggieTracker.Web
+      - name: Package Flyway
+        run: |
+          octo pack --id="VeggieTracker.Web" --format="Zip" --version="$PACKAGE_VERSION" --basePath="$GITHUB_WORKSPACE" --outFolder="$GITHUB_WORKSPACE/artifacts"
+
+      # Push packages to octopus deploy
+      - name: Push packages to Octopus
+        run: |
+          octo push --package="$GITHUB_WORKSPACE/artifacts/VeggieTracker.Web.$PACKAGE_VERSION.zip" --server="${{ secrets.OCTOPUS_SERVER_URL }}" --apiKey="${{ secrets.OCTOPUS_API_KEY }}" --space="${{ secrets.OCTOPUS_SERVER_SPACE }}"      
+</code></pre>
+
+<p>构建完成后，我们可以专注于在Octopus Deploy中创建部署。</p>
+
+<h2 id="deploying-veggietracker-with-octopus-deploy">使用Octopus Deploy部署VeggieTracker</h2>
+
+<p>这篇文章假设你熟悉用Octopus Deploy创建项目。</p>
+
+<p>Veggie Tracker应用程序的部署过程由一个包含多个组件的步骤组成，我将在后面介绍这些组件。</p>
+
+<h3 id="variables">变量</h3>
+
+<p>在定义我们的流程之前，让我们创建要在部署中使用的变量:</p>
+
+<ul>
+<li><code>Project.NGINX.Port</code> -端口NGINX将监听。</li>
+<li><code>defaults:database</code>-veggie tracker应用程序的数据库名称。</li>
+<li><code>defaults:host</code>-PostgreSQL服务器的主机名或IP地址。</li>
+<li><code>defaults:password</code>-PostgreSQL用户帐户的密码。</li>
+<li><code>defaults:port</code>-PostgreSQL服务器监听的端口号。</li>
+<li><code>defaults:username</code>-PostgreSQL服务器上帐户的用户名。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-project-variables.png" class="zoom" data-title=""><img src="../Images/d7d71689e8d3eeff1986967616916e73.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-project-variables.png"/>T2】</a></p>
+
+<p>以<code>defaults:</code>开头的变量是与<strong>结构化配置变量</strong>功能一起使用的变量。</p>
+
+
+<h3 id="process">过程</h3>
+
+<p>添加一个<strong>部署到NGINX </strong>的步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-add-nginx.png" class="zoom" data-title=""><img src="../Images/8b0f5c1f8a90510412e0a87698536bdc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-add-nginx.png"/>T2】</a></p>
+
+<p>点击<strong>配置功能</strong>按钮，启用<strong>自定义部署脚本</strong>和<strong>结构化配置变量</strong>功能。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-configure-features.png" class="zoom" data-title=""><img src="../Images/7f7a1d7ff732f32c250ed3cc11024f77.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-configure-features.png"/>T2】</a></p>
+
+<h4 id="package-details">包装详情</h4>
+
+<p>在<strong>包裹详情</strong>部分，选择蔬菜跟踪者。Web包。</p>
+
+<h4 id="custom-deployment-scripts">自定义部署脚本</h4>
+
+<p>作为部署过程的一部分，我们将运行两个脚本。</p>
+
+<h5 id="deployment-scripts">部署脚本</h5>
+
+<p>Ruby应用程序数据库更新的一种流行方法是在代码中定义数据库更新。Veggie Tracker应用程序包括一个名为<strong> db </strong>的文件夹，它使用代码定义数据库结构。</p>
+
+<p>为了执行数据库创建和迁移，将下面的代码放在<strong>部署脚本</strong>窗口中。确保选择<strong> Bash </strong>作为要使用的语言。</p>
+
+<pre><code class="language-bash"># Ensure the bin files are executable
+sudo chmod +x -R "#{Octopus.Action[Deploy to Nginx].Output.Package.InstallationDirectoryPath}/vendor/bin"
+
+# Set variables
+ROOTDIR=#{Octopus.Action[Deploy to Nginx].Output.Package.InstallationDirectoryPath | Replace "%" "%%"}
+export GEM_HOME="${ROOTDIR}/vendor"
+export GEM_PATH="${ROOTDIR}/vendor"
+
+# Install platform specific gems
+gem install bcrypt
+gem install bond
+gem install nio4r
+gem install pg
+gem install puma
+
+# Run database migrations
+${ROOTDIR}/vendor/bin/rake db:create
+${ROOTDIR}/vendor/bin/rake db:migrate
+</code></pre>
+
+<p>这个脚本安装了一些Ruby Gems。这是必需的，因为GitHub Actions使用基于Ubuntu的容器来执行构建。这个平台被标识为<code>x86_64-linux</code>，而Ubuntu VM被标识为<code>x86_64-linux-gnu</code>。虽然很相似，但编译器生成了不同的不兼容的二进制文件。</p>
+<p>受此影响的宝石在构建日志中用<code>Installing X with native extensions</code>标识出来，这些宝石需要在目标平台上重新构建。</p>
+
+
+<h5 id="post-deployment-script">部署后脚本</h5>
+
+<p>NGINX步骤配置NGINX来服务Puma Ruby应用服务器，但是我们需要一些东西来启动Puma，尤其是在重启之后。</p>
+
+<p>以下脚本将Puma应用服务器配置为作为Linux服务启动:</p>
+
+<pre><code class="language-bash">SYSTEMD_CONF=/etc/systemd/system
+SERVICE_USER=$(whoami)
+ENVIRONMENT=#{Octopus.Environment.Name}
+
+# This is used to generate the systemd filename, so we remove any chars that might be problematic for filenames
+APPNAME=#{Octopus.Action[Deploy to Nginx].Package.PackageId | Replace "[^a-zA-Z0-9]" -}-#{Octopus.Environment.Name}
+# This path is referenced by the systemd service in multiple places, and systemd treats the % char as special,
+# so it is escaped with a second % char
+ROOTDIR=#{Octopus.Action[Deploy to Nginx].Output.Package.InstallationDirectoryPath | Replace "%" "%%"}
+SYSTEMD_SERVICE_FILE=${SYSTEMD_CONF}/${APPNAME}.service
+
+# Application systemd service configuration
+echo "Creating ${APPNAME} systemd service configuration"
+cat &gt; "${APPNAME}.service" &lt;&lt;-EOF
+[Unit]
+Description=${APPNAME} service
+After=network.target
+
+[Service]
+# Expose the gems that were bundled up with the application package
+Environment="GEM_PATH=${ROOTDIR}/vendor"
+Environment="GEM_HOME=${ROOTDIR}/vendor"
+Environment="PATH=${PATH}:${ROOTDIR}/vendor/bin"
+WorkingDirectory=${ROOTDIR}
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+#ExecStart=${ROOTDIR}/vendor/bin/puma -C ${ROOTDIR}/config/puma.rb #-e ${ENVIRONMENT}
+ExecStart=${ROOTDIR}/vendor/bin/puma
+Restart=always
+RestartSec=10
+SyslogIdentifier=${APPNAME}
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo mv "${APPNAME}.service" ${SYSTEMD_CONF}/${APPNAME}.service
+
+# Ensure the bin files are executable
+chmod +x -R "#{Octopus.Action[Deploy to Nginx].Output.Package.InstallationDirectoryPath}/vendor/bin"
+
+# Any changes to a system file are picked up by reloading the systemd daemon
+sudo systemctl daemon-reload
+# Enable the service so it starts on boot
+sudo systemctl enable "${APPNAME}.service"
+# Start or restart the service to pick up any changes
+sudo systemctl restart "${APPNAME}.service"
+</code></pre>
+
+<h4 id="structured-configuration-variables">结构化配置变量</h4>
+
+<p>我们将使用<strong>结构化配置变量</strong>特性来替换<code>database.yml</code>中的值，以便连接到数据库服务器。这个文件位于我们应用程序的<code>config</code>文件夹中。</p>
+
+<p>对于<strong>目标文件</strong>，输入<code>config/database.yml</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-structured-variables.png" class="zoom" data-title=""><img src="../Images/53fe30c339c16a793cc6efcd9b27bd43.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-structured-variables.png"/>T2】</a></p>
+
+<h4 id="nginx-web-server">NGINX Web服务器</h4>
+
+<p>现在我们为NGINX定义绑定和位置等项目。</p>
+
+<h5 id="bindings">粘合剂</h5>
+
+<p>删除缺省绑定，并用项目变量中配置的端口变量替换它。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-port.png" class="zoom" data-title=""><img src="../Images/f734b9faabd64b261fd3e20a3f63142e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-port.png"/>T2】</a></p>
+
+<h5 id="locations">位置</h5>
+
+<p>我们的应用程序需要定义两个位置。这两个位置都有一些也将被应用的指令。点击<strong>添加位置</strong>开始。</p>
+
+<h6 id="location">位置/</h6>
+
+<p>第一个位置是<code>/</code>，需要两条指令。</p>
+
+<p>点击<strong>添加指令</strong>按钮，输入以下内容:</p>
+
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-location1.png" class="zoom" data-title=""><img src="../Images/ea67f3fe9bbae24af668d2de67a3857d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-location1.png"/>T2】</a></p>
+
+<h6 id="location-app">位置@应用程序</h6>
+
+<p>第二个地点是<code>@app</code>。这个位置需要用一个指令配置为<code>http://unix:#{Octopus.Action.Package.InstallationDirectoryPath}/shared/sockets/puma.sock</code>的反向代理。</p>
+
+<ul>
+<li>指令:<code>proxy_set_header</code></li>
+<li>数值:<code>Host $http_host</code></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-location2.png" class="zoom" data-title=""><img src="../Images/cdf0a2ae92c9c6599b734183c6f298aa.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-nginx-location2.png"/>T2】</a></p>
+
+<p>位置确定后，我们就完成了部署过程。您可以创建一个版本并进行部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-deploy.png" class="zoom" data-title=""><img src="../Images/36eefbe8e9767a93c4d237c14f035ba8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/octopus-deploy.png"/>T2】</a></p>
+
+<p>Linux上的一些程序将信息消息写入stderr流。Octopus将这些解释为可能的错误，并以红色显示。看到这样的消息很正常。</p>
+
+
+<p>打开浏览器，我们可以看到部署的应用程序正在运行。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-07/deploying-ruby/nginx-veggie-tracker.png" class="zoom" data-title=""><img src="../Images/9461ebdb5d02f14b4c36f5842cf6b108.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-07/deploying-ruby/nginx-veggie-tracker.png"/></a>T2】</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我演示了如何将一个用Ruby编写的web应用程序部署到NGINX web服务器上，包括数据库迁移。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,116 @@
+<html>
+<head>
+<title>Securing your Kubernetes cluster with Kubewarden - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Kubewarden - Octopus Deploy保护您的Kubernetes集群</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/securing-kubernetes-cluster-with-kubewarden#2021-12-16">https://octopus.com/blog/securing-kubernetes-cluster-with-kubewarden#2021-12-16</a></blockquote>
+                        <p>Kubernetes正在迅速成为云的操作系统。每个主要的云提供商都有一个受支持的Kubernetes平台，Kubernetes可以在内部运行，Kubernetes甚至有一个带Helm的包管理器。多亏了<a href="https://kubernetes.io/docs/concepts/extend-kubernetes/operator/" rel="nofollow">操作模式</a>，Kubernetes拥有内置的支持来描述和管理几乎<a href="https://operatorhub.io/" rel="nofollow">任何类型的工作负载</a>。</p>
+
+<p>这种灵活性是福也是祸。Kubernetes几乎可以运行任何东西，但是几乎不可能维护任何真实世界的生产集群来托管任何随机的东西。</p>
+
+<p>Kubernetes基于角色的访问控制(RBAC)提供了对集群托管的资源的某种级别的控制。但是，RBAC只允许创建顶级资源，如部署或pod。</p>
+
+<p>一个单元几乎可以承载任何东西，所以仅仅允许或禁止一个单元的部署通常是不够的。相反，在允许或拒绝之前，团队需要检查给定pod的属性。</p>
+
+<p><a href="https://kubernetes.io/blog/2019/03/21/a-guide-to-kubernetes-admission-controllers/" rel="nofollow">准入控制器</a>通过将资源传递给定制服务，提供检查、修改、接受或拒绝新资源的能力。这允许对集群中创建的资源进行细粒度的控制，并确保只部署那些满足您特定需求的资源。</p>
+
+<p>这篇文章着眼于kube warden准入控制器，这是一个早期的项目，支持用编译成WebAssembly的多种语言编写的准入策略。</p>
+
+<p>我将带您在Octopus中创建一些操作手册和部署来管理Kubewarden，并将pods部署到Kubernetes，测试定制的准入策略。</p>
+
+<h2 id="installing-kubewarden">安装Kubewarden</h2>
+
+<p>安装Kubewarden最简单的方法是通过它的舵图。</p>
+
+<p>在Octopus中创建一个指向<a href="https://charts.kubewarden.io" rel="nofollow">https://charts . kube warden . io</a>的新Helm Feed:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/helm-feed.png" class="zoom" data-title=""><img src="../Images/d85e64fcc79cc4eb8e9a538e4a774742.png" class="img-fluid center" alt="Octopus dashboard open on External Feeds showing Kubewarden Helm" data-original-src="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/helm-feed.png"/>T2】</a></p>
+
+<p>Kubewarden是通过一本手册安装的。Runbooks对于管理任务很有用，比如部署跨领域服务，因为它们不受生命周期进程的限制。这允许在部署生命周期的后期在环境中启动新的集群(就像新的生产集群一样),而无需首先在生命周期的早期环境中部署服务:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/helm-deployment.png" class="zoom" data-title=""><img src="../Images/ba25c399de63294f1a84eeee3f1e9a6b.png" class="img-fluid center" alt="Octopus dashboard open on Runbooks screen showing Install Kubewarden" data-original-src="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/helm-deployment.png"/>T2】</a></p>
+
+<h2 id="deploying-a-suspicious-pod">部署一个可疑的吊舱</h2>
+
+<p>为了演示Kubewarden如何保护您的集群的安全，请部署下面的pod。这个pod赋予自己<code>SYS_TIME</code>功能，并使用<code>date</code>命令来设置容器中的系统时间。</p>
+
+<p>pod几乎没有理由设置系统时间，可以想象改变时间会导致应用程序出现故障。例如，如果日期倒退，仓库库存服务可能会下多个订单，或者任务调度程序可能会在不正确的时间触发作业。</p>
+
+<p>尽管下面的窗格仅设置日期并退出，但它能够这样做表明其他窗格也可以部署设置日期的功能:</p>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: settime
+spec:
+  containers:
+  - name: ubuntu
+    image: index.docker.io/ubuntu
+    command:
+    - "/bin/bash"
+    - "-c"
+    - "date -s '19 APR 2012 11:14:00'"
+    securityContext:
+     capabilities:
+       add:
+       - SYS_TIME
+</code></pre>
+
+<p>此pod部署有一个<strong>部署原始Kubernetes YAML </strong>步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/deploy-pod.png" class="zoom" data-title=""><img src="../Images/9b2fff7b854b5d553bf5a614e15c3eba.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/deploy-pod.png"/>T2】</a></p>
+
+<p>果不其然，pod被部署并更新其容器中的时间。这不是我们想要的结果，所以下一步是添加一个Kubewarden策略来防止这样的资源被部署。</p>
+
+<h2 id="deploying-an-admission-policy">部署准入策略</h2>
+
+<p>像所有Kubernetes资源一样，Kubewarden政策可以在YAML定义。下面的例子使用<a href="https://github.com/kubewarden/psp-capabilities" rel="nofollow"> psp-capabilities </a>策略在创建或更新时从所有pod中删除<code>SYS_TIME</code>功能:</p>
+
+<pre><code class="language-yaml">apiVersion: policies.kubewarden.io/v1alpha2
+kind: ClusterAdmissionPolicy
+metadata:
+  name: psp-capabilities
+spec:
+  module: registry://ghcr.io/kubewarden/policies/psp-capabilities:v0.1.3
+  rules:
+  - apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    operations:
+    - CREATE
+    - UPDATE
+  mutating: true
+  settings:
+    required_drop_capabilities:
+    - SYS_TIME
+</code></pre>
+
+<p>使用操作手册中的<strong>部署原始库本内特YAML </strong>步骤部署资源:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/add-policy.png" class="zoom" data-title=""><img src="../Images/133bf154206a4bb97254fae8c5e3fc01.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-10/securing-kubernetes-cluster-with-kubewarden/add-policy.png"/>T2】</a></p>
+
+<p>现在再次打开逃生舱。这一次部署失败了，因为Kubewarden策略阻止部署具有<code>SYS_TIME</code>功能的pod，并出现以下错误:</p>
+
+<pre><code class="language-bash">Error from server: error when creating "customresource.yml": admission webhook "psp-capabilities.kubewarden.admission" denied the request: PSP capabilities policies doesn't allow these capabilities to be added: {"SYS_TIME"}
+</code></pre>
+
+<h2 id="conclusion">结论</h2>
+
+<p>Kubewarden是一个准入控制器的例子，它根据分配给各个资源属性的值，在创建资源时接受、拒绝或修改资源。这使得运营团队能够确保只部署满足其特定要求的资源。它提供了一个比标准库本内特斯RBAC更高水平的控制。</p>
+
+<p>在这篇文章中，您使用Helm chart部署了Kubewarden，使用<strong> Deploy raw Kubernetes YAML </strong>步骤部署了一个策略，并看到了不符合策略规则的pod部署是如何被拒绝的，从而确保了具有已知无效配置的pod不能被应用到集群。</p>
+
+<h2 id="watch-the-webinar">观看网络研讨会</h2>
+
+<iframe src="https://www.youtube.com/embed/qlsk8zdTcLA" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>我们定期举办网络研讨会。请参见<a href="https://octopus.com/events">网络研讨会页面</a>，了解过去的网络研讨会和即将举办的网络研讨会的详细信息。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

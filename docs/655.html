@@ -1,0 +1,165 @@
+<html>
+<head>
+<title>Packages in Script Steps - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>脚本步骤中的包- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/script-step-packages#2021-07-07">https://octopus.com/blog/script-step-packages#2021-07-07</a></blockquote>
+                        <p>在<a href="https://octopus.com/blog/octopus-release-2018.8"> Octopus 2018.8 </a>脚本步骤正在进化，并获得一些新的超能力。</p>
+
+<h2 id="packages">软件包++</h2>
+
+<p>我们增加了向脚本步骤家族添加包引用的能力:</p>
+
+<ul>
+<li><code>Run a Script</code></li>
+<li><code>Run an Azure PowerShell Script</code></li>
+<li><code>Run an AWS CLI Script</code></li>
+</ul>
+
+<p>以前，这些步骤能够引用包含要运行的脚本的单个包。他们现在也可以引用不包含脚本的包。是的，包裹，<em>复数</em>。哦，当我们说<em>包装</em>时，我们包括集装箱图片(见下面的<a href="#container-images">)。</a></p>
+
+<h2 id="why">为什么？</h2>
+
+<p>脚本经常需要与包进行交互。他们可能需要读取/写入包中的文件(例如执行包中包含的另一个脚本)，或者在某些情况下只需要包元数据(例如更新AWS ECS服务使用的映像版本)。</p>
+
+<p>以前，当从脚本访问文件时，有两种模式:</p>
+
+<h3 id="the-wrapper-package">1)“包装”包装</h3>
+
+
+
+<p>Octopus早就有能力使用一个包作为要执行的脚本的源。这样做的一个副作用是，包首先被提取，然后里面的文件与正在运行的脚本文件放在一起。这使得许多精明的用户意识到他们可以将他们的脚本嵌入到他们想要使用的包中，或者反过来将包嵌入到脚本所在的包中。</p>
+
+<p>这是可行的，但是我们不希望强制创建这些人为的包装包。</p>
+
+<h3 id="the-deploy-the-packages-first-pattern">2)“首先部署包”模式</h3>
+
+<p>在这种模式中，一个或多个<em>部署包</em>或<em>传输包</em>步骤被配置为将包推送到目标服务器上的某个位置。然后，脚本步骤简单地假设已经部署了包。</p>
+
+<p>这种方法的主要缺点是它只能用于在目标机器上执行脚本。它不能用于运行在Octopus服务器或工作程序上。这也使得部署过程变得更加复杂。</p>
+
+<p><img alt="Rube Goldberg Machine" src="../Images/43bff558f13d1e7e80a3818b4a7d29ab.png" data-original-src="https://i.octopus.com/blog/2018-09/script-step-packages/rube-goldberg-machine.jpg"/></p>
+
+<h3 id="container-images">容器图像</h3>
+
+<p>您现在可以从脚本步骤中以一流的方式引用容器图像了！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/script-step-packages/aws-ecs-container-image.png" class="zoom" data-title=""><img src="../Images/ae0ceefc363f81e9a72a7a56a5a58088.png" class="img-fluid center" alt="Container Image Reference" data-original-src="https://i.octopus.com/blog/2018-09/script-step-packages/aws-ecs-container-image.png"/>T2】</a></p>
+
+<p>这意味着图像的版本(图像标签)将在发布创建时被捕获，就像任何其他包一样。</p>
+
+<p>容器映像可以配置为在执行目标上获取，或者根本不获取。例如，在上图中，我们正在更新AWS ECS服务使用的容器映像的版本。因为我们只是简单地使用元数据，所以我们不需要承担本地提取图像的成本。</p>
+
+<h2 id="an-example-nuget-push">一个例子:NuGet Push</h2>
+
+<p>我们在Octopus总部的一个真实示例场景是将包推送到NuGet。</p>
+
+<p>我们章鱼的释放过程。客户。NET库将把包推送到一个NuGet库。对于我们的<code>Test</code>环境，我们推送到一个私有的MyGet提要，然后对于我们的<code>Production</code>发布，我们推送到<a href="https://www.nuget.org/packages/Octopus.Client/" rel="nofollow">nuget.org</a></p>
+
+<p>这涉及两个包:</p>
+
+<ul>
+<li>来自nuget.org的<code>NuGet.CommandLine</code>，我们需要提取它来运行<code>nuget.exe push</code></li>
+<li><code>Octopus.Client</code>哪一个是我们刚刚构建的包，我们想把它解压缩到一个NuGet存储库中</li>
+</ul>
+
+<p>我们之前跳了“首先部署包”舞。借助新的脚本步骤功能，部署流程变成了:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/script-step-packages/nuget-push-process.png" class="zoom" data-title=""><img src="../Images/9151a260cd9cbe024acdb4593c43a6d4.png" class="img-fluid center" alt="NuGet Push Deployment Process" data-original-src="https://i.octopus.com/blog/2018-09/script-step-packages/nuget-push-process.png"/>T2】</a></p>
+
+<p>当我们添加<code>NuGet.CommandLine</code>包引用时，我们指定它应该被提取。我们还给它起了一个名字<code>nuget</code>，方便从我们的自定义脚本中使用。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/script-step-packages/nuget-add-package.png" class="zoom" data-title=""><img src="../Images/d10c7ae4576f9f037a38108acf6eaacb.png" class="img-fluid center" alt="Add NuGet.CommandLine package reference" data-original-src="https://i.octopus.com/blog/2018-09/script-step-packages/nuget-add-package.png"/>T2】</a></p>
+
+<p>对比一下<code>Octopus.Client</code>包引用，我们指定<em>而不是</em>被提取。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/script-step-packages/octopus-client-add-package.png" class="zoom" data-title=""><img src="../Images/7b48afb218a84c5f7f61442feafc6f36.png" class="img-fluid center" alt="Add Octopus.Client package reference" data-original-src="https://i.octopus.com/blog/2018-09/script-step-packages/octopus-client-add-package.png"/>T2】</a></p>
+
+<p>我们发布包的脚本变成了:</p>
+
+<pre><code># Build the path to nuget.exe
+$nugetPackagePath = $OctopusParameters["Octopus.Action.Package[nuget].ExtractedPath"]
+$nugetExe = Join-Path -Path $nugetPackagePath -ChildPath "Tools\nuget.exe"
+
+# nuget push
+. $nugetExe push Octopus.Client.nupkg -source $DestinationRepository
+</code></pre>
+
+<p>自定义脚本可以通过两种方式使用引用的包。</p>
+
+<h3 id="package-files">包文件</h3>
+
+<p>如果包引用被配置为提取，那么包将被提取到脚本工作目录下的子目录中。该目录将被命名为与包引用相同的名称。在上面的例子中，名为<code>nuget</code>的包引用将被提取到类似于<code>C:\Octopus\Work\20180821060923-7117-31\nuget</code>的目录中(这显然是一个Windows目录；在Linux目标上执行的脚本可能有一个路径，比如<code>/home/ubuntu/.octopus/Work/20180821062148-7121-35/nuget</code>。</p>
+
+<p>如果包引用被<em>而不是</em>配置为提取，那么未提取的包文件将被放置在工作目录中。该文件将被命名为包引用名，扩展名与原始包文件相同。在abolve示例中，<code>Octopus.Client</code>包引用解析为一个nupkg包，文件将被复制到一个路径，比如<code>C:\Octopus\Work\20180821060923-7117-31\Octopus.Client.nupkg</code>(对于Linux: <code>/home/ubuntu/.octopus/Work/20180821062148-7121-35/Octopus.Client.nupkg</code>)。</p>
+
+<p>这些位置被设计成便于从定制脚本中使用，因为相对路径可以预测，例如<code>./nuget</code>。如果需要绝对路径，可以使用变量(见下文)。</p>
+
+<h3 id="package-variables">包变量</h3>
+
+<p>包引用贡献变量，这些变量可以像任何其他变量一样使用。这些变量是(使用<code>nuget</code>示例):</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>可变的</th>
+<th>描述</th>
+<th>示例值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>章鱼。Action.Package[nuget]。PackageId</td>
+<td>包ID</td>
+<td>努杰。命令行</td>
+</tr>
+<tr>
+<td>章鱼。Action.Package[nuget]。FeedId</td>
+<td>订阅源ID</td>
+<td>feeds-nuget-org</td>
+</tr>
+<tr>
+<td>章鱼。Action.Package[nuget]。包版本</td>
+<td>发行版中包含的软件包版本</td>
+<td>4.7.1</td>
+</tr>
+<tr>
+<td>章鱼。Action.Package[nuget]。提取路径</td>
+<td>提取目录的绝对路径</td>
+<td>c:\ Octopus \ Work \ 2018 0821060923-7117-31 \ n获取</td>
+</tr>
+<tr>
+<td>章鱼。Action.Package[nuget]。PackageFilePath</td>
+<td>包文件的绝对路径(不会为<code>nuget</code>示例设置，因为它被配置为提取)</td>
+<td>c:\章鱼\工作\ 2018 08 21060923-7117-31 \章鱼。Client.nupkg</td>
+</tr>
+<tr>
+<td>章鱼。Action.Package[nuget]。包文件名</td>
+<td>包文件的名称(不会为<code>nuget</code>示例设置)</td>
+<td>章鱼。Client.nupkg</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="variable-substitution">变量替换</h2>
+
+<p>还有一点...</p>
+
+<p>我们已经为脚本步骤启用了文件变量替换特性。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-09/script-step-packages/var-sub-features.png" class="zoom" data-title=""><img src="../Images/a3771d6f260f1359a47e406a161e858f.png" class="img-fluid center" alt="Variable Substitution Features" data-original-src="https://i.octopus.com/blog/2018-09/script-step-packages/var-sub-features.png"/>T2】</a></p>
+
+<p>这允许将Octopus变量替换到引用包中包含的文件中。</p>
+
+<h2 id="when">当...的时候</h2>
+
+<p>Octopus 2018.8中提供了脚本步骤的包引用，当您阅读本文时，该版本将可供下载。</p>
+
+<p><em>多套餐部署愉快！</em></p>
+
+                    
+                    
+</body>
+</html>

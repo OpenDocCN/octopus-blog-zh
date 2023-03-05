@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>Tenant aware lifecycles - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>租户感知生命周期- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/tenant-aware-lifecycle#2017-09-29">https://octopus.com/blog/tenant-aware-lifecycle#2017-09-29</a></blockquote>
+                        
+
+<p>为了充分利用多阶段部署的优势，<a href="http://docs.octopusdeploy.com/display/OD/Lifecycles">部署生命周期</a>是需要理解的关键概念之一。通常，发布的当前阶段可以通过生命周期环境中部署的直接线性进展来确定。然而，一旦您启用并开始使用多租户，情况可能开始变得不那么清晰。让我们看一下租户的加入如何影响部署生命周期过程。</p>
+
+<h2>租户感知生命周期</h2>
+
+<p>我们将从设置一个典型的多租户配置场景开始。我们的<code>Synergy</code>项目的默认生命周期类似于<code>Testing</code>-&gt;-<code>Staging</code>-&gt;-<code>Production</code>，我们有三个不同的租户连接到这个项目，用于不同的环境。</p>
+
+<ul>
+<li><code>Customer-1</code>部署到<code>Staging</code>和<code>Production</code></li>
+<li><code>Customer-2</code>部署到<code>Staging</code>和<code>Production</code></li>
+<li><code>Customer-3</code>仅部署到<code>Production</code></li>
+</ul>
+
+<p>我们没有给机器或步骤增加任何标记范围的复杂性，并且假设部署一旦开始就会成功完成。</p>
+
+<h3>步骤1 -测试的首次部署</h3>
+
+<p>查看从<code>3.4.0</code>构建中获得的新项目仪表板，我们可以很好地了解与这个项目相关联的所有租户以及一个发布过滤器。只有可以部署到该版本的<a href="http://docs.octopusdeploy.com/display/OD/Channels">通道</a>(在本例中为默认通道)的租户才会显示在这个过滤视图中。</p>
+
+<p><img src="../Images/0ac6a21f31b095892f541226a7c562de.png" title="Step-1: Only un-tenanted" data-original-src="https://i.octopus.com/blog/201607-step1-89KY.png"/> <br/>创建我们的版本<code>0.0.1</code>我们发现，按照对生命周期的标准理解，我们最初只能部署到第一个环境<code>Testing</code>。到目前为止，一切都没有改变。<strong>由于我们的租户都没有连接到该环境，我们只能执行未租赁到<code>Testing</code>环境</strong>的部署。假设不涉及租户，这意味着对变量模板的任何引用都将解析为模板默认值或适当范围的项目变量。<br clear="ALL"/></p>
+
+<h3>步骤2 -测试完成，第一个租户部署</h3>
+
+<p><img src="../Images/ac5bb0abd5feecdd0b208d3152d2420c.png" title="Step-2: Un-tenanted or staging connected tenants" align="right" data-original-src="https://i.octopus.com/blog/201607-step2-X8CR.png"/>随着我们测试环境的成功，当前的生命周期阶段已经转移到了<code>Staging</code>。现在，我们有两个客户可以部署到这个环境中，<code>Customer-1</code>和<code>Customer-2</code>。然而，由于<code>Customer-3</code>没有连接到<code>Staging</code>，他们仍然不能部署这个版本。请注意，<strong>未租赁部署的性质意味着，尽管现在有可用的租户，也可以执行到<code>Staging</code>。</strong></p>
+
+<p>让我们假设我们已经通过部署<code>Customer-1</code>到<code>Staging</code>继续。<br/> <br clear="ALL"/></p>
+
+<h3>第三步-分期？生产？在哪里？谁啊。</h3>
+
+<p>根据我们所指的租户，生命周期的当前阶段现在稍微复杂一些。因为<code>Customer-1</code>已经到了<code>Staging</code>，所以我们现在可以为那个租户升级到<code>Production</code> <em>的部署。</em></p>
+
+<p>只能部署到<code>Production</code>的<img src="../Images/ab3c9f8ec032cb137b65e242f3463915.png" title="Step-3: Different phases" align="left" data-original-src="https://i.octopus.com/blog/201607-step3-FT72.png"/> <code>Customer-3</code>现在也可以直接执行到<code>Production</code>的首次部署。这是因为将任何租户部署到一个环境都是对该版本的未租用生命周期的一种提升。这解释了为什么<code>Customer-3</code>部署<em>和</em>未租赁部署现在可以执行到<code>Production</code>，尽管两者都没有执行<code>Staging</code>部署。</p>
+
+<p>另一方面，我们将<code>Customer-2</code>定义为除了<code>Production</code>之外还连接到<code>Staging</code>环境。这个配置建议我们<em>要求</em> <code>Customer-2</code>在提升到<code>Production</code>之前先部署到<code>Staging</code>。让我们停下来想一想这意味着什么。虽然根据<code>Customer-1</code>和<code>Customer-3</code>我们现在可以执行<code>Production</code>部署，但是对于<code>Customer-2</code>的任何部署仍然必须首先发生在<code>Staging</code>上。因此，就好像我们现在有一个并行的生命周期，这个版本仍然处于专门针对<code>Customer-2</code>的<code>Staging</code>阶段，而其他租户可以继续下一阶段。<strong>将租户链接到项目的环境需要在阶段进展之前将他们部署到该环境。</strong>此功能允许您在未完成每个配置阶段的情况下，阻止您的租户部署进入后续环境，而不会影响其他租户继续部署。<br/>T19】</p>
+
+<h2>租户必需的项目</h2>
+
+<p>您可能已经注意到这种开箱即用的多租户行为的一个结果是，您总是能够对任何租户可以部署到的任何环境执行未租赁部署。然而，在您的特殊情况下，您可能会发现对<code>Production</code>执行非租赁部署没有意义。也许某些必需的变量会丢失，因为它们只能在变量模板中的租户上定义。也许您希望防止未租用的部署意外地部署到生产基础架构中。为了支持您希望禁止未租赁部署的这些场景，我们在项目设置页面上包括了以下选项。</p>
+
+<p><img src="../Images/0933de5b84a535c4dda953cab2085dee.png" title="Require Tenants" data-original-src="https://i.octopus.com/blog/201610-201606-requiretenants-72h6-DY7F.png"/></p>
+
+<p>通过选择<code>Require a tenant for all deployments</code>选项，该项目将无法再进行未租赁的部署。我们预计这将是一些团队在开始转向完全租用的架构时将采用的高级配置。在这种情况下，您还可以设置一个特殊的内部测试租户，它与开发或测试环境相关联，在这些环境中，您的客户特定的部署没有多大意义。也许您还将为您的每个测试人员创建一个测试租户，允许他们接收您的发布到不同机器的单独部署，以便进行并行测试。(请记住，在禁用未租赁部署时，您需要确保至少有一个租户能够部署到您的每个生命周期环境中，否则不会有太大进展！).</p>
+
+<p><strong>我们认为，即使您的项目实际上不需要为多个客户部署同一个版本，您的部署也可以通过多种不同的方式受益于多租户特性。</strong>让我们知道你可能如何利用租户，而不仅仅是明显的租户=客户设计！</p>
+
+                    
+                    
+</body>
+</html>

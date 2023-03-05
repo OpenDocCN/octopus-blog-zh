@@ -1,0 +1,153 @@
+<html>
+<head>
+<title>RFC: Lifecycles - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC:生命周期- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/lifecycles-rfc#2015-09-25">https://octopus.com/blog/lifecycles-rfc#2015-09-25</a></blockquote>
+                        <p>生命周期是Octopus中的一个新概念，它将允许我们处理许多我们一直渴望解决的与<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/5730624-triggers-gates-and-bad-releases">相关的建议</a>:</p>
+
+<ul>
+<li>在环境之间自动升级(触发器)</li>
+<li>将一个版本标记为坏的(因此它不能再被部署)</li>
+<li>在测试部署完成之前阻止生产部署(门)</li>
+</ul>
+
+<p><img src="../Images/d93215478793d0ffd14502e76b6bdcb9.png" alt="Lifecycle example" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2014-07-19_at_10_40_48_pm_vjgqjr.png"/></p>
+
+<h2>生命周期和阶段</h2>
+
+<p>生命周期由许多阶段组成，每个阶段都指定了有关升级的触发器和规则。最简单的生命周期，即开箱即用且默认的生命周期，就是:</p>
+
+
+<strong>Phase 1: Anything Goes</strong>
+<ul>
+<li>允许手动部署到:<em>所有环境</em></li>
+</ul>
+
+
+<p>换句话说，这个生命周期简单地说“发布可以以任何顺序部署到任何环境中”。完全混乱了！</p>
+
+<p>自定义生命周期可能会将世界分为预生产和生产阶段:</p>
+
+
+<strong>Phase 1: Pre-Production</strong>
+<ul>
+<li>自动部署到:<strong>开发</strong></li>
+<li>允许手动部署到:<strong> UAT1、UAT2、UAT3、Staging </strong></li>
+<li>提升前的最低环境:<strong> 3 </strong></li>
+</ul>
+
+<strong>Phase 2: Production</strong>
+<ul>
+<li>自动部署到:</li>
+<li>允许手动部署到:<strong>生产</strong></li>
+<li>提升前的最低环境:</li>
+</ul>
+
+
+<p>最后，一个更加结构化的生命周期可能是这样的:</p>
+
+
+<strong>Phase 1: Development</strong>
+
+<ul>
+<li>自动部署到:<strong>开发</strong></li>
+<li>允许手动部署到:</li>
+<li>提升前的最低环境:<strong> 1 </strong></li>
+</ul>
+
+<strong>Phase 2: Test</strong>
+<ul>
+<li>自动部署到:</li>
+<li>允许手动部署到:<strong> UAT1、UAT2、UAT3 </strong></li>
+<li>提升前的最低环境:<strong> 2 </strong></li>
+</ul>
+
+<strong>Phase 3: Staging</strong>
+<ul>
+<li>自动部署到:</li>
+<li>允许手动部署到:<strong>暂存</strong></li>
+<li>提升前的最低环境:<strong> 1 </strong></li>
+</ul>
+
+<strong>Phase 4: Production</strong>
+<ul>
+<li>自动部署到:</li>
+<li>允许手动部署到:<strong>生产</strong></li>
+<li>提升前的最低环境:<strong> 1 </strong></li>
+</ul>
+
+
+<p>请注意，测试阶段解锁了3个不同的测试环境，在发布进入阶段之前，用户必须部署到其中的至少两个环境中。</p>
+
+<h2>假设</h2>
+
+<p>为了简单起见，我们对这个特性做了一些假设。</p>
+
+<p>首先，阶段的进展总是线性的——你从阶段1开始，然后到阶段2，然后是阶段3，等等。你不能跳过一个阶段，也没有分支。</p>
+
+<p>第二，随着生命周期的深入，可以部署的环境是累积的。例如，在上面的第三个例子中，如果发布处于阶段3 (Staging ),您可以部署到开发、UAT1/2/3或Staging，而不是生产。</p>
+
+<h2>自动升级</h2>
+
+<p>由于每个阶段都可以配置为部署到一个或多个环境，因此您可以使用此选项来自动在环境之间进行升级。例如，在成功部署到开发环境之后，您可能会自动升级到测试环境。</p>
+
+<p>请记住，您可以将此功能与现有的<a href="http://docs.octopusdeploy.com/display/OD/Manual+intervention+and+approvals">手动干预步骤</a>系统混合使用，以便在部署之前/之后和升级之前暂停审批。</p>
+
+<h2>自动发布创建</h2>
+
+<p>当您将一个生命周期分配给一个项目时，您还可以配置该项目，以便在检测到一个新的NuGet包时立即创建发布。</p>
+
+<p><img src="../Images/54f80157146bc351137e33e73e86bf86.png" alt="Create releases automatically" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2014-07-17_at_6_55_41_pm_ddqztc.png"/></p>
+
+<p>目前，我认为这将仅限于我们内置的NuGet存储库(不适用于外部提要中的包)。</p>
+
+<p>当与上述特性相结合时，这是非常令人兴奋的——从NuGet包的推送中，我们可以创建和部署没有外部集成的版本。</p>
+
+<h2>标记一个问题</h2>
+
+<p>通常，我们假设如果一个版本被成功部署，它就可以被提升了。就像现在，您可以使用<a href="http://docs.octopusdeploy.com/display/OD/Manual+intervention+and+approvals">手动步骤</a>来强制审查/批准，作为部署结束时的一个明确步骤。</p>
+
+<p>然而，有时部署看起来很好并获得批准，只是到后来您才发现问题——可能是删除客户数据的可怕错误。如果发生这种情况，您可以标记部署的问题:</p>
+
+<p><img src="../Images/a6dcc20efc9967e6f88806d821f3afae.png" alt="Flag a problem" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2014-07-17_at_7_08_13_pm_bqbhqo.png"/></p>
+
+<p>当一个问题被标记时，部署在整个生命周期中并不计入进度——如果我们标记了一个与试运行部署相关的问题，我们将不能升级到生产，即使试运行是成功的。</p>
+
+<h2>启用场景</h2>
+
+<blockquote>
+  <p>我想通过推送一个NuGet包，从开发一直到生产，自动提升部署</p>
+</blockquote>
+
+<ol>
+<li>使用“自动创建发布”选项</li>
+<li>在管道的每个阶段，设置“自动部署到”环境，以便发布自动通过管道进行</li>
+</ol>
+
+<blockquote>
+  <p>除非您已经部署到暂存，否则禁止生产部署</p>
+</blockquote>
+
+<p>简单地将它们放在不同的阶段，除非有成功的试运行部署，否则不要解锁生产环境。</p>
+
+<blockquote>
+  <p>即使试运行成功，如果我们后来发现应用程序有问题，也要阻止生产部署</p>
+</blockquote>
+
+<p>在生命周期中，使用“标记一个问题”特性来防止发布进展到下一个阶段，或者将它恢复到前一个阶段。</p>
+
+<h2>生命周期将消耗项目组</h2>
+
+<p>目前，Octopus中的项目组用于组织项目集合，限制它们可以部署到的环境，并设置保留策略。</p>
+
+<p>当引入生命周期时，您将通过生命周期来控制项目可以部署到哪些环境，以及要应用的保留策略。项目组只是被留下来组织项目集合，仅此而已。</p>
+
+<p>你觉得怎么样？这个特性会对你有用吗？你的生命周期会是什么样的？</p>
+
+                    
+                    
+</body>
+</html>

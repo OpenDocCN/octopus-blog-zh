@@ -1,0 +1,127 @@
+<html>
+<head>
+<title>Raising the minimum requirements for hosting and using Octopus Server - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>提高托管和使用八达通服务器的最低要求-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/raising-minimum-requirements-for-octopus-server#2021-11-10">https://octopus.com/blog/raising-minimum-requirements-for-octopus-server#2021-11-10</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-11/raising-minimum-requirements-for-octopus-server/minimum_requirements_octopus_2020.png" class="zoom" data-title=""><img src="../Images/5ac6cb2dde95c1add9ba3602e2ab7140.png" class="img-fluid center" alt="Raising the minimum requirements for hosting and using Octopus Server" data-original-src="https://i.octopus.com/blog/2019-11/raising-minimum-requirements-for-octopus-server/minimum_requirements_octopus_2020.png"/>T2】</a></p>
+
+<p>【2020年9月更新</p>
+<p>我们听取了客户的意见，并将我们的SQL Server要求从SQL Server 2017+下调至SQL Server 2016+</p>
+<p>这从以下版本开始生效:</p>
+<ul>
+<li>2020.1 . x<em>(2020.1 . x中未强制执行SQL版本变更)</em></li>
+<li>➜最新版</li>
+<li>➜2020 . 3 . 6最新</li>
+<li>2020.4.0 ➜最新</li>
+</ul>
+<p>以下版本范围内的任何版本仍然强制执行SQL Server 2017+版本要求</p>
+<ul>
+<li>2020.2.0 ➜ 2020.2.17</li>
+<li>2020.3.0 ➜ 2020.3.5</li>
+</ul>
+
+
+<h2 id="original-post">原始帖子</h2>
+
+<p>2020年，我们将提高托管和使用八达通服务器的最低要求:</p>
+
+<ul>
+<li>Windows Server 2012 R2版</li>
+<li>SQL Server 2017+版</li>
+</ul>
+
+<p>此外，我们还将终止对IE11的主流支持。</p>
+
+<p>支持旧的服务器和浏览器消耗了我们的时间和注意力，使我们更难创新和推动Octopus生态系统向前发展。我们想在2020年打破这个循环。从另一个角度来看，如果Octopus服务器是您业务中的关键资源，您真的应该考虑一个现代化的操作环境来提高安全性和性能。</p>
+
+<p>也许这就是我们都需要的推动力？也许我们还没有充分考虑到这会给你的生活带来多大的困难？如果这些最低要求在您的场景中会有问题，请在评论中告诉我们原因，或者通过<a href="https://octopus.com/support">联系我们</a>。这篇博文的其余部分应该回答最常见的问题。</p>
+
+<p>愉快的部署！</p>
+
+<h2 id="question-will-i-be-affected">问题:我会受到影响吗？</h2>
+
+<p>只有在以下情况下，您才会受到影响:</p>
+
+<ol>
+<li>您在Windows Server 2008-2012或SQL Server 2008-2014上托管Octopus服务器，并且您想要升级到Octopus服务器<code>2020.x</code>。</li>
+<li>无论您是在自己的基础设施上托管Octopus服务器还是使用Octopus Cloud，您都必须使用Internet Explorer 11，这是强制的还是您自己的偏好。</li>
+</ol>
+
+<h2 id="question-will-my-deployments-be-affected">问:我的部署会受到影响吗？</h2>
+
+<p>不，您的部署不会受到影响。这些要求只影响八达通服务器本身的托管。我们仍然高度向后兼容您在Octopus中的部署目标，包括旧的Windows和Linux操作系统。</p>
+
+<h2 id="question-how-much-time-do-i-have-to-plan-my-upgrade">问题:我有多少时间来计划我的升级？</h2>
+
+<p>我们将在2020年1月再发布一个LTS版本的Octopus Server，版本为<code>2019.12 LTS</code>，将在我们的<a href="https://octopus.com/docs/administration/upgrading/long-term-support">长期支持计划</a> <strong>下提供支持，直到2020年7月</strong>，之后您应该认真考虑升级Octopus Server。我们希望这给你足够的时间来计划全面升级。</p>
+
+<h2 id="question-should-i-upgrade-octopus-server-anyhow">问题:我应该升级八达通服务器吗？</h2>
+
+<p>与时俱进对这种关系的双方都有帮助:</p>
+
+<ul>
+<li>当你运行现代章鱼服务器时，我们能给你最好的支持。我们可以用更少的开销来解决问题，并且当您应用增量升级时，升级的风险更小。</li>
+<li>自您上次升级以来，我们所做的一切都让您受益匪浅，包括令人愉快的新功能，如简化的流程编辑器和操作手册。看看<a href="https://octopus.com/whatsnew">有什么新的</a>。此外，<a href="https://octopus.com/roadmap">看看我们的动态路线图</a>，了解我们计划很快推出的产品。</li>
+<li>在安全和信任方面，我们积极主动。让你的Octopus服务器保持最新是安全可靠安装的基础。不想危言耸听，这里从安全角度列出了升级的<a href="https://www.cvedetails.com/vulnerability-list/vendor_id-16785/product_id-39115/Octopus-Octopus-Deploy.html" rel="nofollow">个理由</a>。</li>
+</ul>
+
+<h2 id="question-why-will-windows-server-2012-r2-be-the-minimum-operating-system">问:为什么Windows Server 2012 R2将是最低操作系统？</h2>
+
+<p>我们的驱动原因很简单:<a href="https://github.com/dotnet/core/blob/master/release-notes/3.0/3.0-supported-os.md" rel="nofollow">。NET Core 3.x需要Window Server 2012 R2 </a>，我们希望Octopus服务器有一个单一的目标。现在，我们需要瞄准全部。适用于Windows和。NET Core 2.x for Linux。锁定目标。NET Core 3.x将简化我们的代码库和部署管道。此外，我们更愿意为跨多种Windows和Linux主机环境的单一框架提供世界一流的支持。</p>
+
+<p>此外，Windows Server 2012的主流支持早在2018年10月就已结束。Octopus是基础设施的重要组成部分，但它的可靠性和安全性取决于底层操作系统。升级只是一个好主意。</p>
+
+<h2 id="question-how-do-i-upgrade-my-host-operating-system">问:如何升级我的主机操作系统？</h2>
+
+<p>您可以将Windows Server操作系统就地升级到更现代的操作系统。了解如何升级Windows服务器。</p>
+
+<p>或者，你可以将你的八达通服务器转移到另一台已经运行更现代的操作系统的主机上。了解<a href="https://octopus.com/docs/administration/managing-infrastructure/moving-your-octopus">移动你的八达通服务器</a>。</p>
+
+<h2 id="question-why-will-sql-server-2017-be-the-minimum-database">问题:为什么SQL Server 2017会是最小数据库？</h2>
+
+<p>我们的驱动原因很简单:我们在混合数据存储中大量使用JSON，我们希望利用SQL Server 2017提供的所有JSON功能。过去，我们对推进这一议程犹豫不决，因为我们不想给客户增加负担。回想过去几个月，在许多情况下，现代数据库基础会帮助我们提供更多价值:</p>
+
+<ol>
+<li>我们本可以使用一流的JSON查询而不是脆弱的SQL查询来帮助客户解决复杂的支持问题。</li>
+<li>出于同样的原因，我们可以编写更健壮的数据库升级脚本。</li>
+<li>我们可以编写更高效的数据库查询，使Octopus更快，而不是受最小公分母的约束。</li>
+<li>我们可以利用新的数据库引擎特性来加快每个Octopus的安装速度。</li>
+</ol>
+
+<p>我们没有看到任何价值从SQL Server 2012到2014到2016不断滚动，迫使您每次都进行升级。我们认为是时候撕掉众所周知的创可贴(TM ),直接跳到SQL Server 2017，这样我们就可以为所有客户提供更好的价值和更快的周转时间。</p>
+
+<h2 id="question-how-do-i-upgrade-my-database-server">问:如何升级我的数据库服务器？</h2>
+
+<p>您可以对SQL Server执行就地升级。了解<a href="https://docs.microsoft.com/en-us/sql/database-engine/install-windows/upgrade-sql-server" rel="nofollow">升级到SQL Server 2017 </a>。</p>
+
+<h2 id="question-octopus-is-using-a-shared-database-server-which-will-be-hard-to-upgrade-what-about-us">问题:Octopus使用的是共享数据库服务器，很难升级！我们呢？</h2>
+
+<p>我们不希望升级八达通服务器很难，希望这不是你在过去5年的经历！然而，我们相信最终的结果是值得努力的。在这种情况下，托管在该数据库服务器上的所有应用程序都可能受益于SQL Server引擎的改进。<a href="https://sqlperformance.com/2018/04/sql-server-2017/reasons-to-upgrade-to-sql-server-2017" rel="nofollow">这里有一个关于这个主题的好帖子:升级到SQL Server 2017 </a>的理由。</p>
+
+<p>或者，你可以考虑将你的Octopus迁移到SQL Server 2017的免费版，直到共享数据库服务器升级。</p>
+
+<p>另一个选择是考虑将<a href="https://octopus.com/cloud">转移到章鱼云</a>，在那里我们会代表你处理一切。</p>
+
+<p>如果你真的会被卡住，请<a href="https://octopus.com/support">伸手聊天</a>！</p>
+
+<h2 id="question-what-about-internet-explorer-11">问题:Internet Explorer 11怎么样？</h2>
+
+<p>我们不会阻止IE11访问Octopus。我们还将保留所有的垫片，让IE11在Octopus上继续工作一段时间。但是，我们不会在功能开发和测试期间主动针对IE11，也不会主动修复只影响IE11的bug。是的，随着时间的推移，这可能会导致IE11与Octopus一起使用的体验下降。</p>
+
+<p>从自私的角度来说，现在我们只有3%的流量来自IE，我们花在迎合IE11上的时间和精力觉得不值得。</p>
+
+<p>从无私的角度来看，当你真的应该使用现代浏览器时，我们不希望你使用IE11。甚至微软团队也在2019年推动这个议程<a href="https://techcommunity.microsoft.com/t5/Windows-IT-Pro-Blog/The-perils-of-using-Internet-Explorer-as-your-default-browser/ba-p/331732" rel="nofollow">。IE11是针对无法与其他浏览器兼容的网络应用的兼容性解决方案，但这不是Octopus。</a></p>
+
+<p>在未来的某个时候，我们将删除所有IE11特定的代码，并阻止除了现代浏览器之外的任何东西使用Octopus，从而为我们所有人带来一个更美好的未来。</p>
+
+<h2 id="question-when-can-i-host-octopus-server-on-linux">问:什么时候可以在Linux上托管Octopus服务器？</h2>
+
+<p>在不久的将来。我们已经在内部为章鱼云(我们的SaaS平台)做这件事了。当我们准备好支持在您自己的Linux基础设施上安装Octopus服务器时，我们将发布一个单独的公告。</p>
+
+                    
+                    
+</body>
+</html>

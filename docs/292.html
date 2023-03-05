@@ -1,0 +1,123 @@
+<html>
+<head>
+<title>GitHub Feeds - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>GitHub Feeds - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/github-feed#2021-08-12">https://octopus.com/blog/github-feed#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/blogimage-githubfeeds.png" class="zoom" data-title=""><img src="../Images/2de631f26bc0af8a2ad284af8686504c.png" class="img-fluid center" alt="Blog Image" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/blogimage-githubfeeds.png"/>T2】</a></p>
+
+<h2 id="giving-you-github">给你GitHub</h2>
+
+<p>有时你只是想部署你的应用程序，但它不需要一个构建步骤。它可能是一个存储库，你可以在那里存储你的云形成模板，一堆在Octopus中运行的脚本，或者一个你用nodejs这样的解释语言运行的简单应用程序。<code>2018.3.0</code>中提供的GitHub feed类型为您在Octopus部署期间访问资源提供了一种新的方式。<strong>没错，你没听错，我们现在支持使用GitHub作为提要源。</strong></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/good_news.jpg" class="zoom" data-title=""><img src="../Images/c7998e56ff7981669952d071952428dd.png" class="img-fluid center" alt="Good News" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/good_news.jpg"/>T2】</a></p>
+
+<blockquote class="blockquote">
+<p>我们现在支持使用GitHub作为提要源。</p>
+</blockquote>
+
+<p>这种新的提要类型允许Octopus直接从GitHub部署文件，而不需要任何额外的中间构建步骤。这意味着不再打包您的脚本，以便它们可以在Octopus中使用，并且在源代码控制中存储您的部分部署过程时有更好的体验。<strong>标记、推送，然后直接从Octopus部署，无需构建服务器</strong></p>
+
+<h3 id="ins-and-outs">来龙去脉</h3>
+
+<p>从部署资源的角度来看，从一个包存储库中构建工件在许多方面看起来与源代码控制中的代码是完全不同的概念。然而，通过查看我们如何对NuGet包的各个部分建模，我们可以看到GitHub“package”包如何被建模以适应Octopus生态系统的一些相似之处。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>进料类型</th>
+<th>源Uri</th>
+<th>包裹</th>
+<th>版本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong> NuGet </strong></td>
+<td>任何支持NuGet v2或v3 api的提要(例如<a href="https://api.nuget.org/v3/index.json" rel="nofollow">https://api.nuget.org/v3/index.json</a></td>
+<td>包的名称，通常在<code>.nuspec</code>文件中定义。(如<code>Octopus.Clients</code>)</td>
+<td>包的不同实例通过具有<a href="https://semver.org/" rel="nofollow"> semver 2 </a>版本格式的<code>.nuspec</code>文件进行版本控制。</td>
+</tr>
+<tr>
+<td><strong> GitHub </strong></td>
+<td>任何支持v3 api的GitHub端点。这可以是标准的公共端点或私有GitHub安装。(例如<a href="https://api.github.com" rel="nofollow">https://api.github.com</a>)</td>
+<td>完整的存储库身份，包括所有者。(如<code>OctopusDeploy/Calamari</code>)</td>
+<td>一个可以被解析为<a href="https://semver.org/" rel="nofollow"> semver 2 </a>版本的独特标签。如果该标签存在一个版本，那么这些版本说明将在Octopus中显示在版本详细信息中该包的旁边。</td>
+</tr>
+</tbody>
+</table>
+
+<p>构建这种提要类型是为了提供一种简单的方法，将GitHub资源作为包处理，而不会增加处理分支和提交的复杂性。因为这些概念不能很好地映射到现有的Octopus概念，所以决定简单地读取和解析存储库上的标签，并在识别要部署的特定包时将它们视为Octopus使用的版本。顺便提一下，由于GitHub提供了基于标签的可下载zip包，这提供了一种简单的机制来检索所需的文件，然后像简单的zip包一样集成到现有的Octopus部署流程中。在这篇文章的最后还提出了一些进一步的观点，概述了围绕作为提要类型的<em> Git </em>的一些未来想法。同样值得指出的是，目前只有源文件<em>被Octopus部署。其他链接到GitHub发行版的二进制文件目前还没有包括在内，但是这在将来可能会改变。</em></p>
+
+<h2 id="what-does-it-look-like">它看起来像什么？</h2>
+
+<p>不需要构建过程的“包”的一个经典例子是存储在Octopus之外的版本控制中的脚本，它作为部署的一部分运行。接下来的几节看看我们如何配置一个部署来执行来自<code>OctopusDeploy/AcmeScripts</code> GitHub存储库的脚本。</p>
+
+<h3 id="setting-up-the-feed">设置馈送</h3>
+
+<p>首先，让我们看看如何在Octopus中创建一个GitHub外部提要。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/feed.png" class="zoom" data-title=""><img src="../Images/92a493535864f596a523c3e9d0c8e6a0.png" class="img-fluid center" alt="GitHub Feed" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/feed.png"/>T2】</a></p>
+
+<p>如您所见，我们提供了设置个人访问令牌<a href="https://github.com/blog/1509-personal-api-tokens" rel="nofollow">的能力，而不仅仅是用户名和密码。这允许你创建GitHub称之为</a><a href="https://developer.github.com/v3/guides/managing-deploy-keys/#machine-users" rel="nofollow">的机器用户</a>，它实际上是组织中的GitHub用户，用于这些种类的自动化任务。</p>
+
+<p>当访问GitHub端点时，为Octopus提供一个认证选项是很重要的，因为匿名请求被GitHub限制为比认证请求低得多的值。</p>
+
+<h3 id="using-the-package">使用软件包</h3>
+
+<p>此提要中的“包”被视为与任何其他包完全相同。在这个场景中，我们将选择一个脚本步骤，并从一个包中获取我们的<code>RunMe.ps1</code>脚本。packageID是标识我们的<code>AcmeScripts</code>存储库的完整的<code>Octopus/AcmeScripts</code>名称。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/script_step.png" class="zoom" data-title=""><img src="../Images/a0924a31a1134251bcc4184a3a09f583.png" class="img-fluid center" alt="Script Step" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/script_step.png"/>T2】</a></p>
+
+<p>请注意，当您搜索软件包时，如果您省略了<code>/</code>字符，它将在所有存储库中搜索(您的帐户可以访问的)。添加不带库的<code>/</code>将列出该所有者的所有包，添加库名将搜索该所有者的库。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/search.gif" class="zoom" data-title=""><img src="../Images/9de8f5adcc42e03df5980d1c61d1d5be.png" class="img-fluid center" alt="Search" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/search.gif"/>T2】</a></p>
+
+<h3 id="adding-the-github-tag">添加GitHub标签</h3>
+
+<p>我们现在已经配置了Octopus，我们只需要将PowerShell脚本添加到我们的GitHub存储库<code>OctopusDeploy/AcmeScripts</code>中，它将在我们的项目中执行。</p>
+
+<pre><code class="language-bash">echo Write-Host Hello World &gt; RunMe.ps1
+git add RunMe.ps1
+git commit -m "Ready To Run"
+git tag 0.0.1
+git push
+git push --tags
+</code></pre>
+
+<p>为了更好地衡量，我们还将通过GitHub门户网站为这个标签添加一些发行说明。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/github_release.png" class="zoom" data-title=""><img src="../Images/d170ed0564bdcb81aec78296cccf844a.png" class="img-fluid center" alt="GitHub Release" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/github_release.png"/>T2】</a></p>
+
+<h3 id="creating-a-release">创建版本</h3>
+
+<p>由于我们目前不支持从外部源自动创建发布(注意这个空间)，Octopus不知道我们刚刚推了这个新标签，直到我们创建了一个新的发布。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/octopus_release.png" class="zoom" data-title=""><img src="../Images/55dbb075b219355e30708b3893bbe8bf.png" class="img-fluid center" alt="Octopus Release" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/octopus_release.png"/>T2】</a></p>
+
+<p>在部署时，Octopus将通过GitHub API从标记的commit下载源代码。</p>
+
+<p>从这一点上来说，在整个部署过程中，被有效地视为一个典型的zip文件，允许它被提取、传输或用作脚本和模板的源。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/task_result.png" class="zoom" data-title=""><img src="../Images/a20b307ac33deb87a60503be8b139642.png" class="img-fluid center" alt="Task Result" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/task_result.png"/>T2】</a></p>
+
+<p><strong>看马，没身材！</strong></p>
+
+<h2 id="future-plans">未来计划</h2>
+
+<p>值得再次重申的是，这种新的提要类型完全是建立在标签和发布之上的。当使用新的feed类型时，分支、提交和heads这样的概念并不<em>直接</em>相关。您可以<em>间接地</em>处理分支，方法是在这些分支中适当地标记您的提交(记住，一旦您将这些提交合并回<code>master</code>分支，那么标记可能会引用一个属于<code>master</code>分支的提交)。有计划正在进行中，以提供真正的Git-as-a-feed支持，其中提交\分支将被更优先地对待，但是决定保持这个GitHub feed工作独立。</p>
+
+<p>上面提到的另一点是GitHub缺少触发发布和部署的钩子。由于我们许多客户网络的性质，从外部世界打电话并不总是可用的。因此，我们将考虑其他更实用的机制来支持来自外部提要的ARC。</p>
+
+<h2 id="githib-as-a-package-feed">GitHib作为包装饲料</h2>
+
+<p>我们对这种新的饲料类型给八达通用户带来的机会感到兴奋。使用GitHub作为一些部署依赖项的来源将有助于简化您的CI管道，并允许更好的版本控制，而无需花费多余的精力和时间来打包那些并不真正需要打包的资源。请让我们知道您对这一新方向的想法，以及它如何在您的部署过程中派上用场。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/github-feed/nobuild.png" class="zoom" data-title=""><img src="../Images/850162ea727e7ea06a73c90634990178.png" class="img-fluid center" alt="NoBuild" data-original-src="https://i.octopus.com/blog/2018-03/github-feed/nobuild.png"/>T2】</a></p>
+
+                    
+                    
+</body>
+</html>

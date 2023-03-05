@@ -1,0 +1,263 @@
+<html>
+<head>
+<title>Selenium series: finding elements by XPaths and CSS selectors - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Selenium系列:通过XPaths和CSS选择器查找元素</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/selenium/6-finding-elements-by-xpaths-and-css-selectors/finding-elements-by-xpaths-and-css-selectors#2021-07-07">https://octopus.com/blog/selenium/6-finding-elements-by-xpaths-and-css-selectors/finding-elements-by-xpaths-and-css-selectors#2021-07-07</a></blockquote>
+                        <p>这篇文章是关于<a href="/blog/selenium/0-toc/webdriver-toc">创建Selenium WebDriver测试框架</a>的系列文章的一部分。</p>
+
+<p>在上一节中，我们通过ID属性搜索了想要与之交互的元素。使用ID属性非常方便，但是在现实世界的场景中，并不是每个想要与之交互的元素都有ID，或者ID是由模板语言生成的，而不是静态的。</p>
+
+<p>与ID属性不同，网页中的每个元素都有唯一的XPath。XPath (XML Path Language)是一种查询语言，用于从类似XML的文档中选择节点，比如我们的例子中的HTML。</p>
+
+<p>XPath查询可能会变得非常复杂。独特的XPaths看起来像<code>//*[@id="request-summary"]/div/div[2]/div/form/div[2]/input</code>并不罕见。</p>
+
+<p>幸运的是，Chrome和其他浏览器提供了一种为元素生成唯一XPaths的简单方法。右键单击<code>Elements</code>选项卡中的元素并选择<span class="path">复制➜复制Xpath </span>会将标识该元素的最简洁的唯一Xpath放入剪贴板。这个功能意味着您不需要理解XPath的本质细节就可以使用它们，因为您可以让浏览器为您生成XPath。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/6-finding-elements-by-xpaths-and-css-selectors/image1.png" class="zoom" data-title=""><img src="../Images/8780f6cb2ba47e47404503745b681a53.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2018-10/selenium/6-finding-elements-by-xpaths-and-css-selectors/image1.png"/>T2】</a></p>
+
+<p>对于我们的测试网页，Chrome生成的XPath利用了这样一个事实，即元素都有唯一的ID属性，这导致了相对简洁的XPath，如<code>//*[@id="button_element"]</code>。</p>
+
+<p>为了使用XPaths而不是id来定位页面中的元素，我们需要向<code>AutomatedBrowser</code>接口添加四个新方法:</p>
+
+<pre><code class="language-java">void clickElementWithXPath(String xpath);
+
+void selectOptionByTextFromSelectWithXPath(String optionText, String xpath);
+
+void populateElementWithXPath(String xpath, String text);
+
+String getTextFromElementWithXPath(String xpath);
+</code></pre>
+
+<p>反过来，我们将这四个方法的实现添加到<code>AutomatedBrowserBase</code>类中:</p>
+
+<pre><code class="language-java">@Override
+public void clickElementWithXPath(final String xpath) {
+  if (getAutomatedBrowser() != null) {
+      getAutomatedBrowser().clickElementWithXPath(xpath);
+  }
+}
+
+@Override
+public void selectOptionByTextFromSelectWithXPath(final String optionText, final String xpath) {
+  if (getAutomatedBrowser() != null) {
+    getAutomatedBrowser().selectOptionByTextFromSelectWithXPath(optionText, xpath);
+  }
+}
+
+@Override
+public void populateElementWithXPath(final String xpath, final String text) {
+  if (getAutomatedBrowser() != null) {
+    getAutomatedBrowser().populateElementWithXPath(xpath, text);
+  }
+}
+
+@Override
+public String getTextFromElementWithXPath(final String xpath) {
+  if (getAutomatedBrowser() != null) {
+    return getAutomatedBrowser().getTextFromElementWithXPath(xpath);
+  }
+  return null;
+}
+</code></pre>
+
+<p>然后我们在<code>WebDriverDecorator</code>类中定义这些方法的实现。</p>
+
+<p>注意，我们在这些方法中调用<code>By.xpath()</code>而不是<code>By.id()</code>。这是我们根据元素的XPath搜索元素的方法:</p>
+
+<pre><code class="language-java">@Override
+public void clickElementWithXPath(final String xpath) {
+  webDriver.findElement(By.xpath(xpath)).click();
+}
+
+@Override
+public void selectOptionByTextFromSelectWithXPath(final String optionText, final String xpath) {
+  new Select(webDriver.findElement(By.xpath(xpath))).selectByVisibleText(optionText);
+}
+
+@Override
+public void populateElementWithXPath(final String xpath, final String text) {
+  webDriver.findElement(By.xpath(xpath)).sendKeys(text);
+}
+
+@Override
+public String getTextFromElementWithXPath(final String xpath) {
+  return webDriver.findElement(By.xpath(xpath)).getText();
+}
+</code></pre>
+
+<p>最后，我们创建了一个新的测试方法，它与我们的示例web页面进行交互，但是这次利用了新的基于XPath的方法:</p>
+
+<pre><code class="language-java">@Test
+public void formTestByXPath() throws URISyntaxException {
+
+  final AutomatedBrowser automatedBrowser = AUTOMATED_BROWSER_FACTORY.getAutomatedBrowser("Chrome");
+
+  try {
+    automatedBrowser.init();
+
+    automatedBrowser.goTo(FormTest.class.getResource("/form.html").toURI().toString());
+
+    automatedBrowser.clickElementWithXPath("//*[@id=\"button_element\"]");
+    assertEquals("Button Clicked", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.populateElementWithXPath("//*[@id=\"text_element\"]", "test text");
+    assertEquals("Text Input Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.populateElementWithXPath("//*[@id=\"textarea_element\"]", "test text");
+    assertEquals("Text Area Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.selectOptionByTextFromSelectWithXPath("Option 2.1", "//*[@id=\"select_element\"]");
+    assertEquals("Select Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithXPath("//*[@id=\"radio3_element\"]");
+    assertEquals("Radio Button Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithXPath("//*[@id=\"checkbox2_element\"]");
+    assertEquals("Checkbox Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithXPath("//*[@id=\"image_element\"]");
+    assertEquals("Image Clicked", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithXPath("//*[@id=\"div_element\"]");
+    assertEquals("Div Clicked", automatedBrowser.getTextFromElementWithId("message"));
+  } finally {
+    automatedBrowser.destroy();
+  }
+}
+</code></pre>
+
+<p>像XPaths一样，HTML文档中的所有元素都有一个唯一的CSS选择器来标识它们。</p>
+
+<p>CSS选择器与CSS规则集中使用的标识符相同。如果你做过任何网页开发，那么你很可能熟悉CSS选择器。但即使你不是，Chrome和其他浏览器也提供了一种为HTML元素生成CSS选择器的方法。在Chrome中，右击<code>Elements</code>标签中的元素，选择<span class="path">复制➜复制选择器</span>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-10/selenium/6-finding-elements-by-xpaths-and-css-selectors/image2.png" class="zoom" data-title=""><img src="../Images/c1395904ffabfd73e99b3bb14c9759cc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2018-10/selenium/6-finding-elements-by-xpaths-and-css-selectors/image2.png"/>T2】</a></p>
+
+<p>在我们的例子中，因为我们正在交互的元素都有ID属性，这个菜单选项将把一个CSS选择器如<code>#button_element</code>放入剪贴板。</p>
+
+<p>使用CSS选择器的过程与我们支持XPaths的过程非常相似。</p>
+
+<p>我们在<code>AutomatedBrowser</code>接口中定义新方法:</p>
+
+<pre><code class="language-java">void clickElementWithCSSSelector(final String cssSelector);
+
+void selectOptionByTextFromSelectWithCSSSelector(final String optionText, final String cssSelector);
+
+void populateElementWithCSSSelector(final String cssSelector, final String text);
+
+String getTextFromElementWithCSSSelector(final String cssSelector);
+</code></pre>
+
+<p>然后，我们在<code>AutomatedBrowserBase</code>类中提供默认实现:</p>
+
+<pre><code class="language-java">@Override
+public void clickElementWithCSSSelector(final String cssSelector) {
+  if (getAutomatedBrowser() != null) {
+    getAutomatedBrowser().clickElementWithCSSSelector(cssSelector);
+  }
+}
+
+@Override
+public void selectOptionByTextFromSelectWithCSSSelector(final String optionText, final String cssSelector) {
+  if (getAutomatedBrowser() != null) {
+    getAutomatedBrowser().selectOptionByTextFromSelectWithCSSSelector(optionText, cssSelector);
+  }
+}
+
+@Override
+public void populateElementWithCSSSelector(final String cssSelector, final String text) {
+  if (getAutomatedBrowser() != null) {
+    getAutomatedBrowser().populateElementWithCSSSelector(cssSelector, text);
+  }
+}
+
+@Override
+public String getTextFromElementWithCSSSelector(final String cssSelector) {
+  if (getAutomatedBrowser() != null) {
+    return getAutomatedBrowser().getTextFromElementWithCSSSelector(cssSelector);
+  }
+  return null;
+}
+</code></pre>
+
+<p>用新方法更新了<code>WebDriverDecorator</code>类。我们使用<code>By.cssSelector()</code>方法通过元素的CSS选择器来搜索元素:</p>
+
+<pre><code class="language-java">@Override
+public void clickElementWithCSSSelector(final String cssSelector) {
+  webDriver.findElement(By.cssSelector(cssSelector)).click();
+}
+
+@Override
+public void selectOptionByTextFromSelectWithCSSSelector(final String optionText, final String cssSelector) {
+  new Select(webDriver.findElement(By.cssSelector(cssSelector))).selectByVisibleText(optionText);
+}
+
+@Override
+public void populateElementWithCSSSelector(final String cssSelector, final String text) {
+  webDriver.findElement(By.cssSelector(cssSelector)).sendKeys(text);
+}
+
+@Override
+public String getTextFromElementWithCSSSelector(final String cssSelector) {
+  return webDriver.findElement(By.cssSelector(cssSelector)).getText();
+}
+</code></pre>
+
+<p>最后，我们将所有新方法与使用CSS选择器定位元素的新测试结合在一起:</p>
+
+<pre><code class="language-java">@Test
+public void formTestByCSSSelector() throws URISyntaxException {
+  final AutomatedBrowser automatedBrowser = AUTOMATED_BROWSER_FACTORY.getAutomatedBrowser("Chrome");
+
+  try {
+    automatedBrowser.init();
+
+    automatedBrowser.goTo(FormTest.class.getResource("/form.html").toURI().toString());
+
+    automatedBrowser.clickElementWithCSSSelector("#button_element");
+    assertEquals("Button Clicked", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.populateElementWithCSSSelector("#text_element", "test text");
+    assertEquals("Text Input Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.populateElementWithCSSSelector("#textarea_element", "test text");
+    assertEquals("Text Area Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.selectOptionByTextFromSelectWithCSSSelector("Option 2.1", "#select_element");
+    assertEquals("Select Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithCSSSelector("#radio3_element");
+    assertEquals("Radio Button Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithCSSSelector("#checkbox2_element");
+    assertEquals("Checkbox Changed", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithCSSSelector("#image_element");
+    assertEquals("Image Clicked", automatedBrowser.getTextFromElementWithId("message"));
+
+    automatedBrowser.clickElementWithCSSSelector("#div_element");
+    assertEquals("Div Clicked", automatedBrowser.getTextFromElementWithId("message"));
+  } finally {
+    automatedBrowser.destroy();
+  }
+}
+</code></pre>
+
+<p>我们已经看到了三种不同的方法来识别HTML页面中的元素:使用ID、使用XPaths和使用CSS选择器。但是哪种方式是最好的呢？</p>
+
+<p>在有效的HTML中，<code>id</code>属性必须是唯一的。在一个设计良好的页面中,<code>id</code>属性还为定义它的元素提供了一些有意义的上下文。当开发人员更新应用程序时，元素在页面中移动时，通常也会保留相同的<code>id</code>属性。这使得通过ID查找元素成为在页面中定位元素的最简洁可靠的方式。</p>
+
+<p>不幸的是，因为<code>id</code>属性必须手动分配给一个元素，所以您不能依赖于您希望与之交互的具有<code>id</code>属性的元素。事实上，以我的经验来看，在针对现实世界的应用程序编写测试时，很少有<code>id</code>属性可用。</p>
+
+<p>与<code>id</code>属性不同，所有元素都可以使用XPaths和CSS选择器来定位。因此，在没有可用ID的情况下，您将不得不求助于这些定位器中的一个。</p>
+
+<p>CSS选择器往往比XPaths更熟悉，因为CSS选择器被web开发人员用来设计CSS规则集。出于这个原因，我推荐CSS选择器而不是XPaths。</p>
+
+<p>这篇文章是关于<a href="/blog/selenium/0-toc/webdriver-toc">创建Selenium WebDriver测试框架</a>的系列文章的一部分。</p>
+
+                    
+                    
+</body>
+</html>

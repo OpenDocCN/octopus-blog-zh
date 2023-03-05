@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>Deploy and consume ZIP files from Maven - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从Maven - Octopus Deploy部署和使用ZIP文件</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-and-consume-zip-files-from-maven#2021-08-12">https://octopus.com/blog/deploy-and-consume-zip-files-from-maven#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/blogimage-mavenzip.png" class="zoom" data-title=""><img src="../Images/af0768b6a53c3bfa73ff5f53c880972d.png" class="img-fluid center" alt="Deploy and consume ZIP files from Maven" data-original-src="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/blogimage-mavenzip.png"/>T2】</a></p>
+
+<p>Maven是一个多功能的工件存储库，它超越了传统的Java包，如jar和WARs，提供了托管通用ZIP存档的能力。在这篇博文中，我将介绍如何将通用档案发布到Maven存储库中，以及如何在Octopus项目中使用它们。</p>
+
+<h2 id="maven-repository-configuration">Maven存储库配置</h2>
+
+<p>第一步是在<code>~/.m2/settings.xml</code>文件中配置Maven存储库。该文件包含Maven存储库凭证等设置。</p>
+
+<p>以下示例定义了Nexus Maven存储库的默认凭据:</p>
+
+<pre><code class="language-xml">&lt;settings 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                      https://maven.apache.org/xsd/settings-1.0.0.xsd"&gt;
+  &lt;servers&gt;
+    &lt;server&gt;
+      &lt;id&gt;Nexus&lt;/id&gt;
+      &lt;username&gt;admin&lt;/username&gt;
+      &lt;password&gt;admin123&lt;/password&gt;
+    &lt;/server&gt;
+  &lt;/servers&gt;
+&lt;/settings&gt;
+</code></pre>
+
+<h2 id="create-a-package">创建一个包</h2>
+
+<p>接下来，我们需要创建将要上传的包。在这个例子中，我创建了一个名为<code>package.zip</code>的标准ZIP存档，其中保存了文件<code>test.txt</code>:</p>
+
+<pre><code>zip package.zip test.txt
+</code></pre>
+
+<h2 id="upload-the-package">上传包</h2>
+
+<p>为了上传这个包，我使用了Maven <code>deploy:deploy-file</code>目标。下载<a href="https://maven.apache.org/download.cgi" rel="nofollow"> Maven </a>。</p>
+
+<p>该命令中的<code>repositoryId</code>系统属性需要匹配<code>settings.xml</code>文件中的<code>&lt;id&gt;</code>元素。</p>
+
+
+<pre><code>mvn deploy:deploy-file \
+  -DgroupId=org.example \
+  -DartifactId=package \
+  -Dversion=0.0.1 \
+  -Dpackaging=zip \
+  -Dfile=package.zip \
+  -DrepositoryId=Nexus \
+  -Durl=http://nexus-host:8081/repository/maven-releases
+</code></pre>
+
+<h2 id="create-an-external-maven-feed">创建外部Maven提要</h2>
+
+<p>为了使用Octopus中的新工件，我们需要添加Nexus服务器作为外部Maven提要。这是在<span class="path">库➜外部馈送</span>下完成的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/maven-repo.png" class="zoom" data-title=""><img src="../Images/3f69ec3fae424cc8a787ea34c1b18b21.png" class="img-fluid center" alt="Maven Repo" data-original-src="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/maven-repo.png"/>T2】</a></p>
+
+<p>然后，我们可以通过搜索工件<code>org.example:package</code>来测试存储库，工件<code>org.example:package</code>是与<code>artifactId</code>相结合的<code>groupId</code>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/maven-test.png" class="zoom" data-title=""><img src="../Images/6e2a46a21135342928d7f60ea2243fa4.png" class="img-fluid center" alt="Maven Test" data-original-src="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/maven-test.png"/>T2】</a></p>
+
+<h2 id="transfer-the-package">转移包裹</h2>
+
+<p>现在我们可以访问Maven提要了，我使用<strong> Transfer a package </strong>步骤将工件下载到目标机器上。我们再次用<code>org.example:package</code>引用Maven工件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/maven-transfer-package-step.png" class="zoom" data-title=""><img src="../Images/14b53681f1733d144f0dbd8e533d77c7.png" class="img-fluid center" alt="Transfer a package" data-original-src="https://i.octopus.com/blog/2020-05/deploy-and-consume-zip-files-from-maven/maven-transfer-package-step.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过托管通用的ZIP文件，Maven存储库可以用于管理各种部署的包，而不仅仅是针对Java的包，并且通过对Maven提要的本机支持，Octopus可以轻松地将这些工件作为部署过程的一部分。</p>
+
+                    
+                    
+</body>
+</html>

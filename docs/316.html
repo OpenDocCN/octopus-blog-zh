@@ -1,0 +1,106 @@
+<html>
+<head>
+<title>How we use telemetry to improve Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>我们如何使用遥测技术来改善八达通部署-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/how-we-use-telemetry-to-improve-octopus#2021-10-14">https://octopus.com/blog/how-we-use-telemetry-to-improve-octopus#2021-10-14</a></blockquote>
+                        <p>多年来，Octopus Deploy已经发展到在应用程序中包含许多新功能和新领域。客户使用它们来查看仪表板、创建或部署版本、创作项目或针对其基础架构运行操作手册。为了更好地为客户服务，我们想知道体验的速度和响应速度。</p>
+
+<p>像许多软件公司一样，我们收集遥测数据来衡量客户如何使用和体验产品。我们收集的一些遥测是API调用和数据库操作的计时，我们称之为性能遥测。我们在定制的工程仪表板上展示这种遥测技术，代号为“乌鸦之巢”。</p>
+
+<p>乌鸦巢提供了用户体验产品的高层次概述。当客户想要访问一个页面或轮询一个端点时，就会触发一个web请求，而Crow's Nest会测量该请求需要多长时间。</p>
+
+<p>我们还在多个版本中跟踪这些请求，以确保Octopus Deploy的响应能力不断提高。</p>
+
+<h2 id="apdex">Apdex</h2>
+
+<p>我们计算一个Apdex(应用性能指数)分数，该分数旨在将测量结果转化为关于用户满意度的见解。公式是:</p>
+
+<pre><code>Apdex = (SatisfiedCount + ToleratingCount * 0.5) / TotalCount
+</code></pre>
+
+<p>Apdex使用返回2xx响应的API (web)请求。Apdex排除了某些经常被调用并被缓存的请求。</p>
+
+<ul>
+<li>在小于或等于50毫秒内返回的请求被视为在满足的阈值范围内。</li>
+<li>大于50毫秒小于200毫秒的请求被认为是在可容忍的阈值范围内。</li>
+</ul>
+
+<p>Apdex给出了测试客户体验的统一尺度。数字越大，表示用户体验越好。我们可以改变阈值来试验给定的特定耐受性偏好的Apdex分数。</p>
+
+<p>这篇文章中的例子显示了默认的阈值。这些可在应用程序中实时配置，以根据不同标准查看Apdex分数。</p>
+
+<p>计算中仅包括具有2xx状态的web请求。2xx状态表示web请求成功。对任何给定数据发送遥测数据的实例少于50个的版本会被过滤掉，以去除异常值。这些web请求的响应时间评估了客户对其服务的满意度。</p>
+
+<h2 id="visualizing-apdex-and-octopus-deploy">可视化Apdex和Octopus部署</h2>
+
+<p>有几种方法可以可视化Apdex。下图显示了我们如何使用Crow's Nest来显示Apdex并获得有价值的见解。</p>
+
+<h3 id="apdex-for-cloud-and-deploy">面向云和部署的Apdex</h3>
+
+<p>蓝线表示Octopus Cloud和部署服务器中最近版本的Apdex性能。在此期间，云Apdex性能一直保持在90左右。部署服务器是内部Octopus实例，不会向客户发布。</p>
+
+<p>橙色图表显示，自2048年2月21日起，Apdex出现显著下降，在修正回归后，该指数于2021年2月4155日回升。</p>
+
+<p>回顾一下不同的版本是如何影响用户体验的是很有帮助的。如果性能显著下降，我们可以进行根本原因分析来确定和解决原因。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-cloud-deploy.png" class="zoom" data-title="Apdex Cloud and Deploy"><img src="../Images/57a81a533f8636b293d9333c1ef0e545.png" class="img-fluid center" alt="Apdex Cloud and Deploy" title="Apdex Cloud and Deploy" data-original-src="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-cloud-deploy.png"/></a>T2】</p>
+
+<h3 id="apdex-by-version-and-license">按版本和许可的Apdex</h3>
+
+<p>我们可以比较不同版本和许可证的Apdex分数。许可证分为云、内部、试用和整体。这些数字有很大的可变性，因为它们代表了所有客户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-by-version.png" class="zoom" data-title="Apdex by Version"><img src="../Images/1e37a82a1edb7de91af87d2b20a9fecd.png" class="img-fluid center" alt="Apdex by Version" title="Apdex by Version" data-original-src="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-by-version.png"/>T2】</a></p>
+
+
+
+<h3 id="apdex-overall-score">Apdex总分</h3>
+
+<p>每个客户都有一个总体Apdex分数，它表示客户体验的响应度。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-score.png" class="zoom" data-title="Apdex Score"><img src="../Images/557730eccd2fbd347468c24a2af3d2ea.png" class="img-fluid center" alt="Apdex Score" title="Apdex Score" data-original-src="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-score.png"/>T2】</a></p>
+
+<h3 id="apdex-routes">Apdex路线</h3>
+
+<p>单个路线的性能在客户视图中。我们对网络请求进行计时，并根据路由对结果进行分组。从这些计时中，我们显示了平均值、中间值和第95百分位时间。</p>
+
+<p>通过按路由存储请求，我们避免了传输大量数据。在以后的版本中，我们可以使用这些度量来识别性能最差的路由。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-route.png" class="zoom" data-title="Apdex Routes"><img src="../Images/bd7b916ed67830514a19e18119a44c12.png" class="img-fluid center" alt="Apdex Routes" title="Apdex Routes" data-original-src="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-route.png"/>T2】</a></p>
+
+<h4 id="apdex-route-difference">Apdex路线差异</h4>
+
+<p>我们可以使用乌鸦巢来查看不同版本之间的路线差异。项目路线在2020.6年和2021.1年之间有所改善，如Apdex得分的绿色差异指标所示。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-route-diff.png" class="zoom" data-title="Apdex Routes Difference"><img src="../Images/e1481895e83e74833efa7d6241b27c50.png" class="img-fluid center" alt="Apdex Routes Difference" title="Apdex Routes Difference" data-original-src="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-route-diff.png"/></a>T2】</p>
+
+<h4 id="apdex-route-view">Apdex路线视图</h4>
+
+<p>历史业绩在每条路线上都是可见的。这使我们可以看到路由的性能在每个版本中是如何变化的。</p>
+
+<p>例如，上述证书路由的性能从2020.2下降到2020.6。Apdex评分从62分降至16分。</p>
+
+<p>在2021.1中，我们确定了Apdex分数下降的原因并解决了该问题，使Apdex分数提高到77分。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-route-view.png" class="zoom" data-title="Apdex Route View"><img src="../Images/4d237b0f8d7ddf93e18216de6914bcf8.png" class="img-fluid center" alt="Apdex Route View" title="Apdex Route View" data-original-src="https://i.octopus.com/blog/2021-10/how-we-use-telemetry-to-improve-octopus/apdex-route-view.png"/>T2】</a></p>
+
+<h4 id="future-improvements">未来的改进</h4>
+
+<p>乌鸦巢帮助我们计划下一步的工作。它突出了最需要注意的领域，应该首先解决。在监控我们的整体应用程序健康状况时，它也给了我们另一个信号。</p>
+
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>遥测技术是一种强大的工具，可以为企业提供完整的用户体验。</p>
+
+<p>遥测和Apdex提供了每个用户和每条路线性能的全面可见性。我们可以比较不同版本和许可证的性能。比较版本可以量化每次更新的效果。表现不佳的路由在每个用户或整个Octopus Deploy平台上都是可见的。</p>
+
+<p>我们的Crow's Nest工具有助于改善客户体验，带来更灵敏的交互和更愉快的部署。</p>
+
+                    
+                    
+</body>
+</html>

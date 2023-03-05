@@ -1,0 +1,175 @@
+<html>
+<head>
+<title>Getting started with the Terraform provider for Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus Deploy的Terraform provider入门- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopusdeploy-terraform-provider#2022-08-10">https://octopus.com/blog/octopusdeploy-terraform-provider#2022-08-10</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/octopusdeploy-terraform-provider/blogimage-terraform-provider-2021.png" class="zoom" data-title=""><img src="../Images/655909e5e04c845192ee78c14a7e7385.png" class="img-fluid center" alt="Octopus Deploy Terraform provider: Getting started with the Beta" data-original-src="https://i.octopus.com/blog/2021-01/octopusdeploy-terraform-provider/blogimage-terraform-provider-2021.png"/>T2】</a></p>
+
+<p>基础设施即代码(IaC)允许团队创建基础设施资源(即虚拟机、存储、网络资源等)。)而无需浏览向导或多次点击鼠标。哈希公司的 <a href="https://www.terraform.io" rel="nofollow"> Terraform </a>是最受欢迎的基础设施as代码解决方案之一。Terraform是一个开源的IaC解决方案，它允许您使用一种基于函数的编程语言来定义您的基础设施，这种语言叫做<a href="https://github.com/hashicorp/hcl" rel="nofollow">哈希公司配置语言(HCL) </a>。</p>
+
+<p>章鱼很自豪地介绍我们的官方平台提供商。这个项目最初是由<a href="https://github.com/MattHodge/" rel="nofollow">马修·霍奇金斯</a>发起的<a href="https://github.com/MattHodge/terraform-provider-octopusdeploy" rel="nofollow">社区倡议</a>，他根据自己的需求建造了这个项目。接下来，<a href="https://github.com/mhenderson-so" rel="nofollow"> Mark Henderson </a>为StackExchange的需求贡献了项目。我们感谢Matt和Mark自2018年项目启动以来所做的努力。使它成为一个官方的、受支持的提供者带来了显著的优势，因为我们可以保持插件最新，改进它的测试，并增加新的特性。</p>
+
+<p>在这篇博文中，我介绍了Octopus Deploy的Terraform提供者，并分享了如何开始使用它的实际例子。</p>
+
+<h2 id="why-infrastructure-as-code">为什么基础设施是代码？</h2>
+
+<p>自动化和开发运维是未来。手动创建基础设施既慢又容易出错，而且很容易因为一个愚蠢的打字错误而破坏系统。</p>
+
+<p>作为代码的基础设施允许您声明性地描述您的基础设施，并且相关的工具允许您在将其应用于生产系统之前对其进行测试。将您的配置存储在源代码管理中允许您通过协作、代码审查来进一步提高质量，并且它为您提供了更改的完整历史。</p>
+
+<h2 id="what-is-a-terraform-provider">什么是Terraform提供商？</h2>
+
+<p>Terraform是一个开源工具，您可以使用声明性配置文件，遵循基础架构即代码的方法，来配置和更新基础架构。您在配置文件中描述资源的状态，Terraform将此应用于您的基础设施。它可以创建、破坏和检测期望状态和实际基础设施之间的偏差。</p>
+
+<p>Terraform提供者是允许Terraform与多种技术交互的插件。Octopus Deploy Terraform provider将使您能够与Octopus实例交互并管理其配置。</p>
+
+<h2 id="getting-started-with-the-terraform-provider-for-octopus-deploy">Octopus Deploy的Terraform provider入门</h2>
+
+<p>我们的Terraform提供商允许团队提供和配置Octopus Deploy实例。这适用于本地Octopus服务器和<a href="https://octopus.com/docs/octopus-cloud"> Octopus Cloud </a>实例。</p>
+
+<p>我们在内部使用这个Terraform provider来提供和配置Octopus实例，包括Octopus Cloud。这是一个神奇的工具，我们很高兴看到它在社区的团队中使用。</p>
+
+
+<p>这个提供者由用<a href="https://golang.org" rel="nofollow"> Go </a>编写的新的跨平台<a href="https://github.com/OctopusDeploy/go-octopusdeploy" rel="nofollow"> Octopus客户端</a>提供支持。这个客户端很有用，因为它让您无需直接调用Octopus REST API就可以与Octopus进行交互。它补充了<a href="https://octopus.com/docs/octopus-rest-api/octopus-cli"> Octopus CLI </a>和其他Octopus <a href="https://octopus.com/docs/octopus-rest-api"> API客户端</a>。</p>
+
+<h3 id="prerequisites">先决条件</h3>
+
+<p>使用Octopus Terraform provider需要以下工具:</p>
+
+<ul>
+<li>Go 1.12或更新版本</li>
+<li>Terraform 0.12或更新版本</li>
+<li>Octopus Deploy 2019.1或更新版本</li>
+</ul>
+
+<h3 id="installing-the-octopus-terraform-provider">安装Octopus Terraform提供程序</h3>
+
+<p>我们正在将Octopus提供程序发布到官方的<a href="https://registry.terraform.io" rel="nofollow"> Terraform注册表</a>，Terraform会自动检测您需要哪些提供程序并安装它们。</p>
+
+<h3 id="creating-your-first-terraform-script">创建您的第一个地形脚本</h3>
+
+<p>首先，这里有一个简单的例子，向您展示如何向现有的Octopus实例和空间添加新的变量集:</p>
+
+<ol>
+<li><strong>创建地形配置文件</strong></li>
+</ol>
+
+<ul>
+<li><code>main.tf</code>:这是主配置文件，配置提供者并指定要创建或更新的资源。</li>
+<li><code>variables.tf</code>:该文件定义了<code>main.tf</code>配置文件中使用的变量。</li>
+<li><code>terraform.tfvars</code>:该文件包含<code>variables.tf</code>中定义的变量值。</li>
+</ul>
+
+<ol start="2">
+<li><strong>配置主地形配置文件。</strong>打开<code>main.tf</code>文件，复制粘贴以下内容。前两个块配置Octopus部署提供程序，最后一个块定义新的变量集资源:</li>
+</ol>
+
+<pre><code class="language-json">terraform {
+  required_providers {
+    octopusdeploy = {
+      source  = "OctopusDeployLabs/octopusdeploy"
+    }
+  }
+}
+
+provider "octopusdeploy" {
+  address  = var.serverURL
+  api_key   = var.apiKey
+  space_id = var.space
+}
+
+resource "octopusdeploy_library_variable_set" "newvariableset" {
+  description = var.description
+  name        = var.variableSetName
+}
+</code></pre>
+
+<ol start="3">
+<li><strong>添加变量定义。</strong>打开<code>variables.tf</code>文件，复制并粘贴以下变量定义。这个文件的内容很简单。我们正在定义变量名和它们将存储的数据类型。在这种情况下，一切都是一个简单的字符串:</li>
+</ol>
+
+<pre><code class="language-json">variable "apiKey" {
+    type = string
+}
+
+variable "space" {
+    type = string
+}
+
+variable "serverURL" {
+    type = string
+}
+
+variable "variableSetName" {
+    type = string
+}
+
+variable "description" {
+    type = string
+}
+</code></pre>
+
+<ol start="4">
+<li><strong>设置您的变量值</strong>。Terraform会在运行时将这些值传递到您的配置文件中。打开<code>terraform.tfvars</code>文件，复制并粘贴以下文本。您将需要使用您的Octopus服务器详细信息以及变量集名称和描述来更新这些值:</li>
+</ol>
+
+<pre><code class="language-json">serverURL       = "https://mytestoctopusname.octopus.app"
+apiKey          = "API-XXXXXXXXXXXXX"
+space           = "Spaces-1"
+variableSetName = "AWS configuration values"
+description     = "Collection of common AWS config values for automated deployment and runbook processes."
+</code></pre>
+
+<ol start="5">
+<li><strong>应用配置文件中的更改。</strong>通过将Terraform配置文件应用到Octopus实例来创建新的Octopus变量集资源。在终端或命令提示符下运行以下命令，初始化、验证并应用您的更改:</li>
+</ol>
+
+<ul>
+<li><code>terraform init</code></li>
+<li><code>terraform plan</code></li>
+<li><code>terraform apply</code></li>
+</ul>
+
+<p><strong>注意</strong>:这不是一个完整的地形教程。我强烈推荐你阅读优秀的<a href="https://www.terraform.io/docs/" rel="nofollow"> Terraform文档</a>来了解更多关于Terraform本身的信息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/octopusdeploy-terraform-provider/terraform-provider-example-terminal.png" class="zoom" data-title=""><img src="../Images/1bb2017159872311c83a97bea891f649.png" class="img-fluid center" alt="Terraform Provider example Terminal screenshot" data-original-src="https://i.octopus.com/blog/2021-01/octopusdeploy-terraform-provider/terraform-provider-example-terminal.png"/>T2】</a></p>
+
+<p>恭喜你！您已经使用Terraform和Octopus Deploy提供程序配置了Octopus实例。导航到您的Octopus实例，您将看到在所选空间中新创建的变量集！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-01/octopusdeploy-terraform-provider/terraform-provider-example-octopus.png" class="zoom" data-title=""><img src="../Images/6e18078c6f11f1ae403c3304e3cdae79.png" class="img-fluid center" alt="Terraform Provider example Octopus screenshot" data-original-src="https://i.octopus.com/blog/2021-01/octopusdeploy-terraform-provider/terraform-provider-example-octopus.png"/>T2】</a></p>
+
+<h3 id="next-steps">后续步骤</h3>
+
+<p>阅读<a href="https://registry.terraform.io/providers/OctopusDeployLabs/octopusdeploy/latest/docs" rel="nofollow"> Terraform provider文档</a>并查看GitHub存储库中的<a href="https://github.com/OctopusDeployLabs/terraform-provider-octopusdeploy/tree/master/examples" rel="nofollow">T5文件夹</a>以获取更多示例。</p>
+
+<p>观看我们的管理Octopus with Go和Terraform网络研讨会，获得深入的概述，并观看大量真实的例子。</p>
+
+<iframe src="https://www.youtube.com/embed/lN78iPeqwsE" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="open-source-and-contributing">开源和贡献</h2>
+
+<p>GitHub上的<a href="https://github.com/OctopusDeployLabs/terraform-provider-octopusdeploy" rel="nofollow">项目库</a>带有Mozilla Public License版许可。我们接受拉取请求，并且我们希望看到社区贡献。</p>
+
+<h2 id="infrastructure-as-code-with-the-terraform-provider-vs-config-as-code">使用Terraform provider的基础架构代码与配置代码</h2>
+
+<p>我们目前正在构建对代码为的<a href="https://octopus.com/blog/shaping-config-as-code">配置的支持，以给团队一个版本控制的Octopus项目的文本表示。这带来了许多好处，但也提出了几个问题。</a></p>
+
+<p><em>对于我们的Terraform提供商来说，配置即代码和基础设施即代码有什么区别？什么时候应该使用配置作为代码？我应该何时使用Terraform提供程序？</em></p>
+
+<p>这两个特性都很有价值，它们相辅相成。如果适合您的需要，您可以选择单独使用或一起使用它们。这两种技术之间最显著的区别是范围。基础设施代码侧重于提供和配置整个Octopus实例，而配置代码侧重于项目中的自动化过程。</p>
+
+<p>使用代码为的<strong> Config，您可以在Git源代码控制中获得自动化过程(部署和runbook)的人类可读版本。这带来了许多好处，包括捕获历史，支持分支的变更，拥有单一的事实来源，以及提高创建可以被克隆的模板配置的能力。Config as Code侧重于项目中的自动化过程。它不允许您配置Octopus的其他区域。</strong></p>
+
+<p>使用代码为的<strong>基础设施，您可以提供新的Octopus实例并配置现有的实例。这涵盖了Octopus的大部分领域，从基础设施、项目、库到系统配置。您还可以从Terraform生态系统中获得许多好处，包括配置基础架构、管理变更和检测偏差的一致方法。</strong></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>我们很高兴分享我们的Terraform提供者，我们希望它能帮助团队用一种声明性的“基础设施即代码”的方法来管理他们的Octopus实例。</p>
+
+                    
+                    
+</body>
+</html>

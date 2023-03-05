@@ -1,0 +1,317 @@
+<html>
+<head>
+<title>Beyond Hello World: Build a real-world Docker CI/CD pipeline - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>超越Hello World:构建一个真实的Docker CI/CD管道- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/build-a-real-world-docker-cicd-pipeline#2021-08-12">https://octopus.com/blog/build-a-real-world-docker-cicd-pipeline#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/docker-in-a-ci-cd-pipeline.png" class="zoom" data-title=""><img src="../Images/cacb7ca4ed0c69d0d0d19d4a57889215.png" class="img-fluid center" alt="Build a real-world CI/CD Docker pipeline" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/docker-in-a-ci-cd-pipeline.png"/>T2】</a></p>
+
+<p>Docker容器和Kubernetes是您DevOps工具箱中的优秀技术。这个<strong>超越Hello World </strong>博客系列涵盖了如何在现实应用中使用它们。</p>
+
+
+
+<hr/>
+
+<p>在上一篇文章中，我向您展示了如何将<a href="https://github.com/OctopusSamples/OctoPetShop" rel="nofollow"> OctoPetShop </a> web应用程序容器化，并为其生成Docker图像。</p>
+
+<p>在这篇文章中，我配置了一个完整的Docker CI/CD管道来自动化这个过程。这包括配置与JetBrains的TeamCity的持续集成和与Octopus Deploy的持续交付的步骤。</p>
+
+<h2>在这篇文章中</h2>
+
+
+
+<h2 id="configure-docker-continuous-integration-with-jetbrains-teamcity">配置Docker与JetBrains的TeamCity的持续集成</h2>
+
+<p>持续集成发生在构建服务器上。连续部分通常与触发构建的事件相关联，例如源代码提交或预定义的时间表。对于我们的构建服务器，我们将执行以下任务:</p>
+
+<ul>
+<li>创建一个项目。</li>
+<li>创建一个生成定义。</li>
+<li>定义构建步骤。</li>
+</ul>
+
+<h3 id="add-the-docker-build-capability-to-the-build-agent">向构建代理添加Docker构建功能</h3>
+
+<p>大多数主要的构建服务器都可以通过内置的步骤或可下载的插件来构建Docker映像。对于这个演示，我使用TeamCity，因为我的大部分经验都是使用Azure DevOps，我想扩展我的视野。</p>
+
+<p>我没有创建一个新的虚拟机(VM ),安装并配置一个操作系统，安装构建代理，最后安装Docker，而是选择了一个更有趣的方法。团队城市(以及其他产品)的制造商JetBrains为他们的构建代理提供了一个<a href="https://hub.docker.com/r/jetbrains/teamcity-agent/" rel="nofollow"> Docker图像。他们不仅有一个构建代理映像，而且这个映像还可以运行Docker来执行Docker构建(在上面的链接文档中，我选择了<em>运行需要Docker </em>的构建下的选项二)。</a></p>
+
+<p><strong>提示</strong> <br/>我第一次尝试运行时遇到了代理容器无法解析本地DNS条目的问题，但是Robin Winslow的文章<a href="https://development.robinwinslow.uk/2016/06/23/fix-docker-networking-dns/" class="alert-link" rel="nofollow"> Fix Docker的网络DNS配置</a>向我展示了一个解决这个问题的巧妙技巧。</p>
+<p>随着DNS问题的解决，容器启动并在我的TeamCity服务器上注册到未授权的代理类别下:</p>
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-unauthorized-agent.png" class="zoom" data-title=""><img src="../Images/5c7decbb775cb9d38146c96aeb12409d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-unauthorized-agent.png"/></a>T2】</p>
+<p>单击<strong>授权</strong>按钮完成连接，代理就可以执行构建了。</p>
+
+
+<h3 id="create-a-teamcity-project">创建团队城市项目</h3>
+
+<p>我的第一步是创建一个新的TeamCity项目，并将我的git存储库连接到它。GitHub上有OctoPetShop的源代码，但我使用了一个本地Azure DevOps实例来托管我的。这篇文章假设你已经知道如何在TeamCity中<a href="https://www.jetbrains.com/help/teamcity/creating-and-editing-projects.html" rel="nofollow">创建一个项目</a>，并且关注构建和部署过程。</p>
+
+<h3 id="add-a-connection-to-docker-hub">添加到Docker Hub的连接</h3>
+
+<p>要将您的图像推送到Docker Hub，您需要配置一个授权用户到Docker Hub的连接。</p>
+
+<p>为此，导航到OctoPetShop项目的<strong>连接</strong>选项卡:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-project-connections.png" class="zoom" data-title=""><img src="../Images/d9a205b74991854c777c411b0e2bb7a2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-project-connections.png"/>T2】</a></p>
+
+<p>点击<strong>添加连接</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-project-connections-button.png" class="zoom" data-title=""><img src="../Images/f030e0a0e70361843ad2705c3b860bda.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-project-connections-button.png"/>T2】</a></p>
+
+<p>从下拉菜单中选择<strong> Docker注册表</strong>，并填写用户名和密码。不要忘记使用<strong>测试连接</strong>来确保您的凭证有效:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-dockerhub-connection.png" class="zoom" data-title=""> <img src="../Images/cbcb85143e60f0151b26d5f9f6f66cf5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-dockerhub-connection.png"/> </a> <a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-dockerhub-connection-test.png" class="zoom" data-title=""> <img src="../Images/535b86214b8165ac7938bf4d34fc7751.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-dockerhub-connection-test.png"/></a></p>
+
+<p>有了这些整理工作，您就可以继续您的构建定义了。</p>
+
+<h3 id="create-the-build-definition">创建构建定义</h3>
+
+<p>创建项目后，您可以创建一个新的构建定义来执行Docker构建操作。这个构建定义需要执行以下步骤:</p>
+
+<ul>
+<li>构建OctoPetShop web前端。</li>
+<li>构建OctoPetShop产品服务。</li>
+<li>构建OctoPetShop购物车服务。</li>
+<li>构建OctoPetShop数据库DbUp。</li>
+<li>将映像推送到Docker Hub以用于部署。</li>
+</ul>
+
+<h3 id="add-the-docker-support-build-feature">添加Docker支持构建功能</h3>
+
+<p>您需要将Docker Hub连接连接到您的构建定义。为此，您可以点击<strong>构建特性</strong>选项卡和<strong>添加构建特性</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-add-build-feature.png" class="zoom" data-title=""><img src="../Images/008fcb0fff782011b15d276e060ea726.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-add-build-feature.png"/>T2】</a></p>
+
+<p>从下拉菜单中选择<strong> Docker Support </strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-feature-docker.png" class="zoom" data-title=""><img src="../Images/6122bcea1ed0c072732cf2780cb635f8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-feature-docker.png"/>T2】</a></p>
+
+<p>检查<strong>在构建</strong>之前登录Docker注册表，选择您为项目创建的连接，然后点击<strong>保存</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-feature-add-connection.png" class="zoom" data-title=""><img src="../Images/c36a9b283de1ec0439ed45b4f432d427.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-feature-add-connection.png"/>T2】</a></p>
+
+<h3 id="add-build-steps">添加构建步骤</h3>
+
+<p>步骤1到4几乎相同；唯一的区别是您将构建的dockerfile文件。点击<strong>构建步骤</strong>选项卡，并点击<strong>添加构建步骤</strong>按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-add-step.png" class="zoom" data-title=""><img src="../Images/444e8c679bb4dfccb3402ddc2acc0633.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-add-step.png"/>T2】</a></p>
+
+<p>对于该步骤，请填写以下内容:</p>
+
+<ul>
+<li>转轮类型:<code>Docker</code></li>
+<li>Docker命令:<code>build</code></li>
+<li>回购协议中dockerfile的路径:即<code>Development-Active/OctopusSamples.OctoPetShop.web/dockerfile</code></li>
+<li>图像名称:标签:即<code>octopusexamples/octopetshop-web:1.0.0.0</code></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-step-docker.png" class="zoom" data-title=""><img src="../Images/76ef24e0b1485a3ae58506a36b368ea3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-step-docker.png"/>T2】</a></p>
+
+<p>对于Docker图片，用<code>DockerId/ImageName:version</code>标记你的图片被认为是最佳实践。省略标签的<code>version</code>部分并不罕见，但是每当一个图像的新版本上传到Docker Hub时，如果没有指定版本号，它会自动附加<code>latest</code>作为版本。Octopus Deploy将SemVer用于包版本，在这个例子中，我将<code>1.0.0.0</code>硬编码为版本号，但是您也可以轻松地使用TeamCity参数来动态分配版本号。</p>
+
+<p>您将为产品服务、购物车服务和数据库添加三个类似的步骤。</p>
+
+<p>您将添加的最后一步是将您构建的映像推送到Docker Hub(即执行Docker push命令)。对于这一步，您需要填写以下内容:</p>
+
+<ul>
+<li>转轮类型:<code>Docker</code></li>
+<li>Docker命令:<code>push</code></li>
+<li>图像名称:标签</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-docker-push.png" class="zoom" data-title=""><img src="../Images/3f55428682ae7fc3365659730a93b370.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-docker-push.png"/>T2】</a></p>
+
+<p>对于推送步骤，您可以指定在步骤1到4中构建的所有映像，并在一个步骤中推送它们。除非出现任何输入错误，否则构建应该会成功执行:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-result.png" class="zoom" data-title=""><img src="../Images/1f09b3b2399aa20424de749ce5ec3cc8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-result.png"/>T2】</a></p>
+
+<p>恭喜你！您刚刚完成了本文的CI部分。剩下唯一要做的事情就是添加一个触发器，这样当有人提交到源代码控制时，一个构建就会自动执行。</p>
+
+<h2 id="configure-docker-continuous-delivery-with-octopus-deploy">使用Octopus Deploy配置Docker连续交付</h2>
+
+<p>对于本文的连续交付部分，您将使用Octopus Deploy。使用Octopus，您将执行以下操作:</p>
+
+<ul>
+<li>添加Docker Hub作为外部feed。</li>
+<li>创建新项目。</li>
+<li>定义我们的部署步骤。</li>
+</ul>
+
+<h3 id="add-docker-hub-as-an-external-feed">添加Docker Hub作为外部feed</h3>
+
+<p>您需要添加Docker Hub作为外部提要，以便Octopus Deploy可以从Docker Hub中提取您的图像，并将它们部署到运行Docker的服务器上。</p>
+
+<p>登录Octopus后，点击<strong>库</strong>标签:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-dashboard.png" class="zoom" data-title=""><img src="../Images/9c65e1af4ae1021b47e0d3252b05a75a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-dashboard.png"/>T2】</a></p>
+
+<p>在<strong>库</strong>部分，点击<strong>外部进给</strong>，点击<strong>添加进给</strong>按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-external-feed-add.png" class="zoom" data-title=""><img src="../Images/23100ecd55d791278f5a777085610fcb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-external-feed-add.png"/>T2】</a></p>
+
+<p>在<strong>创建Feed </strong>表单上，填写以下内容:</p>
+
+<ul>
+<li>进料类型:<code>Docker Container Registry</code></li>
+<li>名称:<code>Docker Hub</code></li>
+<li>用户名:<code>your-username</code></li>
+<li>密码:<code>your-password</code></li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-external-feed-docker.png" class="zoom" data-title=""><img src="../Images/f8eb268a0fa7603aef133069c73298ac.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-external-feed-docker.png"/>T2】</a></p>
+
+<p>测试提要以确保Octopus可以登录Docker Hub:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-external-feed-test.png" class="zoom" data-title=""><img src="../Images/e0798dc97fec47ee475d6a42cf2029c2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-external-feed-test.png"/></a>T2】</p>
+
+<p>配置好外部提要后，您可以定义我们的步骤。</p>
+
+<h3 id="create-the-octopus-deploy-project">创建Octopus部署项目</h3>
+
+<p>要创建新项目，点击<strong>项目</strong>选项卡，并点击<strong>添加项目</strong>按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-new.png" class="zoom" data-title=""><img src="../Images/97efaf91ef5aa2e7a9a4a232e1cd976c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-new.png"/>T2】</a></p>
+
+<p>给项目命名，点击<strong>保存</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-name.png" class="zoom" data-title=""><img src="../Images/7242311cf4f6fbbf24209872207cf1b9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-name.png"/>T2】</a></p>
+
+<p>与我们的构建类似，Octopus中的步骤也基本相同，只有微小的差异。我将带您完成您将添加到流程中的第一步，并指出其余步骤中的差异。</p>
+
+<p>在项目的<strong>流程</strong>选项卡上，点击<strong>添加步骤</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-add.png" class="zoom" data-title=""><img src="../Images/e01fbfa9fa2f7eba225b523f374b942f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-add.png"/>T2】</a></p>
+
+<p>选择<strong> Docker </strong>类别和<strong>运行Docker容器</strong>步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-add-docker.png" class="zoom" data-title=""><img src="../Images/4681815af7d762125701c3a1dab1839b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-add-docker.png"/>T2】</a></p>
+
+<p>对于此演示，使用Microsoft SQL Server 2017 Docker映像作为您的数据库服务器。这将是您在部署中配置的第一个容器。</p>
+
+<p>Docker容器步骤的表单相当长，所以我把截图分成了几个部分。对于第一部分，给步骤一个名称以及它将被部署到的角色。在这个演示中，我使用了一个简单的角色<code>Docker</code>，但是在生产场景中，这个角色可能更有意义，比如:<code>OctoPetShop-Web-Container</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker1.png" class="zoom" data-title=""><img src="../Images/4a19ec8e3aea6fafb2be4a33a5281c48.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker1.png"/>T2】</a></p>
+
+<p>选择我们的Docker Hub外部馈送，并选择<code>microsoft/mssql-server-linux</code>图像。</p>
+
+<p><strong>提示</strong> <br/>在搜索框中键入<code>mssql</code>查找图片。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker2.png" class="zoom" data-title=""><img src="../Images/8fae28dfa80801191d4de12f0576fad8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker2.png"/>T2】</a></p>
+
+<p>选择<code>Bridge</code>的网络类型:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker3.png" class="zoom" data-title=""><img src="../Images/d99b7b86acdc8063f77edafc4a6bffb8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker3.png"/>T2】</a></p>
+
+<p>要使您的数据库服务器可访问，您需要添加一个端口映射。指定默认的SQL Server端口<code>1433</code>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker4.png" class="zoom" data-title=""><img src="../Images/e4002459c54a3a04eca06b25ebaa9013.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker4.png"/>T2】</a></p>
+
+<p>向下滚动到<strong>变量</strong>部分，并添加以下显式变量映射。这个图像需要传递给它两个环境变量:<code>SA_PASSWORD</code>和<code>ACCEPT_EULA</code>。为<code>SA_PASSWORD</code>创建一个类型为<em> Sensitive </em>的项目变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker5.png" class="zoom" data-title=""> <img src="../Images/a4266a8eefa61581b397940fa0d070c0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker5.png"/> </a> <a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker6.png" class="zoom" data-title=""> <img src="../Images/25f7b3ae56f4707f618fed3a2b51d007.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-step-docker6.png"/></a></p>
+
+<p>这个容器就这样了。点击<strong>保存</strong>将该步骤提交给流程。</p>
+
+<p>以下是其余容器的详细信息:</p>
+
+<h4 id="octopetshop-web">OctoPetShop网站</h4>
+
+<ul>
+<li>Docker图片:<code>octopussamples/octopetshop-web</code></li>
+<li>网络类型:<code>Host</code></li>
+<li>显式变量映射:          <ul>
+<li><code>ProductServiceBaseUrl = http://localhost:5011/</code></li>
+<li><code>ShoppingCartServiceBaseUrl = http://localhost:5012</code></li>
+</ul>
+</li>
+</ul>
+
+<h4 id="octopetshop-product-service">OctoPetShop产品服务</h4>
+
+<ul>
+<li>码头工人图片:<code>octopussamples/octopetshop-productservice</code></li>
+<li>网络类型:<code>Bridge</code></li>
+<li>端口映射:<code>5011:5011</code></li>
+<li>显式变量映射:          <ul>
+<li><code>OPSConnectionString = "Data Source=#{Octopus.Machine.Hostname}; Initial Catalog=OctoPetShop; User ID=sa; Password=#{Project.Database.SA.Password}</code></li>
+</ul>
+</li>
+</ul>
+
+
+
+<ul>
+<li>Docker图片:<code>octopussamples/octopetshop-shoppingcartservice</code></li>
+<li>网络类型:<code>Bridge</code></li>
+<li>端口映射:<code>5012:5012</code></li>
+<li>显式变量映射:          <ul>
+<li><code>OPSConnectionString = "Data Source=#{Octopus.Machine.Hostname}; Initial Catalog=OctoPetShop; User ID=sa; Password=#{Project.Database.SA.Password}</code></li>
+</ul>
+</li>
+</ul>
+
+<h4 id="octopetshop-database">OctoPetShop数据库</h4>
+
+<ul>
+<li>Docker图像:<code>octopussamples/octopetshop-database</code></li>
+<li>网络类型:<code>Host</code></li>
+<li>显式变量映射:          <ul>
+<li><code>DbUpConnectionString = "Data Source=#{Octopus.Machine.Hostname}; Initial Catalog=OctoPetShop; User ID=sa; Password=#{Project.Database.SA.Password}</code></li>
+</ul>
+</li>
+</ul>
+
+<p>定义好所有步骤后，您就可以创建并部署一个发布了:</p>
+
+<p><strong>提示</strong> <br/>关于如何为Linux设置触手的信息，请参见我们的<a href="https://octopus.com/docs/infrastructure/deployment-targets/linux/tentacle" class="alert-link">文档</a>。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-release-success.png" class="zoom" data-title=""><img src="../Images/f3823abd3e86f2cdd929824c3e964f96.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-project-release-success.png"/>T2】</a></p>
+
+<p>如果您导航到您刚刚部署到的服务器，您应该看到您的OctoPetShop应用程序正在运行。与前面的演示一样，OctoPetShop使用自签名证书重定向到https，因此您很可能会收到关于它不安全的警告。在这种情况下，可以忽略警告并继续:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/server-docker-containers.png" class="zoom" data-title=""><img src="../Images/11f3c2a7270e896a1d20d1cf1105c7c1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/server-docker-containers.png"/></a>T2】</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/server-docker-octopetshop.png" class="zoom" data-title=""><img src="../Images/8c5ad35ea118a2ac11f55599eea1113d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/server-docker-octopetshop.png"/>T2】</a></p>
+
+<h2 id="complete-the-docker-cicd-pipeline">完成Docker CI/CD管道</h2>
+
+<p>到目前为止，我们已经完成了CI和CD部分，但是您仍然需要连接它们。要将这些片段组合在一起，请回到您的TeamCity服务器。</p>
+
+<h3 id="install-the-octopus-deploy-teamcity-plugin">安装Octopus部署团队城市插件</h3>
+
+<p>首先，导航并下载<a href="https://plugins.jetbrains.com/plugin/9038-octopus-deploy-integration" rel="nofollow"> Octopus部署插件</a>。</p>
+
+<p>下载完成后，进入TeamCity服务器中的<span class="path">管理➜插件列表</span>。从这里，点击<strong>上传插件zip </strong>按钮添加插件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-plugins-upload.png" class="zoom" data-title=""><img src="../Images/30f3c2cdb2da2713d771d518edd62fcb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-plugins-upload.png"/>T2】</a></p>
+
+<p>这将添加一些步骤，您可以使用构建定义与Octopus Deploy进行交互:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-octopus-steps.png" class="zoom" data-title=""><img src="../Images/dd4530fd5f385de6f48cf6d9b9e0cde1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-octopus-steps.png"/>T2】</a></p>
+
+<h3 id="add-create-release-step">添加创建发布步骤</h3>
+
+<p>接下来，向您的构建定义添加一个新步骤，<strong>octopus deploy:Create release</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-step-release.png" class="zoom" data-title=""><img src="../Images/d319787a48a2050169ae96b04d9d6912.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-step-release.png"/></a>T2】</p>
+
+<p>现在，当您运行一个构建时，它会自动在Octopus Deploy中创建一个发布:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-step-release-results.png" class="zoom" data-title=""><img src="../Images/a09c115252436f49333e14951e0b24fd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/teamcity-build-step-release-results.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-release-created.png" class="zoom" data-title=""><img src="../Images/d2bac4a7768a2483f57c1677e01ef312.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-12/build-a-real-world-docker-cicd-pipeline/octopus-release-created.png"/>T2】</a></p>
+
+<p>如果您愿意，您可以直接从构建定义中将该版本的自动部署添加到开发中。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>这篇文章展示了使用Docker容器为现实世界的应用程序创建完整的CI/CD管道是可能的。它讲述了如何使用JetBrains TeamCity自动化Docker构建管道，以及如何使用Octopus Deploy配置Docker连续交付。</p>
+
+                    
+                    
+</body>
+</html>

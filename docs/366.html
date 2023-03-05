@@ -1,0 +1,523 @@
+<html>
+<head>
+<title>Using dynamic build agents to automate scaling in Jenkins - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>在Jenkins - Octopus部署中使用动态构建代理来自动扩展</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/jenkins-dynamic-build-agents#2022-05-19">https://octopus.com/blog/jenkins-dynamic-build-agents#2022-05-19</a></blockquote>
+                        <p>如果你在运行一个只有几个开发人员的小项目，那么Jenkins的一个实例是不错的。但是随着您的团队和产品的成长，您会发现单个实例可能无法保持稳定。当提交数量增加时，Jenkins需要运行的流程也会增加，单个实例的性能很快就会下降，并使您的团队慢下来。</p>
+
+<p>谢天谢地，Jenkins是一个可扩展的平台。可扩展性意味着，随着您处理需求的增长，Jenkins也可以随之增长。</p>
+
+<p>Jenkins的可伸缩性将一个实例视为一个控制器，将作业定向到称为代理的其他实例。控制器知道每个代理的容量，并会将您的构建和测试发送到当时最合适的代理。通过使用动态构建代理，这个过程可以自动发生，允许Jenkins对您的需求做出反应。</p>
+
+<p>感谢像Kubernetes和Amazon Web Services (AWS)这样的虚拟环境，您不需要数量有限的代理或物理硬件。动态设置中的Jenkins足够聪明:</p>
+
+<ul>
+<li>如果没有合适的代理，则增加新的代理</li>
+<li>清理未使用的代理</li>
+<li>替换损坏的安装</li>
+</ul>
+
+<p>而且完全不需要人工干预。</p>
+
+<p>在这篇文章中，我们从头到尾看了两种设置动态伸缩的流行方法，分别是<a href="#method1"> Kubernetes </a>和<a href="#method2"> Amazon Web Services (AWS) </a>。</p>
+
+<h2 id="method1">方法1:使用Kubernetes进行扩展</h2>
+
+<p>Kubernetes是一个工具，它可以自动调整保持应用程序平稳运行所需的容器数量。这使得它成为帮助扩展Jenkins实例的好选择。</p>
+
+<p>通过将您的Jenkins控制器部署到Kubernetes，您的持续集成(CI)设置变得更易于管理、复制或在出现问题时重新创建。</p>
+
+<p>容器是不太复杂的虚拟机，很容易部署到大多数操作系统或云服务。</p>
+
+
+<h3 id="before-you-start">开始之前</h3>
+
+<p>本指南只是一个示例，在更改现有的Jenkins设置之前，您应该尝试缩放。</p>
+
+<p>在本例中，您在本地minikube集群上设置了可伸缩性，并使用下面的工具进行配置。如果您正在跟进，请按照列出的顺序安装工具:</p>
+
+<ol>
+<li>Docker桌面–只有在Windows上才需要。确保Docker Desktop被设置为管理Linux容器而不是Windows容器。</li>
+<li><a href="https://minikube.sigs.k8s.io/docs/start/" rel="nofollow">minikube</a>–允许您在计算机上安装Kubernetes集群。</li>
+<li><a href="https://chocolatey.org/" rel="nofollow">chocolate y</a>–只有在Windows上才需要。它是一个命令行软件管理包，用于安装Kubectl。</li>
+<li><a href="https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/#install-on-windows-using-chocolatey-or-scoop" rel="nofollow">ku bectl</a>–控制Kubernetes集群的命令行工具。使用这个Chocolatey命令行来安装Kubectl: <code>choco install kubernetes-cli</code></li>
+</ol>
+
+<p>您可以使用您习惯的任何工具来设置可伸缩性，但是您可能需要稍微调整我们的说明。</p>
+
+<h3 id="step-1-create-a-jenkins-controller-image">步骤1:创建一个Jenkins控制器映像</h3>
+
+<p>首先，您必须创建一个dockerfile文件并使用它来构建一个Jenkins控制器映像。</p>
+
+<p>dockerfile是一个文本文件，用于在Docker中创建图像，然后您可以将它推送到Docker Hub。</p>
+
+
+<p>我们的示例dockerfile将创建一个包含Jenkins以及Blue Ocean和Kubernetes插件的图像。</p>
+
+<p>要创建dockerfile文件并构建映像:</p>
+
+<ol>
+<li>创建一个名为<code>Dockerfile</code>的文本文件，并添加以下Jenkins建议的脚本。如果你需要的话，你可以在列表中添加更多的插件——只需添加它们的名字，用空格分开:<pre><code>FROM jenkins/jenkins:lts-slim  # Pipelines with Blue Ocean UI and Kubernetes RUN jenkins-plugin-cli --plugins blueocean kubernetes </code></pre></li>
+<li>保存并关闭文件。如果在Windows上使用记事本，您必须删除。' txt '文件扩展名。</li>
+<li>打开终端，使用CD命令移动到包含该文件的文件夹。使用以下命令创建镜像:<pre><code>docker build . -t [username]/jenkinsdockerfile </code></pre></li>
+<li>构建需要一点时间来处理，但是完成后你会在Docker桌面上或者用<code>docker images</code>命令看到图像。</li>
+</ol>
+
+<p>当您在下一步中创建minikube群集时，它不会看到本地存储在您的计算机上的映像，因为群集运行在虚拟环境中。要解决这个问题，您可以将图像推送到Docker Hub。</p>
+
+<p>如果在Windows上，您可以在Docker桌面中完成此操作:</p>
+
+<ol>
+<li>点击Docker桌面左侧的<strong>图片</strong>。</li>
+<li>将光标悬停在您的图像上，单击菜单图标(3个垂直点)并选择<strong>按键控制</strong>。</li>
+</ol>
+
+<p>或者，您可以在终端中使用以下命令行:</p>
+
+<pre><code>Docker push -t [username]/[image name]
+</code></pre>
+
+<h3 id="step-2-create-a-kubernetes-cluster">步骤2:创建一个Kubernetes集群</h3>
+
+<p>打开一个终端窗口，使用以下命令创建一个Kubernetes集群:</p>
+
+<pre><code>minikube start
+</code></pre>
+
+<p>设置群集可能需要一段时间。完成后，给它一个新的名称空间，使集群更容易使用和引用。在终端中使用以下命令创建名称空间“jenkins”:</p>
+
+<pre><code>kubectl create namespace jenkins
+</code></pre>
+
+<h3 id="step-3-install-jenkins-using-a-yaml-deployment-file">步骤3:使用YAML部署文件安装Jenkins</h3>
+
+<p>将下面的代码复制到一个文本文件中，保存为<code>jenkins.yaml</code>。确保将<strong>图像</strong>行更改为指向您的图像，例如【Docker用户名】/【图像名称】。</p>
+
+<pre><code># Service account docs:
+# https://support.cloudbees.com/hc/en-us/articles/360038636511-Kubernetes-Plugin-Authenticate-with-a-ServiceAccount-to-a-remote-cluster
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: jenkins
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["create","delete","get","list","patch","update","watch"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create","delete","get","list","patch","update","watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get","list","watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jenkins
+subjects:
+- kind: ServiceAccount
+  name: jenkins
+---
+apiVersion: apps/v1 
+kind: Deployment 
+metadata: 
+  name: jenkins 
+spec: 
+  replicas: 1 
+  selector: 
+    matchLabels: 
+      app: jenkins 
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      containers:
+      - name: jenkins 
+        image: [docker username]/jenkins 
+        ports:
+        - containerPort: 8080
+        - containerPort: 50000
+        volumeMounts: 
+        - name: jenkins-home
+          mountPath: /var/jenkins_home 
+      volumes:
+      - name: jenkins-home 
+        emptyDir: { } 
+      serviceAccountName: jenkins
+---
+apiVersion: v1 
+kind: Service 
+metadata: 
+  name: jenkins 
+spec: 
+  type: NodePort 
+  ports: 
+  - port: 8080 
+    targetPort: 8080 
+  selector: 
+    app: jenkins
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-agent
+spec:
+  selector: 
+    app: jenkins
+  type: NodePort  
+  ports:
+    - port: 50000
+      targetPort: 50000
+</code></pre>
+
+<p>要将映像部署到命名空间，请从文件的目录中运行以下命令:</p>
+
+<pre><code>kubectl apply -f jenkins.yaml -n jenkins jenkins.yaml
+</code></pre>
+
+<p>YAML脚本现在将在Kubernetes pod中创建一个Jenkins实例。这个过程可能需要一段时间，但是您可以使用下面的命令来检查进度。当<strong>状态</strong>栏显示为<strong>运行</strong>时，表示准备就绪；</p>
+
+<pre><code>kubectl get pods -n jenkins
+</code></pre>
+
+<h3 id="step-4-find-your-jenkins-instance-url-and-connect-to-it">步骤4:找到您的Jenkins实例URL并连接到它</h3>
+
+<p>运行以下命令找出实例的IP地址，并记下它:</p>
+
+<pre><code>minikube ip
+</code></pre>
+
+<p>现在我们需要发现端口。运行以下命令:</p>
+
+<pre><code>kubectl get services -n jenkins
+</code></pre>
+
+<p><strong>端口</strong>列将以8080:54321格式显示实例的端口。记下冒号后的5个数字。</p>
+
+<p>现在，您可以将minikube IP和端口结合起来组成URL。例如，如果IP是123.123.123.123，端口号是54321，那么您的Jenkins URL将是http://123.123.123.123:54321。</p>
+
+<p>如果您的URL不起作用，可能是您的防火墙阻止了该实例。请向网络管理员寻求帮助。如果您在自己的计算机上遇到这个问题，您可以使用<code>kubectl port-forward svc/jenkins -n jenkins 8080:8080</code>暂时转发您的端口。这将使您的URL http://localhost:8080。</p>
+
+
+<p>转到您的网络浏览器中的URL，您应该会看到<strong>入门</strong>屏幕。这将要求一次性管理员密码。对于Kubernetes集群，您需要通过命令行找到它。</p>
+
+<p>首先，您需要Kubernetes pod的名称。使用以下命令:</p>
+
+<pre><code>kubectl get pods -n Jenkins
+</code></pre>
+
+<p>你的pod名字看起来会像这样:<strong>Jenkins-27 BC 5 DCD 98-xk9mp</strong>。</p>
+
+<p>现在运行下面的命令，用您刚刚记下的名字替换<code>[podname]</code>。</p>
+
+<pre><code>kubectl logs [podname] -n jenkins
+</code></pre>
+
+<p>滚动结果，找到由星号分隔的管理员密码。将它粘贴到您的Jenkins实例中，您就可以完成安装了。参见<a href="https://www.jenkins.io/doc/" rel="nofollow"> Jenkins文档</a>了解如何首次设置Jenkins。</p>
+
+<h3 id="step-5-get-final-information-and-set-up-the-jenkins-plugin">步骤5:获取最终信息并安装Jenkins插件</h3>
+
+<p>现在你可以在Jenkins中设置插件了。在web浏览器中返回Jenkins:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>管理节点和云</strong>。</li>
+<li>点击<strong>配置云</strong>。</li>
+<li>从下拉列表中选择<strong> Kubernetes </strong>，然后点击<strong> Kubernetes云详情</strong>。</li>
+<li>填写以下字段并点击<strong>保存</strong>:          <ul>
+<li><strong> Kubernetes网址</strong>–输入<code>https://kubernetes.default</code></li>
+<li><strong> Kubernetes名称空间</strong>–输入<code>jenkins</code></li>
+<li><strong>詹金斯网址</strong>–输入<code>http://jenkins.jenkins.svc.cluster.local:8080</code></li>
+<li><strong>詹金斯隧道</strong>–回车<code>jenkins-agent.jenkins.svc.cluster.local:50000</code></li>
+</ul>
+</li>
+<li>滚动到底部，点击<strong> Pod模板</strong>，然后<strong>添加Pod模板</strong>，以及<strong> Pod模板详情</strong>。</li>
+<li>填写以下字段并点击<strong>保存</strong>:          <ul>
+<li><strong>名称</strong>–输入<code>jenkins-agent</code></li>
+<li><strong>名称空间</strong>–输入<code>jenkins</code></li>
+<li><strong>标签</strong>–输入<code>jenkins-agent</code></li>
+<li><strong>用途</strong> -从下拉列表中选择<strong>尽可能使用该节点</strong></li>
+</ul>
+</li>
+</ol>
+
+<h3 id="step-6-test-everything-is-working">第六步:测试一切正常</h3>
+
+<p>为了测试Jenkins是否能够适当地伸缩，您可以创建一些简单的构建作业来检查它们是如何分布的。</p>
+
+<p>首先，设置Jenkins，使其不会在控制器上运行作业(除非您另外告诉它):</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>配置系统</strong>。</li>
+<li>从<strong>用法</strong>下拉菜单中选择<strong>仅构建标签表达式与该节点</strong>匹配的作业，然后点击<strong>保存</strong>。</li>
+</ol>
+
+<p>然后创建2个“Hello World”构建作业:</p>
+
+<ol>
+<li>在Jenkins仪表盘上点击<strong>新项目</strong>。</li>
+<li>输入合适的名称，如<code>Testing 1</code>，选择<strong>自由式项目</strong>，点击<strong>确定</strong>。</li>
+<li>在<strong>构建</strong>标题下，从下拉框中选择<strong>执行shell </strong>。</li>
+<li>在<strong>命令框</strong>中输入<code>echo "Hello World"</code>，点击<strong>保存</strong>:</li>
+<li>重复这些步骤，但是把你的第二份工作叫做<code>Testing 2</code>。</li>
+</ol>
+
+<p>同时运行两个生成作业。如果工作正常，它们会出现在Jenkins左侧的<strong>构建队列</strong>中。在构建作业期间，它们出现在标题为<strong>构建执行器状态</strong>的标题下，带有我们之前设置的“jenkins-agent”前缀。您还可以检查构建历史，仔细检查作业运行的确切位置以及它是否成功。</p>
+
+<h2 id="method2">方法2:使用Amazon Web Services (AWS)和EC2 Fleet插件进行扩展</h2>
+
+<p>管理Jenkins可伸缩性的另一种方法是使用EC2(亚马逊弹性计算云)容器和<a href="https://plugins.jenkins.io/ec2-fleet/" rel="nofollow"> EC2 Fleet插件</a>。</p>
+
+<p>此选项适合以下团队:</p>
+
+<ul>
+<li>已经可以访问AWS</li>
+<li>想要轻松地向现有的Jenkins实例添加可伸缩性</li>
+<li>更喜欢使用UI而不是命令行来执行安装</li>
+</ul>
+
+<p>尽管AWS是有成本的，但你的财务限额是在账户级别设定的。</p>
+
+<h3 id="configuring-aws">配置AWS</h3>
+
+<p>如果您没有帐户，请注册AWS如果您已经有访问权限，请登录您的帐户。</p>
+
+<h4 id="step-1-create-a-policy">步骤1:创建策略</h4>
+
+<p>首先创建一个策略，允许访问使用AWS EC2 Spot Fleet和自动缩放组:</p>
+
+<ol>
+<li>点击顶部的<strong>服务</strong>菜单，选择<strong>安全、身份、&amp;合规</strong>，然后选择<strong> IAM </strong>。</li>
+<li>在<strong>访问管理</strong>标题下的左侧菜单中点击<strong>策略</strong>。</li>
+<li>从右侧点击<strong>创建策略</strong>。</li>
+<li>使用可视化编辑器创建一个新策略，以同时使用EC2专色车队和自动缩放组。或者，使用JSON编辑器并粘贴插件设置指南中的<a href="https://plugins.jenkins.io/ec2-fleet/#plugin-content-3-configure-user-permissions" rel="nofollow">代码。点击<strong>下一步:标签</strong>。</a></li>
+<li>如果需要，添加标签，然后点击<strong>下一步:查看</strong>。</li>
+<li>为策略命名并进行描述，然后单击<strong>创建策略</strong>。</li>
+</ol>
+
+<h4 id="step-2-create-an-iam-user-with-programmatic-access">步骤2:创建具有编程访问权限的IAM用户</h4>
+
+<p>现在，您创建一个具有编程访问权限的用户，并为其分配新策略:</p>
+
+<ol>
+<li>点击顶部的<strong>服务</strong>菜单，选择<strong>安全、身份、&amp;合规</strong>，然后选择<strong> IAM </strong>。</li>
+<li>在<strong>访问管理</strong>标题下的左侧菜单中点击<strong>用户</strong>。</li>
+<li>点击右侧的<strong>添加用户</strong>。</li>
+<li>给你的账户取一个合适的名字，选择<strong>访问键-编程访问</strong>，点击<strong>下一步:权限</strong>。</li>
+<li>点击<strong>直接附加现有策略</strong>按钮。搜索您在上一步中创建的策略，勾选左侧的复选框，然后单击<strong> Next: Tags </strong>。</li>
+<li>如果需要，添加标签，然后点击<strong>下一步:查看</strong>。</li>
+<li>查看您的新用户并点击<strong>创建用户</strong>。</li>
+</ol>
+
+<h4 id="step-3-set-credentials-to-connect-aws-to-jenkins">步骤3:设置凭证以将AWS连接到Jenkins</h4>
+
+<p>接下来，创建将AWS连接到Jenkins所需的两种身份验证方法。</p>
+
+<p>首先，为新创建的IAM用户设置一个访问键ID。这将允许Jenkins查看与您的AWS设置相关的信息。要设置访问密钥ID:</p>
+
+<ol>
+<li>点击顶部的<strong>服务</strong>菜单，选择<strong>安全、身份、&amp;合规</strong>，然后选择<strong> IAM </strong>。</li>
+<li>在<strong>访问管理</strong>标题下的左侧菜单中点击<strong>用户</strong>。</li>
+<li>搜索并单击您在步骤2中创建的IAM用户。</li>
+<li>转到<strong>安全凭证</strong>选项卡并点击<strong>创建访问密钥</strong>。</li>
+<li>记下访问密钥ID和秘密访问密钥(点击<strong>显示</strong>查看)并将其保存在安全的地方，如密码管理器。在这个阶段，您只能看到秘密访问密钥，如果丢失了，您需要创建一个新的密钥。</li>
+</ol>
+
+<p>现在，您创建一个密钥对。这允许Jenkins连接到AWS在伸缩时将创建的实例。要设置密钥对:</p>
+
+<ol>
+<li>点击顶部的<strong>服务</strong>菜单，选择<strong>计算</strong>，点击<strong> EC2 </strong>。</li>
+<li>点击<strong>网络&amp;安全</strong>标题下左侧菜单中的<strong>密钥对</strong>。</li>
+<li>点击<strong>创建密钥对</strong>。</li>
+<li>完成以下选项并点击<strong>创建密钥对</strong>:          <ul>
+<li><strong>名称</strong>–给密钥对起一个描述性的名称。</li>
+<li><strong>密钥对类型</strong> -保留为<strong> RSA </strong>。</li>
+<li><strong>私钥文件格式</strong>–选择<strong>。pem </strong>。</li>
+<li><strong>标签</strong>–如果需要，添加标签。</li>
+</ul>
+</li>
+<li>私钥将自动下载到文本文件中。保管好这个文件，你以后会需要的。</li>
+</ol>
+
+<h4 id="step-4-create-an-aws-ec2-spot-fleet-or-an-auto-scaling-group">步骤4:创建AWS EC2 Spot车队或自动伸缩组</h4>
+
+<p>您可以创建EC2 Spot车队或自动缩放组。在本例中，我们创建了一个EC2 Spot车队，但是如果您想了解更多关于<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/GettingStartedTutorial.html" rel="nofollow">创建自动缩放组</a>的信息，请查看AWS文档。</p>
+
+<p>在开始之前，你也应该清楚地知道你想要使用什么亚马逊机器映像(AMI)。AMI是一个预先构建的映像，包括操作系统和软件，您的EC2机群将从这些操作系统和软件创建额外的机器。</p>
+
+<p>您的AMI映像应该包含Java 11，因为没有它Jenkins将无法扩展。我们使用AWS Marketplace 的<a href="https://aws.amazon.com/marketplace/server/configuration?productId=dd67a7a9-d67f-4c91-a5ee-7e32da4da5c8&amp;ref_=psb_cfg_continue" rel="nofollow">open JDK 11 Java 11 Ubuntu 18.04 AMI，然而，如果你需要一些特定的东西，你可以构建自己的AMI。关于AMIs </a>的更多信息，请参见<a href="https://docs.aws.amazon.com/marketplace/latest/userguide/ami-products.html" rel="nofollow"> AWS文档。</a></p>
+
+<p>要创建EC2 Spot车队:</p>
+
+<ol>
+<li>点击顶部的<strong>服务</strong>菜单，选择<strong>计算</strong>，点击<strong> EC2 </strong>。</li>
+<li>在<strong>实例</strong>标题下的左侧菜单中点击<strong>现场请求</strong>。</li>
+<li>点击<strong>请求Spot实例</strong>。</li>
+<li>至少设置以下选项，其他选项可以根据需要进行更改:          <ul>
+<li><strong>AMI</strong>–记得选择包含Java 11的AMI。</li>
+<li><strong>密钥对名称</strong>–选择我们在步骤3中创建的密钥对名称。</li>
+<li><strong>保持目标产能</strong>–勾选此框。</li>
+</ul>
+</li>
+<li>滚动到底部，完成后点击<strong>发射</strong>。</li>
+</ol>
+
+<p>AWS需要一些时间来创建你的舰队。然后就可以配置Jenkins了。</p>
+
+<h3 id="configuring-jenkins">配置Jenkins</h3>
+
+<h4 id="step-1-install-the-ec2-fleet-plugin-in-jenkins">步骤1:在Jenkins中安装EC2 Fleet插件</h4>
+
+<p>要安装EC2 Fleet插件:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>管理插件</strong>。</li>
+<li>点击<strong>可用的</strong>选项卡，开始在<strong>过滤字段</strong>中输入<code>EC2 Fleet</code>。插件应该出现在预测的搜索结果中。</li>
+<li>勾选插件左侧的复选框，然后点击<strong>安装而不重启</strong>。</li>
+</ol>
+
+<p>Jenkins将安装插件和所有依赖项，包括其他插件、扩展和Amazon软件开发工具包(SDK)。</p>
+
+<p>如果你还没有，你也应该安装<a href="https://plugins.jenkins.io/credentials-binding/" rel="nofollow">凭证绑定插件</a>。</p>
+
+<h4 id="step-2-add-the-aws-iam-account-and-key-pair-to-jenkins">步骤2:向Jenkins添加AWS IAM帐户和密钥对</h4>
+
+<p>要添加您的AWS IAM帐户:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>向下滚动到<strong>安全</strong>标题并点击<strong>管理凭证</strong>。</li>
+<li>在Jenkins 标题下的<strong>商店范围内点击<strong> Jenkins </strong>。</strong></li>
+<li>点击<strong>系统</strong>标题下的<strong>全局凭证(无限制)</strong>。</li>
+<li>如果没有凭证，可以点击<strong>添加一些凭证怎么样？</strong>链接，否则从左边点击<strong>添加凭证</strong>。</li>
+<li>填写以下字段并点击<strong>确定</strong>:          <ul>
+<li><strong>种类</strong>–从下拉菜单中选择<strong> AWS凭证</strong>。</li>
+<li><strong>ID</strong>–给凭证起一个名字，用于在Jenkins中识别凭证。</li>
+<li><strong>描述</strong>–输入有意义的描述。</li>
+<li><strong>访问密钥ID</strong>–输入您在AWS中创建IAM帐户时的访问密钥ID。</li>
+<li><strong>秘密访问密钥</strong>–输入您在AWS中创建IAM帐户时的访问字符串。</li>
+</ul>
+</li>
+</ol>
+
+<p>要添加您的密钥对:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>向下滚动到<strong>安全标题</strong>并点击<strong>管理凭证</strong>。</li>
+<li>点击Jenkins范围内的商店标题下的<strong> Jenkins。</strong></li>
+<li>点击<strong>系统</strong>标题下的<strong>全局凭证(无限制)</strong>。</li>
+<li>点击左边<strong>添加凭证</strong>。</li>
+<li>填写以下字段并点击<strong>确定</strong>:          <ul>
+<li><strong>种类</strong>–从下拉列表中选择<strong> SSH用户名和私钥</strong>。</li>
+<li><strong>ID</strong>–给凭证一个名称，用于在Jenkins中识别凭证。</li>
+<li><strong>描述</strong>–输入有意义的描述。</li>
+<li><strong>用户名</strong>–该用户名用于您选择的AMI。</li>
+<li><strong>私钥</strong>–勾选<strong>直接输入</strong>单选按钮，点击<strong>添加</strong>按钮，粘贴您之前下载的密钥对文件的内容。</li>
+</ul>
+</li>
+</ol>
+
+<h4 id="step-3-connect-jenkins-to-your-aws-ec2-spot-fleet">步骤3:将Jenkins连接到您的AWS EC2 Spot车队</h4>
+
+<p>现在您将Jenkins连接到AWS EC2 Spot舰队:</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>管理节点和云</strong>。</li>
+<li>点击<strong>配置云</strong>。</li>
+<li>从<strong>添加新云</strong>下拉列表中选择<strong> Amazon EC2 Fleet </strong>。填写以下字段并点击<strong>保存</strong>:          <ul>
+<li><strong>名称</strong>–输入在Jenkins中使用的描述性名称。</li>
+<li><strong> AWS凭证</strong>–从<strong> AWS凭证</strong>下拉列表中选择您的访问密钥ID。</li>
+<li><strong>区域</strong>–从下拉列表中选择您的EC2舰队的区域。</li>
+<li><strong> EC2车队</strong>–任何连接到您的访问密钥ID的EC2 Spot车队都会出现在这里。如果凭证没有显示，您可能需要点击<strong>测试连接</strong>。</li>
+<li><strong>启动器</strong>–通过SSH 选择<strong>启动代理，从两个新的下拉框中选择您在步骤2中添加的密钥对凭证和<strong>非验证验证策略</strong>。</strong></li>
+</ul>
+</li>
+</ol>
+
+<h4 id="step-4-test-everything-is-working">第四步:测试一切正常</h4>
+
+<p>几分钟后，转到您的詹金斯仪表板。在左侧的<strong>构建执行器状态</strong>下，您应该看到您的控制器实例和您的新EC2车队。如果EC2机群显示任何错误，请单击其名称查看日志以确定问题。</p>
+
+<p>为了测试Jenkins现在可以适当地伸缩，您可以创建简单的构建作业来检查它们是如何分布的。</p>
+
+<p>首先，您要设置Jenkins，这样它就不会在控制器上运行作业(除非您另外告诉它):</p>
+
+<ol>
+<li>从菜单中点击<strong>管理詹金斯</strong>。</li>
+<li>点击<strong>配置系统</strong>。</li>
+<li>从<strong>用法</strong>下拉菜单中选择<strong>仅构建标签表达式与此节点</strong>匹配的作业，然后点击<strong>保存</strong>。</li>
+</ol>
+
+<p>现在创建一个“Hello World”构建作业:</p>
+
+<ol>
+<li>在Jenkins仪表盘上点击<strong>新项目</strong>。</li>
+<li>输入合适的名称，如<code>Testing</code>，选择<strong>自由式项目</strong>，点击<strong>确定</strong>。</li>
+<li>在<strong>构建</strong>标题下，从下拉框中选择<strong>执行shell </strong>。</li>
+<li>在<strong>命令</strong>框中输入<code>echo "Hello World"</code>，点击<strong>保存</strong>:</li>
+</ol>
+
+<p>运行构建作业，如果工作正常，您会看到它出现在您的舰队下，在左侧的构建执行者状态中。一旦完成，您还可以检查您的构建历史，以检查作业运行的确切位置。</p>
+
+<h3 id="changing-your-scaling-options-in-aws">在AWS中更改缩放选项</h3>
+
+<p>在它设置和运行之后，您可以更改您希望Jenkins在AWS中扩展的方式。</p>
+
+<ol>
+<li>登录AWS。</li>
+<li>点击顶部的<strong>服务</strong>菜单，选择<strong>计算</strong>，点击<strong> EC2 </strong>。</li>
+<li>在<strong>实例</strong>标题下的左侧菜单中点击<strong>现场请求</strong>。</li>
+<li>点击您的EC2 Spot车队的<strong>请求ID </strong>。</li>
+<li>滚动到页面底部查看缩放选项。点击<strong>自动缩放</strong>标题下的<strong>配置</strong>按钮。</li>
+<li>根据需要更改设置并保存。</li>
+</ol>
+
+<h2 id="whats-next">下一步是什么？</h2>
+
+<p>有关缩放詹金斯的更多信息，请通读他们的官方缩放文档。</p>
+
+<p>你也可以阅读我们关于配置Jenkins的其他帖子:</p>
+
+
+
+<p><a href="https://oc.to/JenkinsPipelineGenerator" rel="nofollow">试试我们免费的Jenkins管道生成器工具</a>用Groovy语法创建一个管道文件。这是您启动管道项目所需的一切。</p>
+
+<h2 id="watch-our-jenkins-pipeline-webinar">观看我们的詹金斯管道网络研讨会</h2>
+
+<iframe src="https://www.youtube.com/embed/D_7AHTML_xw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="">VIDEO</iframe>
+
+<p>我们定期举办网络研讨会。请参见<a href="https://octopus.com/events">网络研讨会第</a>页，了解有关即将举办的活动和实时流录制的详细信息。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/CI%20Series">持续集成系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

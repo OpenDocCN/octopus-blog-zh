@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>What's new in Octopus 2.5 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2.5的新特性- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/2.5#2015-09-25">https://octopus.com/blog/2.5#2015-09-25</a></blockquote>
+                        <p>作为预发布版本提供的<a href="http://octopusdeploy.com/downloads/2.5.1"> Octopus Deploy 2.5 </a>已经上架(可以这么说)。关闭不到50个GitHub问题，让我们看看引擎盖下是什么。</p>
+
+<h2>计划部署</h2>
+
+<p>您是那些不得不在深夜起床运行部署的系统管理员之一吗？这是你的特色。现在，您可以躺在床上，等待计划的部署为您运行。</p>
+
+<p><img src="../Images/b51e22a21ef97d9a534918ac5c5663b8.png" alt="Scheduled Deployments" title="Scheduled Deployments" data-original-src="https://i.octopus.com/blog/migrated/scheduled_deployments_1_wqxuxp.png"/></p>
+
+<p>如您所见，您现在可以计划部署运行的时间。</p>
+
+<p><img src="../Images/1e7cdb3daa399f73039d10e1f0c231db.png" alt="Scheduled Deployments" title="Scheduled Deployments on deployment task page" data-original-src="https://i.octopus.com/blog/migrated/scheduled_deployments_2_s6if2o.png"/></p>
+
+<p>提交时,“任务”页面会显示部署已排队以及何时运行。</p>
+
+<p><img src="../Images/59eb616ca3a5deac4d44ad0b46fc73c7.png" alt="Sheduled Deployments" title="Scheduled Deployments and project dashboard" data-original-src="https://i.octopus.com/blog/migrated/scheduled_deployments_3_pids3q.png"/></p>
+
+<p>您还可以在项目仪表板上查看排队部署。</p>
+
+<h2>有组织的任务页面，包括过滤</h2>
+
+<p>以前在任务页面上很难找到已经运行的特定任务，只是按日期提供所有任务的列表。但不是现在。现在，您可以选择环境、项目或活动类型，并过滤列表。它在页面顶部列出一个组中的所有活动任务，下面是可过滤和可搜索的已完成任务列表。</p>
+
+<p><img src="../Images/6c9c502c74b7467063eb9846502a4c48.png" alt="Filtered Task List" title="Filterted Task list" data-original-src="https://i.octopus.com/blog/migrated/Task_cleanup_1_nmdwmv.png"/></p>
+
+<h2>Octo.exe现在显示出进步</h2>
+
+<p>现在，当使用Octo.exe进行部署时，您可以传递<code>--progress</code>参数，这会将部署输出到控制台。</p>
+
+<p><img src="../Images/ee8be7a632d9ce8f391b11804d0665db.png" alt="Octo.exe showing progress" title="Octo.exe showing progress" data-original-src="https://cloud.githubusercontent.com/assets/47085/3296246/a55bd2ac-f5d6-11e3-8d6e-20dc52924f21.png"/></p>
+
+<h2>步骤模板更新</h2>
+
+<p>第一个步骤模板发生了变化:现在您可以查看步骤模板的使用位置，以及它在项目中是否是最新的。</p>
+
+<p><img src="../Images/94c8b2ca28c382d493211da05d5cd755.png" alt="Step template usage" title="step template usage" data-original-src="https://i.octopus.com/blog/migrated/step_template_usage_2_hepghz.png"/></p>
+
+<p>我们还更新了步骤模板变量。它们现在允许自定义字段类型和类型化参数。</p>
+
+<p><img src="../Images/dbd01052cdea75d75c7659d214757bd7.png" alt="Step template variables" title="step template variables" data-original-src="https://i.octopus.com/blog/migrated/Step_template_parameters_z9wgga.png"/></p>
+
+<h2>部署不再试图过时的触角</h2>
+
+<p>以前，如果触手没有与Octopus服务器匹配的版本，部署将继续。已通过停止部署并给出错误消息纠正了此问题。</p>
+
+<p><img src="../Images/d5234b9b592a818b39955b3e86bb46de.png" alt="Out of date tentacle" title="Out of date tentacle message" data-original-src="https://i.octopus.com/blog/migrated/upgrade_your_tentacle_pw5hrw.png"/></p>
+
+<h1>突破性变化！</h1>
+
+<p>在这个版本中有两个突破性的变化值得注意。</p>
+
+<h2>重大变化:内部NuGet存储库不再被监视</h2>
+
+<p>那些使用内置NuGet存储库的人，我们不再监视文件夹的变化，因为这导致了一些锁定问题。如果您使用API或nuget.exe将文件推送到存储库，这种变化应该不会影响您。如果你使用XCOPY，它会有效果。使用外部馈送将是唯一的选择。不过，我们会在每次重启八达通服务器服务时刷新存储库索引。</p>
+
+<h2>重大变化:部署中使用的所有机器都需要唯一的SQUID</h2>
+
+<p>如果部署检测到两台或多台机器具有相同的SQUID，部署将停止，直到重复的机器从机器目标中删除。</p>
+
+<h1>现在就去看看吧！</h1>
+
+<p>我们已经更新了<a href="https://demo.octopusdeploy.com/">章鱼现场演示</a>使用2.5！所以去看看吧！</p>
+
+                    
+                    
+</body>
+</html>

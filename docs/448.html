@@ -1,0 +1,31 @@
+<html>
+<head>
+<title>OctoPack 2.0 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>OctoPack 2.0 - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopack-improvements#2015-09-17">https://octopus.com/blog/octopack-improvements#2015-09-17</a></blockquote>
+                        <p>当开始使用Octopus Deploy时，人们经常会在最初的步骤中遇到困难:将他们的应用程序打包成NuGet包。为了更容易地创建包，我们在我们的NuGet打包助手OctoPack中实现了一些大的改变，创建了<a href="https://github.com/OctopusDeploy/OctoPack/">octo pack 2.0版</a>。</p>
+
+<p>最大的变化是我们现在让调用OctoPack变得更加容易和简单。您只需运行:</p>
+
+<pre><code>msbuild YourSolution.sln /t:Build /p:RunOctoPack=true
+</code></pre>
+
+<p>OctoPack将只使用相关文件自动打包您的应用程序(例如，web应用程序的内容文件和二进制文件)。这是对OctoPack 1.0的一个很大的改进，因为你不再需要独立地构建每个项目(我们正在构建上面的解决方案)，并且<strong>你不再需要处理web应用程序项目发布</strong>了——octo pack会处理它。</p>
+
+<p>我们还实现了其他一些改进:</p>
+
+<ol>
+<li>您不再需要创建NuSpec文件——如果不存在，我们会自动生成它</li>
+<li>您可以从我们打包时包含的文件中添加发行说明</li>
+<li>卸载时，我们现在删除目标文件</li>
+</ol>
+
+<p>有关OctoPack 2.0的更多信息，请<a href="https://github.com/OctopusDeploy/OctoPack/blob/master/readme.md">查看自述文件</a>。我将在博客上发布一些如何在团队城市和TFS中使用OctoPack 2.0的例子，但在此之前，我希望这些变化能让你更容易地为Octopus打包应用程序。愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

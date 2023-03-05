@@ -1,0 +1,114 @@
+<html>
+<head>
+<title>Request for Comments - ECS integration with Octopus milestone two - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>征求意见- ECS与Octopus集成里程碑二- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-second-ecs-integration-with-octopus#2021-08-10">https://octopus.com/blog/rfc-second-ecs-integration-with-octopus#2021-08-10</a></blockquote>
+                        <p>Octopus 中的第一个亚马逊弹性容器服务(ECS)集成里程碑正在开发中，它将提供一个新的步骤和目标，使您可以轻松地通过Octopus部署第一个ECS服务。</p>
+
+<p>第一个里程碑将通过CloudFormation为您创建和管理ECS服务和任务定义。这使得开发人员和管理员不必为自己编写冗长的模板。</p>
+
+<p>然而，我们早期从部署到ECS的团队那里收到的一个一致的反馈是，他们已经成功地管理了现有的ECS资源，通过手动创建的服务或通过Terraform等工具。挑战不是创建服务，而是用新的映像作为CI/CD管道的一部分来更新它们。</p>
+
+<p>对于ECS集成的第二个里程碑，我们提议采取一个新的步骤来更新现有的ECS服务，而不获取它们的所有权。这为已经建立了ECS集群的团队提供了一个机会，在保留对资源创建方式的控制的同时，协调新映像版本到其服务的部署。</p>
+
+<h2 id="how-we-propose-to-support-established-ecs-clusters">我们建议如何支持已建立的ECS集群</h2>
+
+<p>这个征求意见稿(RFC)提出了一个新的步骤，与第一个里程碑引入的ECS目标相集成。该步骤使用新的图像标签创建新的任务定义修订版，并使用任务定义修订版更新服务。</p>
+
+<p>这个里程碑还通过展示链接现有负载平衡器的能力，增强了里程碑1中交付的步骤。</p>
+
+<h3 id="the-new-step">新的步骤</h3>
+
+<p>新的步骤支持人们向现有的任务定义和服务部署新的映像。</p>
+
+<p>步骤:</p>
+
+<ul>
+<li>定义任务定义及其关联服务的名称。</li>
+<li>定义要在相关任务定义中更新的容器数量:</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-08/rfc-second-ecs-integration-with-octopus/stepmockup.png" class="zoom" data-title=""><img src="../Images/97ac4d54d77cbbc82212a21e9df7dbd5.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-08/rfc-second-ecs-integration-with-octopus/stepmockup.png"/>T2】</a></p>
+
+<p>现有任务定义和服务的ECS部署将执行以下流程:</p>
+
+<ol>
+<li>基于最新修订创建新的任务定义修订。</li>
+<li>任务定义修订中的图像版本与步骤中的匹配容器定义一起更新。</li>
+<li>然后使用新的任务定义修订版更新服务。</li>
+</ol>
+
+<h3 id="linking-to-load-balancers">链接到负载平衡器</h3>
+
+<p>部署到ECS的大多数服务都暴露于网络流量，这意味着它们接收来自负载平衡器的流量。</p>
+
+<p>里程碑二更新了里程碑一中引入的将服务链接到现有负载平衡器的步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2021-08/rfc-second-ecs-integration-with-octopus/loadbalancermockup.png" class="zoom" data-title=""><img src="../Images/408ab7e1e15ff34bbb4e0e88e76ea5e7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2021-08/rfc-second-ecs-integration-with-octopus/loadbalancermockup.png"/></a>T2】</p>
+
+<h2 id="benefits-of-the-proposed-approach">拟议方法的好处</h2>
+
+<p>这一新步骤将允许已建立ECS群集的客户通过Octopus协调映像部署，同时仍然保留对任何现有基础架构脚本的控制。</p>
+
+<p>Octopus在发布创建时选择图像版本，以及所有与频道和版本规则相关的功能。Octopus随后会更新将新映像部署到ECS所需的最低设置，而不会尝试拥有任务定义或服务。</p>
+
+<p>这将您的软件发布管理从您的基础设施发布管理中分离出来。</p>
+
+<h2 id="what-is-the-scope-of-the-second-ecs-milestone">第二个ECS里程碑的范围是什么？</h2>
+
+<p>第二个里程碑主要是用已建立的ECS集群支持团队。它还包括对现有步骤的一些小的更新。</p>
+
+<p>来自<a href="https://octopus.com/blog/rfc-ecs-integration-with-octopus#what-is-the-scope-of-the-first-ecs-milestone">里程碑一</a>的限制仍然适用于里程碑二:</p>
+
+<ul>
+<li>将最初的步骤限制为只部署到Fargate(但是，在这个里程碑中提出的新步骤将更新任何现有的服务和任务定义，无论是EC2还是Fargate)。</li>
+<li>仅支持滚动部署，不支持集成CodeDeploy蓝/绿部署。</li>
+<li>不提供构建新负载平衡器的能力(仅选择现有的一个)。</li>
+<li>排除自动缩放设置。</li>
+<li>排除应用网格和FireLens设置。</li>
+<li>排除服务自动发现设置。</li>
+<li>仅创建或更新服务，不支持任务或计划任务。</li>
+</ul>
+
+<h2 id="when-will-this-be-released">这个什么时候发布？</h2>
+
+<p>里程碑二的工作计划在里程碑一完成后开始。我们还没有发布日期，所以请关注<a href="https://octopus.com/blog/">博客</a>以获得进一步的公告。</p>
+
+<h2 id="we-want-your-feedback">我们需要您的反馈</h2>
+
+<p>我们仍在计划第二个里程碑，所以现在是利用您的反馈来帮助塑造这一新功能的大好时机。我们制作了一期<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/5" rel="nofollow"> GitHub来捕捉讨论</a>。</p>
+
+<p>具体来说，我们想知道:</p>
+
+<ul>
+<li>更新现有任务定义和服务的能力是否支持您现有的ECS群集？</li>
+<li>您希望Octopus能为您解决哪些进一步的ECS部署挑战？</li>
+<li>您能否预见到可能会阻止您对现有ECS群集使用建议步骤的任何挑战？</li>
+</ul>
+
+<p>这些反馈将有助于我们提供最佳解决方案。</p>
+
+<p><span> <a class="btn btn-success" href="https://github.com/OctopusDeploy/StepsFeedback/issues/5">提供反馈</a> </span></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>总之，我们提议的ECS支持的第二个里程碑包括:</p>
+
+<ul>
+<li>将映像部署到现有任务定义和服务的新步骤。</li>
+<li>在里程碑一中介绍的步骤中链接现有负载平衡器的能力。</li>
+</ul>
+
+<p>感谢你阅读这篇文章。我们希望您和我们一样对建议的新ECS功能感到兴奋。</p>
+
+<p>非常感谢您的任何<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/5" rel="nofollow">反馈</a>。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

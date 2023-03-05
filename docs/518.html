@@ -1,0 +1,155 @@
+<html>
+<head>
+<title>Octopus Server 2019.12 with Long Term Support (LTS) - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通服务器2019.12与长期支持(LTS) -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2019.12-lts#2022-07-14">https://octopus.com/blog/octopus-release-2019.12-lts#2022-07-14</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/blogimage-ltsrelease.png" class="zoom" data-title=""><img src="../Images/ca0869c822053e6dc17708acc248d162.png" class="img-fluid center" alt="Cars in the slow and fast lanes" data-original-src="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/blogimage-ltsrelease.png"/>T2】</a></p>
+
+<p>Octopus Deploy <code>2019.12 LTS</code>现在可用于运行Octopus Deploy自托管的团队，我们向这些客户推荐这个版本。我们的<a href="https://octopus.com/docs/administration/upgrading/long-term-support">长期支持(LTS)计划</a>包括提供六个月支持的版本，包括关键错误修复和安全补丁。LTS版本不包括在此版本之后发布的任何新功能、次要增强功能或次要错误修复；这些都将被纳入下一个LTS版本。</p>
+
+<p><a href="https://octopus.com/downloads" class="btn btn-primary btn-lg">立即下载</a></p>
+
+<p>下表显示了我们当前的LTS版本。不再支持Octopus 2019.6，我们建议该版本的客户升级到较新的版本。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>释放；排放；发布</th>
+<th>长期支持</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>章鱼2019.12</td>
+<td>是</td>
+</tr>
+<tr>
+<td>章鱼2019.9</td>
+<td>是</td>
+</tr>
+<tr>
+<td>八达通2019.6</td>
+<td>期满</td>
+</tr>
+</tbody>
+</table>
+
+<p>请继续阅读，了解此版本中的内容以及任何重大变化。</p>
+
+<h2>在这篇文章中</h2>
+
+
+
+<h2 id="operations-runbooks">运营操作手册</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/operations-runbooks.png" class="zoom" data-title=""><img src="../Images/be67b081d4c603b40b515def805404c5.png" class="img-fluid center" alt="Operations Runbooks" data-original-src="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/operations-runbooks.png"/>T2】</a></p>
+
+<p>我们的runbook平台旨在帮助团队自动化日常维护和紧急操作任务，如基础架构供应、数据库管理以及网站故障转移和恢复。</p>
+
+<p>此LTS版本包括对操作手册的支持，其中包括:</p>
+
+<ul>
+<li>对于配置了部署流程的任何人来说，这是一个熟悉的配置流程。</li>
+<li>按需或按计划(每夜、工作日、每月一次等)直接针对基础设施执行操作手册的能力。)根据您团队的需求。</li>
+<li>Runbooks可以用提示变量参数化。</li>
+<li>您可以放心地对您的操作手册进行更改，并且只有在经过安全测试后才能发布。</li>
+<li>运行手册由Octopus管理和执行，因此这意味着有一个完整的审计跟踪，可以在以后进行审查，从而很容易看到发生了什么，什么时候发生的，为什么发生的，以及是否需要更改。</li>
+<li>您可以授予整个团队执行run book的权限，而无需为团队中的每个人分配run book将要执行的基础架构的权限。</li>
+</ul>
+
+<p><a href="https://octopus.com/docs/deployment-process/operations-runbooks">了解更多信息</a></p>
+
+<h2 id="jenkins-plugin">Jenkins插件</h2>
+
+<p>【T2 <img src="../Images/6722f0b7a057a8488947c525a43cdd4f.png" class="img-fluid center" alt="Octopus Deploy Jenkins plugin" data-original-src="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/octopus-deploy-jenkins-plugin.png"/></p>
+
+<p>此版本还包括我们的官方Octopus Deploy Jenkins插件，该插件已经发布，现在可以从Jenkins插件库中安装或更新(如果您当前正在运行社区插件)。这个插件建立在由Brian Adriance和其他贡献者维护的奇妙的社区插件之上。</p>
+
+<p>在此版本中，您现在可以将Jenkins构建与Octopus部署集成，包括以下任务:</p>
+
+<p>构建步骤:</p>
+
+<ul>
+<li>包装应用</li>
+<li>将包裹推送给八达通</li>
+<li>将构建信息推送到Octopus</li>
+</ul>
+
+<p>生成后操作:</p>
+
+<ul>
+<li>创建发布</li>
+<li>部署发布</li>
+</ul>
+
+<p>它还让您更好地了解您的CI/CD管道，并且它可以帮助您改进您的发布的交流。</p>
+
+<p>注意:这个版本的插件不支持Jenkins Pipelines，但是我们已经注意到了。</p>
+
+<p><a href="https://octopus.com/blog/octopus-jenkins-plugin">了解更多信息</a></p>
+
+<h2 id="powershell-core-support">PowerShell核心支持</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/powershell-core.png" class="zoom" data-title=""><img src="../Images/c2e73ced56fbad458d713d2ffa9b5433.png" class="img-fluid center" alt="Screenshot " data-original-src="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/powershell-core.png"/>T2】</a></p>
+
+<p>我们增加了PowerShell核心支持，使团队能够使用微软的现代自动化框架编写跨平台脚本。</p>
+
+<p>在Windows平台上，Octopus将默认使用Windows PowerShell，如果需要，可以选择使用PowerShell Core。您可以通过为支持自定义脚本的步骤配置PowerShell edition来对此进行自定义。</p>
+
+<p>在Linux平台上，如果安装了PowerShell Core，Octopus将自动执行PowerShell脚本。</p>
+
+<p><a href="https://octopus.com/docs/deployment-examples/custom-scripts/powershell-core">了解更多信息</a></p>
+
+<h2 id="improved-build-information-and-work-item-tracking">改进的构建信息和工作项跟踪</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/build-information-repository.png" class="zoom" data-title=""><img src="../Images/7f8ab6ca33c223c1ff489dfba23e8ce5.png" class="img-fluid center" alt="Octopus build information repository" data-original-src="https://i.octopus.com/blog/2020-01/octopus-release-2019.12-lts/build-information-repository.png"/>T2】</a></p>
+
+<p>Octopus 2019.4引入了构建信息和工作项跟踪。这是一个很受欢迎的特性，但是我们收到反馈说包元数据功能很难找到和理解。因此，我们已经在Octopus库中将这一功能提升为名为<strong>构建信息</strong>的顶级功能，使其更易于访问和理解。我们已经更新了我们的构建服务器插件套件，以反映名称的变化。</p>
+
+<p>我们还添加了部署变更模板来补充现有的发行说明模板，使团队能够定制显示以满足他们的需求。</p>
+
+<p><a href="https://octopus.com/docs/packaging-applications/build-servers/build-information">了解更多</a></p>
+
+<h2 id="other-improvements">其他改进</h2>
+
+<p>我们的团队根据客户反馈和支持请求不断添加更新和错误修复。我们想在此版本中重点介绍一些变化:</p>
+
+<ul>
+<li><strong>更简单的基于包的步骤模板</strong>，更容易用包创建步骤模板，并让团队根据这些参数进行绑定。</li>
+<li><strong>更简单的Octopus仪表盘配置</strong>，更清晰的了解什么被过滤。</li>
+<li><strong>增加了对测试Azure DevOps问题跟踪器连接性的支持</strong>。在配置生成服务器集成和工作项跟踪时，此更改会有所帮助。</li>
+<li><strong>如果用户只有一个空间</strong>并且没有添加更多空间的权限，则空间选择不再可见。</li>
+<li>增加了升级触手子集的支持。这适用于环境或工作者池中的触角/工作者组，而不是所有部署目标。</li>
+<li>增加了对<strong>重新部署之前成功部署</strong>的支持，因此更容易回滚到之前的版本。</li>
+<li><strong> Swagger API文档更加准确</strong>，使得团队更容易与Octopus API集成。</li>
+<li><strong>提高了租户页面的性能</strong>。当客户有数百或数千个租户时，租户页面现在呈现得更快。</li>
+<li><strong>提高了保障性</strong>。我们改进了自动部署和动态基础设施供应的日志记录，以帮助团队了解如果出现问题会发生什么。</li>
+</ul>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>此版本包括以下突破性变化:</p>
+
+<p><strong> PowerShell内核</strong></p>
+
+<p>PowerShell核心支持引入了一项更改，即针对非Windows目标运行PowerShell脚本不再静默忽略<code>.ps1</code>文件。Octopus现在将尝试在部署目标上执行<code>.ps1</code>文件。如果PowerShell Core安装在这些目标上，这可能会改变您的部署行为。如果PowerShell核心未安装在这些目标上，部署将会失败。</p>
+
+<p><strong>建造信息</strong></p>
+
+<p>我们的构建信息变更涉及到从API到数据库的资源重命名。这通常是向后兼容的；然而，任何使用我们的GitHub问题跟踪器的人都需要确保他们升级他们的章鱼服务器，如果他们升级他们的<a href="https://marketplace.visualstudio.com/items?itemName=octopusdeploy.octopus-deploy-build-release-tasks" rel="nofollow"> Azure DevOps扩展</a>、<a href="https://plugins.jetbrains.com/plugin/9038-octopus-deploy-integration" rel="nofollow"> TeamCity插件</a>或<a href="https://marketplace.atlassian.com/apps/1217235/octopus-deploy-bamboo-add-on" rel="nofollow"> Bamboo插件</a>。</p>
+
+<p><strong> Octopus API和Octopus。客户端</strong></p>
+
+<p>作为这个版本的一部分，Octopus API已经改变了Octopus的版本。8.0.0之前的客户端无法在版本低于2019.11.0的Octopus服务器上创建计划触发器。</p>
+
+<h2 id="wrapping-up">包扎</h2>
+
+<p>八达通服务器2019.12现已推出，你可以依赖它。长期部署愉快！</p>
+
+                    
+                    
+</body>
+</html>

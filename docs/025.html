@@ -1,0 +1,232 @@
+<html>
+<head>
+<title>Application Server vs UberJAR - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>应用服务器与UberJAR - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/application-server-vs-uberjar#2022-07-15">https://octopus.com/blog/application-server-vs-uberjar#2022-07-15</a></blockquote>
+                        <p>不久前，如果您想部署一个Java web应用程序，您可以编译一个WAR文件并将其托管在应用服务器中。今天，Java web应用程序可以像自包含的UberJARs一样容易地部署。</p>
+
+<p>什么是像<a href="http://wildfly.org/" rel="nofollow"> WildFly </a>这样的应用服务器，什么是UberJAR，以及像<a href="http://wildfly-swarm.io/" rel="nofollow"> WildFly Swarm </a>这样的项目如何改变Java部署的执行方式？</p>
+
+<h2 id="what-is-a-java-ee-application-server">什么是Java EE应用服务器？</h2>
+
+<p>考虑以下代码:</p>
+
+<pre><code class="language-java">public class HelloWorld {
+    public static void main(String[] args)  {
+        System.out.println("Hello, World");
+    }
+}
+</code></pre>
+
+<p>这是用Java编写的传统的“Hello World”应用程序。作为一名开发人员，我可以在任何有Java运行时环境(JRE)的地方运行这些代码。我也不需要捆绑任何额外的类库，因为这里引用的所有类都是由任何JRE提供的，无论它是来自Oracle、OpenJDK、Zulu还是IBM等等。</p>
+
+<p>哪个供应商提供了JRE并不重要，Java应用程序最终运行在什么操作系统上也不重要。因为这段代码使用了标准的Java类，所以它可以在任何地方运行。</p>
+
+<p>现在考虑这段代码:</p>
+
+<pre><code class="language-java">package com.octopus;
+
+import javax.ws.rs.ApplicationPath;
+import javax.ws.rs.core.Application;
+
+@ApplicationPath("/")
+public class MyApplication extends Application {
+
+    public MyApplication() {
+    }
+}
+</code></pre>
+
+<pre><code class="language-java">package com.octopus;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+
+@Path("/")
+public class MyResource {
+
+    @GET
+    @Produces("text/plain")
+    public String get() {
+        return "Hello World";
+    }
+}
+</code></pre>
+
+<p>我们这里有一个基于<a href="https://en.wikipedia.org/wiki/Java_API_for_RESTful_Web_Services" rel="nofollow"> JAX-RS </a>标准的简单REST API。JAX-RS是Java EE规范的一部分，这意味着作为一名开发人员，我可以将这个应用程序部署到任何Java EE应用服务器上。</p>
+
+<p>更重要的是，我不需要捆绑任何实现JAX-RS标准的库。根据应用服务器的不同，JAX-RS标准可能由像RESTEasy或Jersy这样的库提供。但是只要底层库符合规范，我的应用程序就能按预期运行。</p>
+
+<p>当然，Java EE提供的不仅仅是创建RESTful服务的规范。它包括数据库访问、消息传递、邮件、MVC框架、管理API和更多的规范。</p>
+
+<p>多个供应商提供了Java EE规范的实现，WildFly只是其中一个例子。你还有<a href="https://en.wikipedia.org/wiki/List_of_application_servers#Java" rel="nofollow"> WebSphere、WebLogic、Payara、GlassFish、TomEE等</a>。</p>
+
+<p>但是我部署到哪个供应商的应用服务器并不重要。只要我的代码和应用服务器符合Java EE规范，我就可以在任何应用服务器上运行我的代码。</p>
+
+<p>在现实世界的实践中，构建可以部署到多个Java EE应用服务器的Java EE应用程序并不容易。但是为了讨论的方便，我们假设情况是这样的。</p>
+
+
+<p>因此，一般来说，Java EE应用服务器提供了一个环境，在这个环境中可以部署和运行使用Java EE规范编写的应用程序。</p>
+
+<p>重要的是，Java EE应用服务器通常并排托管多个应用程序。例如，您可以部署多个网站，每个网站都被编译为一个单独的WAR文件，并排放在一个应用服务器中。可以独立地部署、启动、停止和取消部署各个应用程序，而不必启动和停止应用服务器本身。</p>
+
+<h2 id="what-is-a-war">什么是战争？</h2>
+
+<p>Web档案(WAR)是Java web应用程序使用的一种档案格式。</p>
+
+<p>看看<a href="https://octopus.com/blog/defining-tomcat-context-paths#exploded-deployments-vs-war-packages">爆炸部署vs战争套装</a>关于战争和爆炸战争的讨论。</p>
+
+<h2 id="what-is-an-uberjar">什么是UberJAR？</h2>
+
+<p>UberJAR不是官方术语，还有FatJAR、ShadowJAR之类的其他名称。所有这些术语都指一个JAR文件，其中包含运行应用程序所需的所有类和资源。</p>
+
+<p>考虑一下这个<a href="https://github.com/OctopusDeploy/UberJARDemo" rel="nofollow">小代码</a>，它使用了Apache Commons库。</p>
+
+<pre><code class="language-java">package com.octopus;
+
+import org.apache.commons.lang3.StringUtils;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(StringUtils.trim(" hello world "));
+    }
+}
+</code></pre>
+
+<p>为了从这段代码中生成一个可执行的JAR，Maven build添加了一个包含以下内容的清单文件:</p>
+
+<pre><code>Manifest-Version: 1.0
+Archiver-Version: Plexus Archiver
+Built-By: mcasperson
+Class-Path: libs/commons-lang3-3.6.jar
+Created-By: Apache Maven 3.5.0
+Build-Jdk: 1.8.0_131
+Main-Class: com.octopus.Main
+</code></pre>
+
+<p>这里重要的一行是<code>Class-Path</code>，它引用了<code>libs/commons-lang3-3.6.jar</code>下的第二个JAR文件。</p>
+
+<p>当我们列出JAR文件的内容时，我们会看到它只包含了<code>Main.class</code>文件。</p>
+
+<pre><code>$ jar tf target/original-uberjardemo-1.0-SNAPSHOT.jar
+META-INF/
+META-INF/MANIFEST.MF
+com/
+com/octopus/
+com/octopus/Main.class
+META-INF/maven/
+META-INF/maven/com.octopus/
+META-INF/maven/com.octopus/uberjardemo/
+META-INF/maven/com.octopus/uberjardemo/pom.xml
+META-INF/maven/com.octopus/uberjardemo/pom.properties
+</code></pre>
+
+<p>要运行这个“传统的”JAR文件，它和它的库JAR文件都需要存在。在这个简单的例子中，这意味着应用程序由两个JAR文件组成。但是一个应用程序需要几十个JAR文件并不罕见。</p>
+
+<p>这个应用程序的UberJAR版本创建了一个JAR文件，它是所有独立依赖项的合并结果。UberJAR文件可能非常大，但是因为它们是一个单独的文件，所以很容易分发。</p>
+
+<p>如果我们列出UberJAR的内容，我们可以看到我们的<code>Main.class</code>文件存在，还有组成Apache Commons库的类。</p>
+
+<pre><code>$ jar tf target/uberjardemo-1.0-SNAPSHOT.jar
+META-INF/
+META-INF/MANIFEST.MF
+com/
+com/octopus/
+com/octopus/Main.class
+META-INF/maven/
+META-INF/maven/com.octopus/
+META-INF/maven/com.octopus/uberjardemo/
+META-INF/maven/com.octopus/uberjardemo/pom.xml
+META-INF/maven/com.octopus/uberjardemo/pom.properties
+META-INF/LICENSE.txt
+org/
+org/apache/
+org/apache/commons/
+org/apache/commons/lang3/
+org/apache/commons/lang3/BitField.class
+... and many more apache classes
+</code></pre>
+
+<p>UberJAR文件与WAR文件相似，都是可用于运行应用程序的独立文件。它们的不同之处在于WAR文件需要一个应用服务器来运行，而UberJAR文件可以从JRE中运行。</p>
+
+
+<h3 id="what-is-wildfly-swarm">什么是野生蜂群？</h3>
+
+<p><a href="http://wildfly-swarm.io/" rel="nofollow"> WildFly Swarm </a>是一个项目，它提供了将WildFly应用服务器提供的相同Java EE库捆绑到UberJAR中的能力。最终结果是一个单独的JAR文件，当它被执行时，将启动一个web服务器并运行Java EE应用程序。</p>
+
+<p>WildFly Swarm如何将所需的类和资源嵌入到UberJAR中的实际机制比我上面给出的例子更复杂，但最终结果是相同的:您得到一个可从任何JRE运行的可执行JAR文件。</p>
+
+<p>WildFly Swarm团队提供了一堆例子，他们<a href="https://github.com/wildfly-swarm/wildfly-swarm-examples/tree/master/jaxrs/jaxrs" rel="nofollow">JAX-遥感的例子</a>与我上面展示的hello world的例子非常相似。</p>
+
+<p>一旦编译完成，WildFly Swarm UberJAR文件就可以使用标准的<code>java</code>可执行文件从命令行执行。</p>
+
+<pre><code>$ java -jar example-jaxrs-war-swarm.jar
+2017-11-02 03:43:29,747 INFO  [org.wildfly.swarm] (main) WFSWARM0013: Installed fraction:                  Logging - STABLE          org.wildfly.swarm:logging:2017.11.0-SNAPSHOT
+2017-11-02 03:43:29,756 INFO  [org.wildfly.swarm] (main) WFSWARM0013: Installed fraction:          Bean Validation - STABLE          org.wildfly.swarm:bean-validation:2017.11.0-SNAPSHOT
+2017-11-02 03:43:29,757 INFO  [org.wildfly.swarm] (main) WFSWARM0013: Installed fraction:                   JAX-RS - STABLE          org.wildfly.swarm:jaxrs:2017.11.0-SNAPSHOT
+2017-11-02 03:43:29,757 INFO  [org.wildfly.swarm] (main) WFSWARM0013: Installed fraction:                 Undertow - STABLE          org.wildfly.swarm:undertow:2017.11.0-SNAPSHOT
+2017-11-02 03:43:29,758 WARN  [org.wildfly.swarm] (main) WFSWARM0013: Installed fraction:                  Swagger - UNSTABLE        org.wildfly.swarm:swagger:2017.11.0-SNAPSHOT
+2017-11-02 03:43:32,158 INFO  [org.jboss.msc] (main) JBoss MSC version 1.2.6.Final
+2017-11-02 03:43:32,250 INFO  [org.jboss.as] (MSC service thread 1-1) WFLYSRV0049: WildFly Swarm 2017.11.0-SNAPSHOT (WildFly Core 2.2.1.Final) starting
+2017-11-02 03:43:32,340 INFO  [org.wildfly.swarm] (MSC service thread 1-1) WFSWARM0019: Install MSC service for command line args: []
+2017-11-02 03:43:33,172 INFO  [org.jboss.as.naming] (ServerService Thread Pool -- 18) WFLYNAM0001: Activating Naming Subsystem
+2017-11-02 03:43:33,175 INFO  [org.jboss.as.security] (ServerService Thread Pool -- 12) WFLYSEC0002: Activating Security Subsystem
+2017-11-02 03:43:33,193 INFO  [org.jboss.as.security] (MSC service thread 1-2) WFLYSEC0001: Current PicketBox version=4.9.6.Final
+2017-11-02 03:43:33,200 INFO  [org.wildfly.extension.io] (ServerService Thread Pool -- 17) WFLYIO001: Worker 'default' has auto-configured to 2 core threads with 16 task threads based on your 1 available processors
+2017-11-02 03:43:33,355 INFO  [org.jboss.as.naming] (MSC service thread 1-2) WFLYNAM0003: Starting Naming Service
+2017-11-02 03:43:33,365 INFO  [org.wildfly.extension.undertow] (MSC service thread 1-2) WFLYUT0003: Undertow 1.4.11.Final starting
+2017-11-02 03:43:33,432 INFO  [org.xnio] (MSC service thread 1-1) XNIO version 3.4.3.Final
+2017-11-02 03:43:33,447 INFO  [org.xnio.nio] (MSC service thread 1-1) XNIO NIO Implementation Version 3.4.3.Final
+2017-11-02 03:43:33,524 INFO  [org.wildfly.extension.undertow] (MSC service thread 1-1) WFLYUT0012: Started server default-server.
+2017-11-02 03:43:33,585 INFO  [org.wildfly.extension.undertow] (MSC service thread 1-2) WFLYUT0006: Undertow HTTP listener default listening on [0:0:0:0:0:0:0:0]:8080
+2017-11-02 03:43:33,765 INFO  [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly Swarm 2017.11.0-SNAPSHOT (WildFly Core 2.2.1.Final) started in 1667ms - Started 70 of 77 services (14 services are lazy, passive or on-demand)
+2017-11-02 03:43:34,002 WARN  [org.wildfly.swarm.swagger] (main) WFSSWGR0002: Ignoring package: org.wildfly.swarm.generated
+2017-11-02 03:43:34,003 WARN  [org.wildfly.swarm.swagger] (main) WFSSWGR0002: Ignoring package: org.wildfly.swarm.generated
+2017-11-02 03:43:34,004 INFO  [org.wildfly.swarm.swagger] (main) WFSSWGR0004: Configure Swagger for deployment example-jaxrs-war.war with package org.wildfly.examples.swarm.jaxrs
+2017-11-02 03:43:34,309 INFO  [org.wildfly.swarm.runtime.deployer] (main) deploying example-jaxrs-war.war
+2017-11-02 03:43:34,351 INFO  [org.jboss.as.server.deployment] (MSC service thread 1-1) WFLYSRV0027: Starting deployment of "example-jaxrs-war.war" (runtime-name: "example-jaxrs-war.war")
+2017-11-02 03:43:35,307 INFO  [org.wildfly.extension.undertow] (MSC service thread 1-1) WFLYUT0018: Host default-host starting
+2017-11-02 03:43:35,660 INFO  [org.jboss.resteasy.resteasy_jaxrs.i18n] (ServerService Thread Pool -- 2) RESTEASY002225: Deploying javax.ws.rs.core.Application: class org.wildfly.examples.swarm.jaxrs.MyApplication
+2017-11-02 03:43:35,692 INFO  [org.wildfly.extension.undertow] (ServerService Thread Pool -- 2) WFLYUT0021: Registered web context: /
+2017-11-02 03:43:35,800 INFO  [org.jboss.as.server] (main) WFLYSRV0010: Deployed "example-jaxrs-war.war" (runtime-name : "example-jaxrs-war.war")
+2017-11-02 03:43:35,808 INFO  [org.wildfly.swarm] (main) WFSWARM99999: WildFly Swarm is Ready
+</code></pre>
+
+<h3 id="application-server-or-uberjar">应用服务器还是UberJAR？</h3>
+
+<p>从应用程序的角度来看，部署到应用服务器或作为独立的UberJAR运行没有什么区别。您可以访问相同的库，并可以公开相同的功能。事实上，您可以将一个构建传统Java EE WAR文件的项目转换为WildFly Swarm UberJAR，而无需修改代码，只需在Maven或Gradle项目文件中添加几行代码。</p>
+
+<p>构建WildFly Swarm JAX-RS示例项目实际上会生成UberJAR和WAR文件。WAR文件可以部署到WildFly应用服务器，并运行与UberJAR相同的代码。这突出了这样一个事实，即在构建WAR文件以部署到应用服务器或可以独立运行的UberJAR时，代码不会改变。</p>
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/uberjar-and-war.png" class="zoom" data-title=""><img src="../Images/1a3f207a95dd591371b21d3917bba1d0.png" class="img-fluid center" alt="UberJAR and WAR" data-original-src="https://i.octopus.com/blog/2017-11/uberjar-and-war.png"/>T2】</a></p>
+
+
+<p>这些方法之间的区别更多地在于应用程序编译后的部署和管理方式。</p>
+
+<p>多年来，应用服务器已经发展到提供丰富的管理工具，允许通过web界面或命令行部署、启动、停止、取消部署和升级应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/wildfly-admin-console.png" class="zoom" data-title=""><img src="../Images/1d5650bce45e6cc394f82ef3e680e973.png" class="img-fluid center" alt="WildFly Admin Console" data-original-src="https://i.octopus.com/blog/2017-11/wildfly-admin-console.png"/>T2】</a></p>
+
+<p>应用服务器还可以提供资源的集中配置，如数据库连接和消息队列。这种资源和应用程序的分离在运营人员控制诸如数据库线程和凭证之类的东西的环境中工作得很好。</p>
+
+<p>您还可以通过让多个应用程序共享公共库来减少应用服务器的内存消耗。我见过应用服务器运行数百个单独的web应用，其中应用服务器托管共享库，这将每个web应用减少到仅几MB。</p>
+
+<p>然而，随着微服务、不可变基础设施和PaaS等范例越来越受欢迎，应用服务器已经过时了。在这些情况下，自包含的UberJARs是更自然的选择。</p>
+
+<p>扩展部署为UberJARs的应用程序很容易，因为每个单独的应用程序都可以在需求增加时部署到新的实例，并在需求减少时关闭。</p>
+
+<p>所有支持Java的PaaS解决方案都将支持运行UberJAR，因为Uber jar只需要存在一个JRE。虽然一些PaaS解决方案支持应用服务器，但它们往往只支持一两家供应商，或者依赖社区贡献来构建应用服务器环境。</p>
+
+<p>UberJARs还具有将基础设施移入Java构建工具的效果。例如，在构建UberJAR时，开发人员负责添加数据库连接驱动程序和配置，而不是依赖于应用服务器所拥有的配置。</p>
+
+<p>不过UberJARs没有管理层。部署、启动和关闭应用程序由您决定；您无法获得应用服务器提供的那种本机管理工具。PaaS解决方案通常会提供管理UberJARs的工具。</p>
+
+<p>如果您对Java应用程序的自动化部署感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看一下<a href="https://octopus.com/docs/deployments/java/deploying-java-applications">我们的文档</a>。</p>
+
+                    
+                    
+</body>
+</html>

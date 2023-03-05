@@ -1,0 +1,507 @@
+<html>
+<head>
+<title>Using DbUp and Octopus workers for database deployment automation - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用DbUp和Octopus workers实现数据库部署自动化- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/dbup-database-deployments#2020-04-09">https://octopus.com/blog/dbup-database-deployments#2020-04-09</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/blogimage-sqlscript.png" class="zoom" data-title=""><img src="../Images/2b0b02ea2211b6525b3a731554b0ebb7.png" class="img-fluid center" alt="Using DbUp and Octopus workers for database deployment automation" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/blogimage-sqlscript.png"/>T2】</a></p>
+
+<p>在过去十年中，数据库部署最令人兴奋的一个方面是已经发布的工具数量。看一下我以前关于这个话题的帖子，你会发现我明显偏向于Redgate的工具，但是我是Redgate的朋友，这是有原因的。</p>
+
+<p>在这个帖子里，我用的是<a href="https://dbup.readthedocs.io/en/latest/" rel="nofollow"> DbUp </a>。DbUp是一个免费的开源工具，我们在Octopus Deploy中使用它进行数据库部署。每当您安装或升级Octopus Deploy时，DbUp都会运行脚本来更新您的数据库。我们的创始人Paul Stovell在2012年写了一篇关于如何使用DbUp部署到SQL Server的<a href="https://octopus.com/blog/howto/deploy-a-sql-database">博客文章</a>。在很大程度上，那篇博文至今仍然有效。</p>
+
+<p>这篇文章是那篇旧文章的更新。DbUp和Octopus Deploy中添加了许多新特性，我将介绍其中的一些特性，并创建一个过程来使用它进行数据库部署。它甚至包括一个DBA批准的审查步骤。</p>
+
+
+
+<h2 id="changes-to-dbup">对DbUp的更改</h2>
+
+<p>本质上，DbUp是一个脚本运行器。对数据库的更改是通过脚本完成的:</p>
+
+<ul>
+<li>Script001_AddTableA.sql</li>
+<li>script 002 _ addcolumntesttotablea . SQL</li>
+<li>script 003 _ addcolumnstategaintotablea . SQL</li>
+</ul>
+
+<p>DbUp通过您自己编写的控制台应用程序运行，因此您可以控制使用哪些选项，并且不需要大量代码:</p>
+
+<pre><code class="language-C">static int Main(string[] args)
+{
+    var connectionString =
+        args.FirstOrDefault()
+        ?? "Server=(local)\\SqlExpress; Database=MyApp; Trusted_connection=true";
+
+    var upgrader =
+        DeployChanges.To
+            .SqlDatabase(connectionString)
+            .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
+            .LogToConsole()
+            .Build();
+
+    var result = upgrader.PerformUpgrade();
+
+    if (!result.Successful)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(result.Error);
+        Console.ResetColor();
+
+        return -1;
+        }
+    }
+
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine("Success!");
+    Console.ResetColor();
+    return 0;
+}
+</code></pre>
+
+<p>您捆绑这些脚本并告诉DbUp运行它们。它将该列表与存储在目标数据库中的列表进行比较。将运行不在该目标数据库列表中的任何脚本。脚本按字母顺序执行，每个脚本的结果都显示在控制台上。非常容易实现和理解。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/dbup-output.png" class="zoom" data-title=""><img src="../Images/5a69c60e9e32aaf2cfa55f98507a3f3b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/dbup-output.png"/>T2】</a></p>
+
+<p>当您部署到开发或测试环境时，这非常有用。我交谈过的许多公司更喜欢他们的DBA在投入生产之前批准脚本。也可能是一个试运行或预生产环境。这个批准过程是必不可少的，尤其是当您第一次开始部署数据库时。</p>
+
+<h3 id="html-report">HTML报告</h3>
+
+<p>迁移脚本是一把双刃剑，就像C++中的内存管理一样。你拥有完全的控制权，这给了你巨大的力量。但是，也很容易搞砸。这完全取决于所做更改的类型和作者的SQL技能。当没有经验的C#开发人员编写这些迁移脚本时，DBA对这个过程的信任度会很低。</p>
+
+<p>最近，DbUp增加了生成HTML报告的功能。这是一个扩展方法，您可以给它您想要生成的报告的路径。这意味着这部分从:</p>
+
+<pre><code class="language-C">var result = upgrader.PerformUpgrade();
+
+if (!result.Successful)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine(result.Error);
+    Console.ResetColor();
+
+    return -1;
+    }
+}
+</code></pre>
+
+<p>收件人:</p>
+
+<pre><code class="language-C">// --generateReport is the name of the example argument.  You can call it anything
+if (args.Any(a =&gt; "--generateReport".Equals(a, StringComparison.InvariantCultureIgnoreCase)))
+{
+    upgrader.GenerateUpgradeHtmlReport("C:\\DeploymentLocation\\UpgradeReport.html");
+}
+else
+{
+    var result = upgrader.PerformUpgrade();
+
+    if (!result.Successful)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(result.Error);
+        Console.ResetColor();
+        return -1;
+    }
+}
+</code></pre>
+
+<p>该代码将生成一个包含所有将要运行的脚本的报告。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/db-htmlreport.png" class="zoom" data-title=""><img src="../Images/d56514026cbbdc1d07eb54245c97728e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/db-htmlreport.png"/>T2】</a></p>
+
+<h3 id="always-run-script-and-script-grouping">始终运行脚本和脚本分组</h3>
+
+<p>默认情况下，DbUp将运行一次脚本，大多数情况下这没问题，但有时总是运行一个脚本或一组脚本也不错。一个例子是刷新所有视图的部署后脚本。或者，使用一个脚本来重建所有索引并重新生成统计数据。您不希望为每个部署编写新的脚本。</p>
+
+<p>DbUp最近增加的另一个特性是能够将一组脚本标记为<code>AlwaysRun</code>并提供一个运行组:</p>
+
+<pre><code class="language-C">var upgradeEngineBuilder = DeployChanges.To
+    .SqlDatabase(connectionString, null) //null or "" for default schema for user
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), script =&gt; script.StartsWith("SampleApplication.PreDeployment."), new SqlScriptOptions { ScriptType = ScriptType.RunAlways, RunGroupOrder = 1})
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), script =&gt; script.StartsWith("SampleApplication.Scripts."), new SqlScriptOptions { ScriptType = ScriptType.RunOnce, RunGroupOrder = 2})
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), script =&gt; script.StartsWith("SampleApplication.PostDeployment."), new SqlScriptOptions { ScriptType = ScriptType.RunAlways, RunGroupOrder = 3})
+    .LogToConsole();
+
+var upgrader = upgradeEngineBuilder.Build();
+
+var result = upgrader.PerformUpgrade();
+
+// Display the result
+if (result.Successful)
+{
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine("Success!");
+}
+else
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine(result.Error);
+    Console.WriteLine("Failed!");
+}
+</code></pre>
+
+<h2 id="create-the-dbup-console-application">创建DbUp控制台应用程序</h2>
+
+<p>有了这些新特性，我们将构建一个. NET核心DbUp控制台应用程序来部署到SQL Server。然后，我们将在Octopus部署中整合一个流程来运行控制台应用程序。</p>
+
+<p>下面的所有代码都可以在<a href="https://github.com/OctopusSamples/DbUpSample" rel="nofollow"> GitHub repo </a>中找到。</p>
+
+<p>我选择了。网核结束。NET框架，因为它可以在任何地方构建和运行。DbUp是一个. NET标准库。DbUp在. NET Framework应用程序中也能很好地工作。</p>
+
+<p>让我们启动我们选择的IDE，创建一个. NET核心控制台应用程序。我使用JetBrain的Rider来构建这个控制台应用程序。比起Visual Studio我更喜欢它。</p>
+
+<h3 id="scaffolding">脚手架</h3>
+
+<p>控制台应用程序已经创建。现在我们需要引入DbUp NuGet包。让我们转到我们的NuGet包管理器:</p>
+
+<p>【T2 <img src="../Images/f523d53a7bdac6d4dbd2be2c465858d9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-managenugetpackagesselection.png"/></p>
+
+<p>接下来，我们选择DbUp-SqlServer包。该包包括核心包以及部署到SQL Server的必要代码。如果您想部署到PostgreSQL、MySQL、Oracle或SQLite，您可以选择:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-selectingdbuppackage.png" class="zoom" data-title=""><img src="../Images/9aa6e79cc0649efee37d46c514aed97e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-selectingdbuppackage.png"/>T2】</a></p>
+
+<p>控制台应用程序需要一些脚本来部署。我将添加三个文件夹，并用一些脚本文件填充它们:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-createfolderswithsamplescripts.png" class="zoom" data-title=""><img src="../Images/7df6b3dcfc03738af8b838d5e2b6e662.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-createfolderswithsamplescripts.png"/>T2】</a></p>
+
+<p>建议你加个前缀，比如001，002等。，添加到脚本文件名的开头。DbUp按字母顺序运行脚本，该前缀有助于确保脚本按正确的顺序运行。</p>
+
+<p>默认情况下，。NET在构建控制台应用程序时不会包含这些脚本文件，我们希望将这些脚本文件作为嵌入式资源包含在内。幸运的是，我们可以通过在<code>.csproj</code>文件中包含这段代码来轻松地添加对这些文件的引用:</p>
+
+<pre><code class="language-XML">    &lt;ItemGroup&gt;
+        &lt;EmbeddedResource Include="BeforeDeploymentScripts\*.sql" /&gt;
+        &lt;EmbeddedResource Include="DeploymentScripts\*.sql" /&gt;
+        &lt;EmbeddedResource Include="PostDeploymentScripts\*.sql" /&gt;
+    &lt;/ItemGroup&gt;
+
+</code></pre>
+
+<p>整个文件如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-sampleprojectcsprojfile.png" class="zoom" data-title=""><img src="../Images/ad389496812acd55f951f5bc71ccac8c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/rider-sampleprojectcsprojfile.png"/>T2】</a></p>
+
+<h3 id="program.cs-file">Program.cs文件</h3>
+
+<p>启动这个应用程序的最后一步是在<code>Program.cs</code>中添加必要的代码来调用DbUp。应用程序接受来自命令行的参数，Octopus Deploy将被配置为发送以下参数:</p>
+
+<ul>
+<li><strong> ConnectionString </strong>:在这个演示中，我们将它作为参数发送，而不是存储在配置文件中。</li>
+<li><strong> PreviewReportPath </strong>:保存预览报表的完整路径。完整路径参数是可选的。当它被发送进来时，我们为Octopus Deploy生成一个预览HTML报告，以变成一个工件。当它没有被发送进来时，代码将执行实际的部署。</li>
+</ul>
+
+<p>让我们从命令行参数中提取连接字符串开始:</p>
+
+<pre><code class="language-C">static void Main(string[] args)
+{    
+    var connectionString = args.FirstOrDefault(x =&gt; x.StartsWith("--ConnectionString", StringComparison.OrdinalIgnoreCase));
+
+    // We expect the connection string to be there.  If it doesn’t this will throw an error.  
+    connectionString = connectionString.Substring(connectionString.IndexOf("=") + 1).Replace(@"""", string.Empty);
+</code></pre>
+
+<p>DbUp使用流畅的API。我们需要告诉它我们的文件夹，每个文件夹的脚本类型，以及我们希望运行脚本的顺序。如果您使用带有<em> StartsWith </em>搜索的嵌入在汇编选项中的脚本，您需要在您的搜索中提供完整的名称空间。</p>
+
+<pre><code class="language-C">var upgradeEngineBuilder = DeployChanges.To
+    .SqlDatabase(connectionString, null)
+    // Pre-deployment scripts, set them to always run first
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), x =&gt; x.StartsWith("DbUpSample.BeforeDeploymentScripts."), new SqlScriptOptions { ScriptType = ScriptType.RunAlways, RunGroupOrder = 0 })
+    // Main Deployment scripts, they run once and run in the second group
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), x =&gt; x.StartsWith("DbUpSample.DeploymentScripts"), new SqlScriptOptions { ScriptType = ScriptType.RunOnce, RunGroupOrder = 1 })
+    // Post deployment scripts, always run these scripts and run after everything has been deployed
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), x =&gt; x.StartsWith("DbUpSample.PostDeploymentScripts."), new SqlScriptOptions { ScriptType = ScriptType.RunAlways, RunGroupOrder = 2 })
+    // By default all the scripts are run in the same transaction
+    .WithTransactionPerScript()
+    // Set this so it can report back to Octopus Deploy how things are going
+    .LogToConsole();
+
+var upgrader = upgradeEngineBuilder.Build();
+
+Console.WriteLine("Is upgrade required: " + upgrader.IsUpgradeRequired());
+</code></pre>
+
+<p>升级程序已经构建好了，可以运行了。这一部分是我们注入升级报告参数检查的地方。如果设置了该参数，请不要运行升级。相反，为Octopus Deploy生成一个报告作为工件上传:</p>
+
+<pre><code class="language-C">if (args.Any(a =&gt; a.StartsWith("--PreviewReportPath", StringComparison.InvariantCultureIgnoreCase)))
+{
+    // Generate a preview file so Octopus Deploy can generate an artifact for approvals
+    var report = args.FirstOrDefault(x =&gt; x.StartsWith("--PreviewReportPath", StringComparison.OrdinalIgnoreCase));
+    report = report.Substring(report.IndexOf("=") + 1).Replace(@"""", string.Empty);
+
+    var fullReportPath = Path.Combine(report, "UpgradeReport.html");
+
+    Console.WriteLine($"Generating the report at {fullReportPath}");
+
+    upgrader.GenerateUpgradeHtmlReport(fullReportPath);
+}
+else
+{
+    var result = upgrader.PerformUpgrade();
+
+    // Display the result
+    if (result.Successful)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("Success!");
+    }
+    else
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(result.Error);
+        Console.WriteLine("Failed!");
+    }
+}
+</code></pre>
+
+<p>当我们把它们放在一起时，它看起来像这样:</p>
+
+<pre><code class="language-C">using System;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using DbUp;
+using DbUp.Engine;
+using DbUp.Helpers;
+using DbUp.Support;
+
+namespace DbUpSample
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var connectionString = args.FirstOrDefault(x =&gt; x.StartsWith("--ConnectionString", StringComparison.OrdinalIgnoreCase));
+
+            connectionString = connectionString.Substring(connectionString.IndexOf("=") + 1).Replace(@"""", string.Empty);
+
+            var upgradeEngineBuilder = DeployChanges.To
+                .SqlDatabase(connectionString, null)
+                .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), x =&gt; x.StartsWith("DbUpSample.BeforeDeploymentScripts."), new SqlScriptOptions { ScriptType = ScriptType.RunAlways, RunGroupOrder = 0 })
+                .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), x =&gt; x.StartsWith("DbUpSample.DeploymentScripts"), new SqlScriptOptions { ScriptType = ScriptType.RunOnce, RunGroupOrder = 1 })
+                .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), x =&gt; x.StartsWith("DbUpSample.PostDeploymentScripts."), new SqlScriptOptions { ScriptType = ScriptType.RunAlways, RunGroupOrder = 2 })
+                .WithTransactionPerScript()
+                .LogToConsole();
+
+            var upgrader = upgradeEngineBuilder.Build();
+
+            Console.WriteLine("Is upgrade required: " + upgrader.IsUpgradeRequired());
+
+            if (args.Any(a =&gt; a.StartsWith("--PreviewReportPath", StringComparison.InvariantCultureIgnoreCase)))
+            {
+                // Generate a preview file so Octopus Deploy can generate an artifact for approvals
+                var report = args.FirstOrDefault(x =&gt; x.StartsWith("--PreviewReportPath", StringComparison.OrdinalIgnoreCase));
+                report = report.Substring(report.IndexOf("=") + 1).Replace(@"""", string.Empty);
+
+                var fullReportPath = Path.Combine(report, "UpgradeReport.html");
+
+                Console.WriteLine($"Generating the report at {fullReportPath}");
+
+                upgrader.GenerateUpgradeHtmlReport(fullReportPath);
+            }
+            else
+            {
+                var result = upgrader.PerformUpgrade();
+
+                // Display the result
+                if (result.Successful)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("Success!");
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine(result.Error);
+                    Console.WriteLine("Failed!");
+                }
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>在启用报告参数的情况下运行控制台应用程序会生成我们预期的报告:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/dbup-samplecodereport.png" class="zoom" data-title=""><img src="../Images/17a106a95b5615ffd1b2081649ec2815.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/dbup-samplecodereport.png"/>T2】</a></p>
+
+<h3 id="future-work">未来的工作</h3>
+
+<p>创建脚手架和编写program.cs文件的代码应该只需要做一次。有了我们的设置，你需要做的就是将文件添加到<code>PreDeployment</code>、<code>PostDeployment</code>和<code>Deployment</code>文件夹中。</p>
+
+<p>使用这种设置，很容易删除旧文件，但是DbUp不喜欢这样做。DbUp背后的想法是，它提供所有数据库更改的历史。例如，当您想要在新的开发人员的机器上创建一个新的数据库时，您只需要运行这个命令行应用程序。它将遍历并运行所有脚本，以启动并运行数据库。删除文件最终可能会删除一个键序列，例如创建一个表、添加一个关键列或者将列从一个表移动到另一个表。有这些额外的文件并不会对性能造成太大的影响。DbUp将看到他们已经运行，并将他们从运行列表中排除。</p>
+
+<p>您可以将较旧的文件移动到一个新的文件夹中，并添加一个新的命令行参数来选择这些文件。</p>
+
+<h2 id="octopus-deploy-configuration">Octopus部署配置</h2>
+
+<p>我将假设您知道如何构建一个. NET核心应用程序并打包它。如果你没有，这里是快速TL；博士:</p>
+
+<ul>
+<li>在项目上运行<code>dotnet publish</code>命令(不要忘记输出路径)。</li>
+<li>运行<code>octo pack</code>来打包输出路径(或者使用Octopus Deploy build server插件)。</li>
+<li>使用<code>octo push</code>命令将包推送到Octopus Deploy(或者使用Octopus Deploy构建服务器插件)。</li>
+</ul>
+
+<p>为了让您的生活更轻松，对于这个演示，我在GitHub repo的根目录中以zip文件的形式包含了示例应用程序的1.0.0.1版本。将软件包上传到Octopus内置存储库:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-uploadedpackage.png" class="zoom" data-title=""><img src="../Images/581ce2d92eba73af0375805199677ed1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-uploadedpackage.png"/></a>T2】</p>
+
+<p>我赞同Octopus Deploy项目应该负责自我引导的理论。对于数据库部署，这意味着在部署之前确保数据库存在，并创建必要的SQL Server用户。</p>
+
+<p>在进入流程之前，我们需要定义一些变量。因为这是一篇博文的演示，所以我在所有环境中使用相同的数据库服务器:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-demovariables.png" class="zoom" data-title=""><img src="../Images/97303f9d03b15c8c62f04771b14f96ae.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-demovariables.png"/>T2】</a></p>
+
+<p>为了创建数据库和用户，这个过程将使用我为以前的博客文章创建的社区步骤模板。请参见<a href="https://octopus.com/docs/deployment-process/steps/community-step-templates#adding-community-step-templates">文档</a>了解如何在你的Octopus服务器上下载和安装这些社区步骤模板。</p>
+
+<p>我在<strong>数据库工作者池</strong>中的一个工作者上运行第一步。我选择使用单个工作池，因为我使用SQL身份验证。我不必担心每个环境的集成安全性和独特的服务帐户。如果我在这个过程中使用集成安全性和每个环境的唯一服务帐户，还有一些额外的设置要做，但是我将在后面的文章中介绍。现在，我想尽可能简单地解释一下:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-createdatabasestep.png" class="zoom" data-title=""><img src="../Images/6005b495715d0b1a961af22d3f243fd6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-createdatabasestep.png"/>T2】</a></p>
+
+<p>首先，我们要搭建好脚手架，创建数据库、用户，并分配用户数据库:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-initialdatabasedeployscaffolding.png" class="zoom" data-title=""><img src="../Images/ce0b3fefa14f466de9b8c391eb672b13.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-initialdatabasedeployscaffolding.png"/></a>T2】</p>
+
+<p>下一组步骤将从DbUp部署数据库更改。如果你还记得<a href="/blog/database-deployment-automation-using-redgate-sql-change-automation">我之前的Redgate文章</a>，这是分四步完成的:</p>
+
+<ol>
+<li>下载软件包。</li>
+<li>运行Redgate创建数据库版本。</li>
+<li>DBA批准部署。</li>
+<li>运行Redgate部署数据库版本。</li>
+</ol>
+
+<p>我对这个过程有几个问题。也就是说，下载包步骤被设计成提取包并把它留在触手上。默认情况下，它将永远保留在那里，除非配置了<a href="https://octopus.com/docs/administration/retention-policies">保留策略</a>。部署完成后，没有必要将提取的包放在触手上。SQL脚本已经运行，现在它们正在占用空间。此外，该流程的步骤2和4引用了步骤1。感觉有很多额外的工作。</p>
+
+<p>如果您正在使用Octopus Deploy 2018.8或更高版本，好消息是我们现在可以引用来自<strong>运行脚本</strong>步骤的包。包将被下载和提取，在步骤完成后，它将删除提取的包。除了清理不需要的内容，在<strong>运行脚本</strong>步骤中使用包引用非常适合在workers上运行部署，假设每个步骤都是独立的。这也意味着不同的工人可以完成每一步的工作。</p>
+
+<p>该流程部署部分的第一步是生成HTML报告，并将其作为工件上传到Octopus Deploy。点击<strong>添加</strong>按钮，将包引用添加到步骤中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-addpackagereference.png" class="zoom" data-title=""><img src="../Images/ba3a0e6debcc13bb2088b7a71acaa598.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-addpackagereference.png"/>T2】</a></p>
+
+<p>当模式窗口出现时，选择要提取的包:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-addpackagereferencemodal.png" class="zoom" data-title=""><img src="../Images/0a44742c1443911d6f1d9a1935726143.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-addpackagereferencemodal.png"/>T2】</a></p>
+
+<p>现在我们可以添加一个脚本来处理部署。跑步。NET核心控制台应用程序与运行。NET Framework控制台应用程序。</p>
+
+<p>这完全取决于您在构建和发布应用程序时设置的开关。您可以创建一个自包含的控制台应用程序(。exe)以及所有必要的。dll，但这样做会增加包的大小。或者，您可以将其设置为仅创建一个. dll，并引用所有外部依赖项。在示例包中，我创建了一个自包含的包，但是我排除了。zip文件中的。这样，您就不必担心运行恢复了:</p>
+
+<pre><code class="language-PS"># How you reference the extracted path
+$packagePath = $OctopusParameters["Octopus.Action.Package[DbUpSample].ExtractedPath"]
+$connectionString = $OctopusParameters["Project.Database.ConnectionString"]
+$reportPath = $OctopusParameters["Project.HtmlReport.Location"]
+
+$dllToRun = "$packagePath\DbUpSample.dll"
+$generatedReport = "$reportPath\UpgradeReport.html"
+
+if ((test-path $reportPath) -eq $false){
+    New-Item $reportPath -ItemType "directory"
+}
+
+# How you run this .NET core app
+dotnet $dllToRun --ConnectionString="$connectionString" --PreviewReportPath="$reportPath"
+
+New-OctopusArtifact -Path "$generatedReport"
+</code></pre>
+
+<p>完成后，整个步骤如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-createdeltareport.png" class="zoom" data-title=""><img src="../Images/7599532b9eda32e592fb116f26479016.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-createdeltareport.png"/></a>T2】</p>
+
+<p>人工干预没什么特别的。在本例中，我将其配置为仅在试运行和生产环境中运行，并让数据库管理员批准该部署:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-manualintervention.png" class="zoom" data-title=""><img src="../Images/d722fa9d7802b2cfeb2e9dd37ac999cf.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-manualintervention.png"/>T2】</a></p>
+
+<p>部署步骤类似于<strong>生成增量报告</strong>步骤，除了它将部署变更，而不用担心报告的生成。这一步的PowerShell是:</p>
+
+<pre><code class="language-PS"># How you reference the extracted path
+$packagePath = $OctopusParameters["Octopus.Action.Package[DbUpSample].ExtractedPath"]
+$connectionString = $OctopusParameters["Project.Database.ConnectionString"]
+
+$dllToRun = "$packagePath\DbUpSample.dll"
+
+# How you run this .NET core app
+dotnet $dllToRun --ConnectionString="$connectionString"
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-deploychanges.png" class="zoom" data-title=""><img src="../Images/a8ab196dd09446898e8457d58fded9c0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-deploychanges.png"/>T2】</a></p>
+
+<p>现在最后的过程是:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-finaldatabasedeploymentprocess.png" class="zoom" data-title=""><img src="../Images/438d86955be37dcbbe869e09785e91ca.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-finaldatabasedeploymentprocess.png"/>T2】</a></p>
+
+<p>变数就在那里。流程设置完毕。让我们部署一些数据库更改:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-deployrelease.png" class="zoom" data-title=""><img src="../Images/582cfd4d9495af4ecdd87260e44a9a4d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-deployrelease.png"/></a>T2】</p>
+
+<p>哎呦！忘记安装了。我的员工的网络核心:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-missingdotnetcore.png" class="zoom" data-title=""><img src="../Images/fa5715f6f8696bf835124e895e41c569.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-missingdotnetcore.png"/>T2】</a></p>
+
+<p>快速跳转到<a href="https://octopus.com/docs/administration/managing-infrastructure/script-console">脚本控制台</a>来运行chocolatey安装:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-scriptconsole.png" class="zoom" data-title=""><img src="../Images/4fc484a948475868be7b96b277ace5bc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-scriptconsole.png"/>T2】</a></p>
+
+<p>这是成功的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-scriptconsolesuccess.png" class="zoom" data-title=""><img src="../Images/299592fc80d57966b3230b92e4808f13.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-scriptconsolesuccess.png"/>T2】</a></p>
+
+<p>让我们再试试那个版本。事后看来，我本可以告诉它重试发布，但我决定创建一个新的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-anotherrelease.png" class="zoom" data-title=""><img src="../Images/2e70330e414753c2e24b174abce35cbd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-anotherrelease.png"/>T2】</a></p>
+
+<p>这一次很成功。您可以看到由流程创建的工件。这是数据库管理员将下载并在试运行和生产中审查的内容:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-successfulrelease.png" class="zoom" data-title=""><img src="../Images/620ea976641a74770886b7ae49df3fbf.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-successfulrelease.png"/>T2】</a></p>
+
+<p>如果我们看一下数据库，我们会看到项目是按预期创建的:</p>
+
+<p>【T2 <img src="../Images/5e201b0f0ae6a7321945393b053edb5a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/ssms-successfuldeployment.png"/></p>
+
+<h2 id="integrated-security-and-workers">综合安全和工人</h2>
+
+<p>在这个演示中，我使用了SQL身份验证。然而，你们中的许多人正在使用集成安全性。为了增加一层安全性，每个环境都有自己的Active Directory服务帐户。这完全有道理，我推荐这种方法。</p>
+
+<p>对于现在这一代员工，你如何做到这一点？这并不像它应该的那样直截了当(我们希望在workers v2中解决这个问题)。我将指导您完成设置它的必要步骤。</p>
+
+<p>首先，我们需要为每个环境创建一个专用的工作人员池。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-environmentspecificworkerpools.png" class="zoom" data-title=""><img src="../Images/8c8ae6f574850cd87850e76678321e19.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-environmentspecificworkerpools.png"/>T2】</a></p>
+
+<p>接下来，我们需要创建云区域部署目标。</p>
+
+<p>您需要为每个环境创建一个云区域。我为这些云区域创建了一个名为<code>DbWorker</code>的新角色，因为我想要一种区分这些新部署目标的方法:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-createcloudregion.png" class="zoom" data-title=""><img src="../Images/e0416c8a9dadf9554f86faa9b56bdbc7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-createcloudregion.png"/>T2】</a></p>
+
+<p>完成后，我有了四个新的云区域:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-environmentcloudregions.png" class="zoom" data-title=""><img src="../Images/4bef5ce31cd77c98ba4e547d34be378e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-environmentcloudregions.png"/>T2】</a></p>
+
+<p>我将更改流程的执行位置，使其在该环境中使用<code>DbWorker</code>角色的目标上运行:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-executionlocation.png" class="zoom" data-title=""><img src="../Images/3baf557b41d239fbf51a6125b9535010.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-executionlocation.png"/>T2】</a></p>
+
+<p>对流程中每个步骤重复相同的更改:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-processwithcloudregiontargets.png" class="zoom" data-title=""><img src="../Images/143afaa50e05e538a8395a900de1f9b4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-processwithcloudregiontargets.png"/>T2】</a></p>
+
+<p>当部署一个新版本来测试时，选择<code>Test Database Worker Region</code>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-releasewithcloudregion.png" class="zoom" data-title=""><img src="../Images/6804901eeed2b68a1f6455f978ec3126.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/dbup-database-deployment-automation/octopusdeploy-releasewithcloudregion.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>最近对DbUp的修改有助于为数据库创建一个健壮的部署管道。现在DBA(和其他人)可以在部署之前通过Octopus Deploy检查变更。拥有审查变更的能力应该有助于在过程中建立信任，并有助于加速采用。</p>
+
+<hr/>
+
+<p>数据库部署自动化系列文章:</p>
+
+
+
+                    
+                    
+</body>
+</html>

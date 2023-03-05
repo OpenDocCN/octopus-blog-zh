@@ -1,0 +1,163 @@
+<html>
+<head>
+<title>Request for Comments - Migrating from scriptcs to dotnet-script - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>征求意见-从scriptcs迁移到dotnet-script - Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-migrate-scriptcs-dotnet-script#2022-08-08">https://octopus.com/blog/rfc-migrate-scriptcs-dotnet-script#2022-08-08</a></blockquote>
+                        <p>我们收到了<a href="https://help.octopus.com/t/consider-use-dotnet-script-vs-scriptcs/22144" rel="nofollow">客户反馈</a>和<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/31454668-allow-the-use-of-c-script-csx-using-net-core" rel="nofollow">用户声音投票</a>，要求我们更新Octopus用来运行C#脚本的工具，从<a href="https://github.com/scriptcs/scriptcs" rel="nofollow"> scriptcs </a>到<a href="https://github.com/filipw/dotnet-script" rel="nofollow"> dotnet-script </a>。这将:</p>
+
+<ul>
+<li>在部署脚本中解锁较新的C#语言功能</li>
+<li>允许从脚本中直接引用NuGet包</li>
+<li>不再需要安装Mono来在Linux部署目标上运行C#脚本</li>
+</ul>
+
+<p>C#脚本占了我们脚本步骤的大约5%,所以我们想了解这个变化对我们用户的影响。</p>
+
+<p>如果您在部署过程中使用C#脚本，并且使用SSH和Mono部署到Linux目标，或者部署到运行早于2012年R2版的Windows版本的Windows Tentacle目标，建议的更改可能会影响您。</p>
+
+<p>这篇文章概述了潜在的变化，以及迁移到dotnet-script和弃用scriptcs的权衡。我们还创建了一个<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/9" rel="nofollow"> GitHub问题</a>，您可以在这里提供反馈，我们可以进一步评估对该功能的需求。</p>
+
+<h2 id="how-we-propose-to-support-dotnet-script">我们建议如何支持dotnet-script</h2>
+
+<p>该意见征询书(RFC)提议移除<code>scriptcs</code>以支持<code>dotnet-script</code>。</p>
+
+<p>为了将软件部署到您的服务器上，我们使用了<a href="https://github.com/OctopusDeploy/OctopusTentacle" rel="nofollow">触手</a>，这是一个轻量级服务，负责与Octopus服务器通信，并调用<a href="https://github.com/OctopusDeploy/Calamari" rel="nofollow">卡拉马里</a>。Calamari是一个命令行工具，它知道如何执行部署，并且是所有部署操作(包括脚本执行)的宿主进程。我们目前为。NET Framework 4.0.0、4.5.2和netcore3.1。根据您的服务器操作系统、体系结构和版本，触手会接收这些Calamari版本之一。</p>
+
+<p>历史上，Calamari要求在Linux目标上安装Mono来执行<code>scriptcs</code>,因为它是完全编译的。NET框架。随着跨平台的引入。使用netcore3.1 Linux的网络应用程序现在可以本地运行。NET应用程序消除了Mono的复杂性和开销。Linux目标目前默认接收netcore3.1 Calamari，除了<a href="https://octopus.com/docs/infrastructure/deployment-targets/linux/ssh-target#add-an-ssh-connection"> Linux SSH目标</a>，它可以指定在Mono上运行脚本。</p>
+
+<p>是基于. NET的C#脚本的现代实现。它可以在所有支持的目标上运行。网络应用程序(netcore3.1及更新版本)。如果我们做出这一更改，这将意味着C#脚本将只能在支持. NET的目标上运行。Windows Server 2012 R2和早期版本仅支持。所以这些目标将失去运行C#脚本的能力。</p>
+
+<h2 id="impacts">影响</h2>
+
+<h3 id="added-functionality">增加的功能</h3>
+
+<table class="table">
+<thead>
+<tr>
+<th>特征</th>
+<th>scriptcs</th>
+<th>点网脚本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C#版本</td>
+<td>5</td>
+<td>8</td>
+</tr>
+<tr>
+<td>移除Linux对Mono的依赖</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>获取导入支持</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>允许未来。NET 5和6支持</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="benefits-of-the-proposed-approach">拟议方法的好处</h3>
+
+<p>所有包含在第8版之前的C#语言特性现在都可以在你的C#脚本中使用了。</p>
+
+<p>消除对Mono执行脚本的依赖使我们与现代的跨平台相结合。NET功能降低了调用Mono和相关问题的复杂性。</p>
+
+<p>来自<code>dotnet-script</code>的NuGet导入支持允许在脚本中直接引用NuGet包，而不必<a href="https://octopus.com/docs/octopus-rest-api/octopus.client/using-client-in-octopus">在脚本包</a>中包含dll。新方法如下所示。</p>
+
+<pre><code>#r "nuget: RestSharp, 108.0.1"
+
+using RestSharp;
+
+var client = new RestClient("https://pokeapi.co/api/v2/");
+var request = new RestRequest("pokemon/ditto");
+var response = await client.ExecuteGetAsync(request);
+Console.WriteLine(response.Content);
+</code></pre>
+
+<h3 id="linux-ssh-targets-using-mono">使用Mono的Linux SSH目标</h3>
+
+<p>这种变化的一个代价是，在使用SSH和Mono的Linux部署目标上，C#脚本不再可用。</p>
+
+<h4 id="migration">移民</h4>
+
+<p>要针对SSH linux目标运行C#脚本，您需要重新配置SSH目标，以使用通过netcore3.1运行的独立的Calamari。</p>
+
+<p>为此，<a href="https://octopus.com/docs/infrastructure/deployment-targets/linux/ssh-target#self-contained-calamari">在您的SSH目标上选择自包含的Calamari目标运行时</a>。使用Linux触手的目标将继续像以前一样工作。</p>
+
+<h3 id="windows-server-2012-r2-and-earlier-targets">Windows Server 2012 R2版(及更早版本)目标</h3>
+
+<p>这一改变的另一个代价是<code>dotnet-script</code>只适用于netcore3.1及以上版本。这将使C#脚本不可用于针对安装在早于2012年R2版的Windows上的Windows Tentacles的部署，因为这些版本正在运行。Calamari的. NET框架构建。</p>
+
+<h4 id="workaround">工作区</h4>
+
+<p>我们开发了一个解决方法，因此您可以在受影响的Windows目标上继续使用scriptcs，但是您必须更新您的部署过程。</p>
+
+<ol>
+<li>添加<a href="https://www.nuget.org/packages/scriptcs/" rel="nofollow"> scriptcs NuGet包</a>作为<a href="https://octopus.com/blog/script-step-packages">引用包</a>。</li>
+<li>将C#脚本的主体复制到下面PowerShell模板中的<code>$ScriptContent</code>变量中。</li>
+</ol>
+
+<p>C#脚本中使用的任何参数都需要通过scriptcs参数传递，并在ScriptContent中使用<code>Env.ScriptArgs[Index]</code>格式引用。下面的模板显示了如何为<code>Octopus.Deployment.Id</code>执行此操作的示例。</p>
+
+
+<pre><code class="language-powershell">$ScriptContent = @"
+Console.WriteLine(Env.ScriptArgs[0]);
+"@
+
+New-Item -Path . -Name "ScriptFile.csx" -ItemType "file" -Value $ScriptContent
+
+$scriptCs = Join-Path $OctopusParameters["Octopus.Action.Package[scriptcs].ExtractedPath"] "tools/scriptcs.exe"
+
+&amp; $scriptCs ScriptFile.csx -- $OctopusParameters["Octopus.Deployment.Id"]
+</code></pre>
+
+<h2 id="when-will-this-be-released">这个什么时候发布？</h2>
+
+<p>我们仍在评估这一变化可能会影响多少用户。在我们清楚了解我们将影响谁以及他们需要采取什么行动之前，我们不会做出或发布提议的变更。</p>
+
+<h2 id="we-want-your-feedback">我们需要您的反馈</h2>
+
+<p>我们仍在考虑这一变更，因此现在正是利用您的反馈来帮助制定这一提案的大好时机。我们制作了一期<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/9" rel="nofollow"> GitHub来捕捉讨论</a>。</p>
+
+<p>具体来说，我们想知道:</p>
+
+<ul>
+<li>Linux SSH目标或早于2012 R2的Windows版本的限制会对您产生影响吗？</li>
+<li>如果是，您能预见到任何可能阻止您升级这些部署目标或使用替代脚本语言的挑战吗？</li>
+<li>更新的语言特性，更容易的NuGet包引用，以及在移除Mono时增加的可靠性证明了这些改变的合理性吗？</li>
+</ul>
+
+<p>您的反馈将帮助我们提供最佳解决方案。</p>
+
+<p><span> <a class="btn btn-success" href="https://github.com/OctopusDeploy/StepsFeedback/issues/9">提供反馈</a> </span></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>总之，从<code>scriptcs</code>到<code>dotnet-script</code>的迁移将导致以下变化:</p>
+
+<ul>
+<li>运行Mono的Linux SSH目标不赞成使用C#脚本</li>
+<li>对于在早于2012年R2版的版本上运行的Windows部署目标，不推荐使用C#脚本</li>
+<li>增加对C# 5到C# 8语言特性的支持</li>
+<li>脚本中NuGet包的直接导入</li>
+<li>删除了在Linux目标上运行C#脚本的Mono要求</li>
+</ul>
+
+<p>感谢您阅读本RFC。非常感谢您的任何反馈。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,296 @@
+<html>
+<head>
+<title>Database Feature Branch Deployments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>数据库功能分支部署- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/database-feature-branch-deployments#2022-07-05">https://octopus.com/blog/database-feature-branch-deployments#2022-07-05</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/database-feature-branch-deployments.png" class="zoom" data-title=""><img src="../Images/66fc2d1eaf8b8e8ed6d388a1a5f5d7b9.png" class="img-fluid center" alt="Database Feature Branch Deployments" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/database-feature-branch-deployments.png"/>T2】</a></p>
+
+<p>在我的上一篇文章<a href="/blog/rethinking-feature-branch-deployments">重新思考特性分支部署</a>中，我分享了我如何调整对特性分支部署的思考。像那篇文章那样写思想实验是一回事，但把它付诸实践又是另一回事。在本文中，我描述了如何为特性分支建立数据库部署过程。</p>
+
+
+
+<h2 id="quick-recap">快速回顾</h2>
+
+<p>TL；DR；对<a href="/blog/rethinking-feature-branch-deployments">重新思考的特性分支部署</a>是:</p>
+
+<p>使用git时，<strong> <span class="path">开发➜测试➜试运行➜生产</span> </strong>的静态工作流不工作。Git使得创建特性分支变得非常容易。静态工作流本质上要求每个人将他们的代码签入到主干(主或开发)中进行适当的测试。这导致了三个问题:</p>
+
+<ol>
+<li>未完成的代码进入<code>master</code>，需要被测试。</li>
+<li>对于bug修复，没有清晰的路径通向<strong>生产</strong>，需要一个变通办法，比如建立一个bug修复分支，只包含<span class="path">准备➜生产</span>。</li>
+<li>开发人员同时处理2到N个特性是很常见的。这意味着将未完成的代码合并到一个主干中。这增加了不正确的合并冲突解决的机会，这反过来减慢了测试和开发。</li>
+</ol>
+
+<p>为解决这些问题，应进行以下更改:</p>
+
+<ol>
+<li>将<strong> Dev </strong>和<strong> Test </strong>组合成一个环境:<strong> Test </strong>。</li>
+<li>在<strong>测试</strong>中，每个特性分支都应该有一个独立的沙箱。</li>
+<li>在QA测试和验证了一个特性分支之后，它应该被合并到主特性中。</li>
+<li>主设备的部署从<strong>阶段</strong>开始，从不经过<strong>测试</strong>。</li>
+<li>**测试**成为一个动态环境，根据需要添加和删除资源。<strong>分期</strong>和<strong>生产</strong>是静态稳定的。</li>
+</ol>
+
+<p>潜在的目标是代码不应该被合并到<code>master</code>中，直到它准备好进入<strong>生产</strong>。</p>
+
+<h2 id="feature-branch-database-deployments-business-rules">功能分支数据库部署业务规则</h2>
+
+<p>看到这些变化，自然会有很多疑问。</p>
+
+<ul>
+<li>何时创建要素分支沙盒？</li>
+<li>它应该是一个全新的数据库，还是应该恢复一个备份？</li>
+<li>如果是恢复的备份，应该备份什么？生产还是分期？</li>
+<li>应该多久进行一次备份？</li>
+<li>最后，那个沙盒什么时候被拆掉？</li>
+</ul>
+
+<p>那些问题仅仅是关于在<strong>测试</strong>中特性分支沙箱的创建！我还经常遇到其他一些问题。许多这样的问题都集中在数据库部署过程中建立信任。</p>
+
+<ul>
+<li>数据库管理员应该在什么时候参与进来？<strong>生产</strong>为时已晚，而在**测试中创建特性分支**为时过早。</li>
+<li>谁应该触发<strong>生产</strong>的部署？</li>
+<li>是否可以调度<strong>生产</strong>部署，并且只在出现问题时呼叫数据库管理员？</li>
+<li>我们能在不做<strong>生产</strong>部署的情况下看到<strong>生产</strong>吗？</li>
+</ul>
+
+<p>对于我的流程，我做了以下决定:</p>
+
+<ol>
+<li>每个部署将检查功能分支数据库，如果它没有看到，创建一个新的。</li>
+<li>创建特征分支数据库时，恢复<strong>暂存</strong>的副本。</li>
+<li>将在每次部署到<strong>转移</strong>时创建<strong>转移</strong>备份。</li>
+<li>当特征分支数据库合并到主数据库时，备份并删除特征分支数据库。</li>
+<li><strong>试运行</strong>部署还将为<strong>生产</strong>生成一份增量报告。这样，数据库管理员只需批准一次发布。</li>
+<li>数据库管理员将批准所有部署到<strong>暂存</strong>。</li>
+<li>逻辑将确保DBA只有<em>有</em>来批准某些模式变更；创建表、删除表、创建视图、删除视图、更改表等。以保持低信噪比。</li>
+<li>数据库管理员将触发<strong>生产</strong>部署。他们可以安排或立即开始。</li>
+</ol>
+
+<p>在开发生命周期中，让数据库管理员在<strong>生产</strong>部署之前参与进来是至关重要的。他们负责保持<strong>生产</strong>运行，并要求他们在<strong>生产</strong>部署失败时快速检查变更。虫子就是这么溜进来的。DBA是很忙的人，他们可以就潜在的数据库更改进行咨询，但是在开发一个特性时，不应该要求他们批准数据库更改。当一个特性开始开发的时候和当这个特性最终被QA签署的时候，这个表的结构看起来会有很大的不同。</p>
+
+<p>另一个选择是将DBA作为拉请求的评审者。这样，代码就不会被合并到还没有准备好进入<strong>产品</strong>的<code>master</code>中。所有这些都取决于DBA的数量、他们必须支持的团队的数量，以及在给定的一天中被合并到<code>master</code>的变更的数量。要求两个DBA组成的团队审查合并到<code>master</code>的20个团队的所有拉请求，平均每天一两次，这让DBA很容易失败。</p>
+
+<h2 id="octopus-deploy-configuration">Octopus部署配置</h2>
+
+<p>对于本文，我将部署到托管在<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Welcome.html" rel="nofollow"> AWS RDS </a>中的SQL Server。我选择AWS RDS没有别的原因，只是因为我被要求使用AWS RDS设置一个示例。我在这个示例项目中做的大约95%的事情可以在Azure SQL或自托管SQL Server中完成。我利用了一些特定于AWS RDS的特性，但不是很多。</p>
+
+<p>您可以在我们的公共<a href="https://samples.octopus.app/app#/Spaces-106" rel="nofollow">示例实例</a>中找到这个示例项目/空间。你可以作为一个客人登录，四处打探。</p>
+
+<h3 id="lifecycles">生活过程</h3>
+
+<p>我在Octopus Deploy中创建了两个生命周期，<code>AWS Default Lifecycle</code>和<code>AWS Feature Branch Lifecycle</code>。在构建这个例子时，我使用了前缀<code>AWS</code>将它们与我的其他项目分开:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-lifecycles.png" class="zoom" data-title=""><img src="../Images/8419ff5de87ca00683565e0af0c30a01.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-lifecycles.png"/>T2】</a></p>
+
+<h3 id="aws-accounts">AWS帐户</h3>
+
+<p>我使用IaC来加速和减速AWS RDS实例。我选择的IaC技术是<a href="https://aws.amazon.com/cloudformation/" rel="nofollow"> AWS CloudFormation </a>，因为我的同事Shawn已经有了一个PostgreSQL的RDS示例，我可以为SQL Server复制和操作它。为了从Octopus调用CloudFormation，我需要在Octopus中注册一些AWS帐户:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/aws-accounts.png" class="zoom" data-title=""><img src="../Images/c15b29fa4366410f210c14efae0eb49f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/aws-accounts.png"/>T2】</a></p>
+
+<h3 id="static-aws-infrastructure-and-library-variable-sets">静态AWS基础设施和库变量集</h3>
+
+<p>对于我的例子，我使用IaC或基础设施作为代码，来启动和关闭AWS RDS实例。在现实世界中，我不认为这是现实的，特别是对于<strong>生产</strong>和<strong>暂存</strong>数据库。即使当我在AWS中使用IaC功能时，我也喜欢有一些静态基础设施，即<a href="https://aws.amazon.com/vpc/" rel="nofollow">VPC</a>、<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html" rel="nofollow">安全组</a>和<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html" rel="nofollow">子网</a>。虽然可以使用IaC上下旋转它们，但这在现实世界中并不实用。许多公司喜欢在他们的数据中心和AWS之间建立P2P VPN连接。你必须使用IaC来旋转它，如果你能让它工作，那就太棒了。我发现它有点挑剔。</p>
+
+<p>我知道我会共享VPC、安全组、子网等。，所以我喜欢创建多个变量集来存储不同的变量组。我从不建议使用一个庞大的全局变量集。一段时间后，它变成了一个<a href="https://www.npr.org/sections/theprotojournalist/2014/08/15/337759135/what-your-junk-drawer-reveals-about-you" rel="nofollow">变量的垃圾抽屉</a>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/library-variable-sets.png" class="zoom" data-title=""><img src="../Images/5f99769e51423c51ae9f01548905cb67.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/library-variable-sets.png"/>T2】</a></p>
+
+<p>变量集本身包含相关的变量。我通常不会让安全组和子网成为敏感变量。然而，这个实例是公开的，我不想与外界分享这些信息:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/variable-set-values.png" class="zoom" data-title=""><img src="../Images/dcf08ef183e0650ccf61b1b713eb7548.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/variable-set-values.png"/>T2】</a></p>
+
+<p>您会注意到我的变量遵循名称间距格式<code>[variablesetname].[group].[variablename]</code>。我这样做是为了以后更容易找到变量。以我知道的<code>Project</code>开头的变量存储在项目变量中，而以我知道的<code>AWS</code>开头的变量存储在<code>AWS</code>变量集中。它还有助于防止变量名冲突。</p>
+
+<h3 id="workers-and-security">工人和安全</h3>
+
+<p>将AWS RDS服务器暴露在互联网上是不明智的，即使是我正在旋转的示例服务器也是如此。我将使用S3来存储我的数据库的备份。暴露这一点也是不明智的。即使是章鱼云也不行。我将我的安全组配置为只接受来自端口80、端口443和端口10933的请求。我在AWS中创建了一个EC2实例，并将其注册为一个<a href="https://octopus.com/docs/infrastructure/workers"> worker </a>。该EC2实例具有通过端口1433上传到S3以及连接到AWS RDS实例的权限:</p>
+
+<p>【T2 <img src="../Images/045e69964e2f0216cb3a598b0be0edf4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/sample-aws-infrastructure.png"/></p>
+
+<p>在现实世界的<strong>生产</strong>配置中，我会使用不止一个工人。我有多个工作池，一个用于不同的环境，并使用变量作用域来动态选择合适的工作池。但是这个例子已经够复杂了，没必要再增加复杂性了。</p>
+
+<h2 id="octopus-deploy-project">Octopus部署项目</h2>
+
+<p>现在，所有的脚手架都已拆除，是时候专注于项目了。</p>
+
+
+
+<p>我使用了社区库中的一些步骤模板。以下是列表，因此您可以自己安装它们:</p>
+
+
+
+<h3 id="runbooks">运行手册</h3>
+
+<p>我的项目中有五个<a href="https://octopus.com/runbooks">run book</a>来处理特性分支部署的各种维护任务。我将它们都放在同一个项目中，以便您在查看我们的<a href="https://samples.octopus.app/app#/Spaces-106/projects/redgate-feature-branch-example/operations/runbooks" rel="nofollow">示例实例</a>时更容易找到它们。使用我创建的Run Octopus Deploy Runbook步骤模板，Runbook可以存在于任何项目中。如果我在现实世界中进行设置，所有这些操作手册都将位于一个单独的<em>特性分支</em>项目中，以供任何流程利用。</p>
+
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-runbooks.png" class="zoom" data-title=""><img src="../Images/95ef82b7183d9a40e9253ee2bea286fd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-runbooks.png"/>T2】</a></p>
+
+<p>在您的用例中，您可能没有上下旋转SQL Servers。重点关注的三个操作手册是创建屏蔽数据库备份、删除特征分支数据库和恢复特征分支的屏蔽备份。</p>
+
+<h4 id="create-a-masked-database-backup">创建屏蔽的数据库备份</h4>
+
+<p>在此期间，我发现AWS RDS的一个特性是能够<a href="https://aws.amazon.com/rds/details/backup/" rel="nofollow">将数据库备份到S3 </a>。太酷了。我不必担心设置文件共享和映射所有驱动器。我运行存储过程<code>msdb.dbo.rds_backup_database</code>来将数据库备份到S3，或者运行存储过程<code>msdb.dbo.rds_restore_database</code>来恢复数据库。我发现调用这些存储过程会启动这项工作。你必须运行<code>msdb.dbo.rds_task_status</code>来检查备份或恢复的状态。如果您有兴趣尝试，我在我们的示例实例上创建了几个自定义步骤模板:</p>
+
+
+
+<p>在这个<a href="https://samples.octopus.app/app#/Spaces-106/projects/redgate-feature-branch-example/operations/runbooks/Runbooks-365/steps/RunbookProcess-Runbooks-365" rel="nofollow">特定的runbook </a>中，过程是将现有的<code>Staging</code>数据库备份到S3，恢复一个名为【数据库名称】的数据库副本。然后，该进程将运行一个清理脚本来清理<code>Staging</code>。之后，该过程在S3存储桶中创建新的备份供功能分支使用:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/create-masked-database-copy.png" class="zoom" data-title=""><img src="../Images/38ab03df00fa342f99a89636a34c1eeb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/create-masked-database-copy.png"/>T2】</a></p>
+
+<p>有一些屏蔽数据的技术，也有你可以购买的工具，比如<a href="https://www.red-gate.com/products/dba/data-masker/" rel="nofollow"> Redgate的SQL Server数据屏蔽器</a>或者你可以使用你自己的屏蔽脚本。在这个例子中，我选择滚动自己的表，因为我只关心一个表。</p>
+
+<h4 id="delete-feature-branch-database">删除特征分支数据库</h4>
+
+<p>删除功能分支runbook需要的工作比我最初想象的要多一点。起初，我打算只删除数据库。但是当我想得更多的时候，首先备份数据库然后删除它更有意义。如果我需要再次启动数据库来修复一个错误，我可以使用那个备份。添加备份步骤使事情变得有点棘手，因为我需要首先检查数据库是否存在。如果数据库不存在，AWS提供的用于备份数据库的存储过程将会失败:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/delete-feature-branch-database.png" class="zoom" data-title=""><img src="../Images/8b172e6e04e7c07c2825fca1f4b18e87.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/delete-feature-branch-database.png"/>T2】</a></p>
+
+<p><code>Check for Existing Database</code>步骤将<a href="https://octopus.com/docs/projects/variables/output-variables">输出变量</a>设置为<code>True</code>或<code>False</code>。备份和删除步骤的运行条件在<a href="https://octopus.com/docs/deployment-process/conditions#variable-expressions">运行条件</a>中使用该值:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/delete-database-run-condition.png" class="zoom" data-title=""><img src="../Images/1f7b4cda4ad0fc4a2ee48ea3d11fd2be.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/delete-database-run-condition.png"/>T2】</a></p>
+
+<h4 id="restore-masked-database-backup-for-feature-branches">恢复功能分支的屏蔽数据库备份</h4>
+
+<p>恢复屏蔽数据库备份操作手册还有一个<code>Check for Existing Database</code>步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/restore-masked-backup-for-feature-branches.png" class="zoom" data-title=""><img src="../Images/9f07121dd70e0312d360645fe7590dfc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/restore-masked-backup-for-feature-branches.png"/>T2】</a></p>
+
+<p>本操作手册包含额外的逻辑。大多数情况下，如果数据库尚不存在，该过程只应创建一个新的特征分支数据库。但是，在一些用例中，他们需要使用全新的数据库副本重新开始。为了帮助解决这个问题，我创建了一个<a href="https://octopus.com/docs/projects/variables/prompted-variables">提示变量</a>，默认值为<code>False</code>。当设置为<code>True</code>时，将创建数据库的新副本:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/prompted-variables.png" class="zoom" data-title=""><img src="../Images/546162684baf87f9b36682559f86e98a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/prompted-variables.png"/>T2】</a></p>
+
+<h3 id="channels">频道</h3>
+
+<p>在我需要设置的各种变量之外，项目脚手架的最后一块是<a href="https://samples.octopus.app/app#/Spaces-106/projects/redgate-feature-branch-example/deployments/channels" rel="nofollow">项目通道</a>。每个项目都有一个<code>Default</code>通道，它是在项目创建时创建的。我为<code>Feature Branches</code>添加了另一个频道:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-channel.png" class="zoom" data-title=""><img src="../Images/a505a7eab3eab7e78d95a2ca52a1e153.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-channel.png"/>T2】</a></p>
+
+<h3 id="deployment-process">部署流程</h3>
+
+<p>我不打算粉饰它，为了满足之前的所有业务规则，部署过程是复杂的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-deployment-process.png" class="zoom" data-title=""><img src="../Images/6a4f7fc4e68fc258e223b0e34a52d704.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-deployment-process.png"/></a>T2】</p>
+
+<p>前两步创建或拆除特征分支脚手架。我<em>不需要</em>指定频道，因为<strong>测试</strong>和<strong>测试</strong>在不同的频道，但是我这样做是为了让其他人更容易阅读:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/deployment-process-first-steps.png" class="zoom" data-title=""><img src="../Images/e7350cf5a2b4d0a6dcd5da7c6d18ff7f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/deployment-process-first-steps.png"/>T2】</a></p>
+
+<p>您可能想知道，Octopus如何知道特性分支的名称来操作适当的基础设施？并没有。构建服务器通过提示变量传递该信息。当合并的分支值为空时，将跳过删除要素分支数据库步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-prompted-variables.png" class="zoom" data-title=""><img src="../Images/31d3ac2acdfe46e8410ba38855db76b7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/feature-branch-prompted-variables.png"/>T2】</a></p>
+
+<p>您可能已经在runbooks流程的每个截图中看到了下一步:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/get-sql-server-name.png" class="zoom" data-title=""><img src="../Images/47b4b6f93fea2bf8642f0a0ba00feb44.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/get-sql-server-name.png"/>T2】</a></p>
+
+<p>这是必要的，因为该过程会启动和关闭AWS RDS服务器。它运行一个快速CLI脚本来获取要在连接字符串中使用的完整实例名称:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/aws-cli-script-database-instance.png" class="zoom" data-title=""><img src="../Images/98af25331f607cd6204549630793734d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/aws-cli-script-database-instance.png"/>T2】</a></p>
+
+<p>部署流程中接下来的六个步骤是实际的部署。它生成增量脚本，查看这些增量脚本中的特定SQL语句，获得批准，最后部署更改:</p>
+
+<p>【T2 <img src="../Images/2b794f2f4611e9c18174a40b64c6ffb8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/create-approve-deploy-delta-scripts.png"/></p>
+
+<p><code>Check SQL Artifacts for Schema Change Commands</code>是我写的一个<a href="https://samples.octopus.app/app#/Spaces-106/library/steptemplates/ActionTemplates-341?activeTab=step" rel="nofollow">自定义步骤模板</a>。你可以在<a href="https://octopus.com/blog/autoapprove-database-deployments">之前的文章</a>中读到更多关于这个步骤的内容。</p>
+
+<p>你会注意到<strong>生产</strong>的增量脚本正在<strong>暂存</strong>中生成。这不是在<strong>生产</strong>部署中使用的增量脚本。这是为了让DBA了解稍后将部署到<strong>生产</strong>中的内容。在99%的情况下，它对批准非常有效。在增量脚本生成时间和它们实际运行的时间之间存在偏差的风险。但是，总的来说，这种风险很小，漂移量通常也很小。通过批准<strong> Staging </strong>中的所有内容，DBA可以将部署安排到<strong>生产</strong>中，而不必在线。</p>
+
+<p>部署过程的最后步骤处理清理和通知。在每个<strong>阶段</strong>部署之后，会创建一个数据库的新的屏蔽副本。这确保了要素分支始终具有最新的模式更改:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/deployment-process-final-steps.png" class="zoom" data-title=""><img src="../Images/806be2797345d0d1a9a8d6f83f098572.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-06/database-feature-branch-deployments/deployment-process-final-steps.png"/>T2】</a></p>
+
+<h2 id="build-server">构建服务器</h2>
+
+<p>对于静态环境，构建服务器的过程非常简单:</p>
+
+<ol>
+<li>建设</li>
+<li>试验</li>
+<li>推动章鱼展开</li>
+<li>在Octopus部署中创建一个版本</li>
+<li>部署发布</li>
+</ol>
+
+<p>现在构建服务器需要在调用Octopus Deploy之前做出一些决定。它必须知道它是在一个特征分支上，在主分支上，还是刚刚发生了一个合并。触发构建的事件将改变构建服务器发送给Octopus的信息。主要区别在于:</p>
+
+<ul>
+<li>入住<code>Master</code>:          <ul>
+<li>如果合并拉请求，获取特征分支名称，将其作为<em>合并分支</em>值发送给Octopus Deploy。</li>
+<li>将目标环境设置为<strong>暂存</strong>。</li>
+<li>将包版本号设置为标准版本号，比如<code>2020.2.1.{Build Number}</code>。</li>
+<li>将频道名称设置为“默认”。</li>
+</ul>
+</li>
+<li>检入要素分支:          <ul>
+<li>提取特征分支名称，并将其作为<em>特征分支</em>值发送给Octopus Deploy。</li>
+<li>将目标环境设置为<strong>测试</strong>。</li>
+<li>将软件包版本号设置为2020.99.99。-.</li>
+<li>将通道名称设置为“特征分支”。</li>
+</ul>
+</li>
+</ul>
+
+<p>这是我的<a href="https://github.com/OctopusSamples/OctopusTrident/blob/master/.github/workflows/packageredgate.yml" rel="nofollow"> GitHub操作</a>中的PowerShell脚本:</p>
+
+<pre><code class="language-PowerShell">$branchName = ((${env:GITHUB_REF} -replace "refs/heads/", "") -replace "feature/", "") -replace "hotfix/", ""
+Write-Host "$branchName"  
+
+$versionFromFile = Get-Content versionprefix.md
+Write-Host "Found $versionFromFile in versionprefix.md"
+$versionNumber = "$versionfromFile.${env:GITHUB_RUN_NUMBER}"
+
+$channelName = "Default"
+$deployEnvironment = "Staging"
+$mergedBranch = ""
+
+$commitMessage = git log -1 --pretty=oneline
+Write-Host "The commit message is: $commitMessage"
+
+if ($branchName -ne "master")
+{
+    $versionNumber = "2020.99.99.${env:GITHUB_RUN_NUMBER}-$branchName"    
+    $channelName = "Feature Branches"
+    $deployEnvironment = "Test"           
+}
+elseif ($branchName -eq "master" -and $commitMessage -like "*Merge pull request*")
+{          
+    $indexOfSlash = $commitMessage.ToString().IndexOf('/')
+    Write-Host "The index of the slash is $indexOfSlash"
+    $mergedBranch = $commitMessage.SubString($commitMessage.IndexOf("/") + 1)
+    Write-Host "The merged branch before replacement is $mergedBranch"
+    $mergedBranch = ($mergedBranch -replace "feature/", "") -replace "bugfix/", ""          
+    Write-Host "The merged branch is now $mergedBranch"
+}
+
+Write-Host "Setting environment variable PACKAGE_VERSION to: $versionNumber"
+Write-Host "Setting environment variable BRANCH_NAME to: $branchName"
+Write-Host "Setting environment variable CHANNEL_NAME to: $channelName"
+Write-Host "Setting environment variable ENVIRONMENT_NAME to: $deployEnvironment"
+Write-Host "Setting environment variable MERGED_BRANCH to: $mergedBranch"
+
+echo "::set-env name=BRANCH_NAME::$branchName"
+echo "::set-env name=PACKAGE_VERSION::$versionNumber"
+echo "::set-env name=CHANNEL_NAME::$channelName"
+echo "::set-env name=ENVIRONMENT_NAME::$deployEnvironment"
+echo "::set-env name=MERGED_BRANCH::$mergedBranch"
+</code></pre>
+
+<h2 id="conclusion">结论</h2>
+
+<p>为特性分支建立沙箱的概念是我的一个爱好。我在很多地方工作过，但我们没有这样做，这很令人头疼。这不是一项简单的任务，但是通过利用Octopus Deploy中的多个特性，这项任务变得更加容易。我在Octopus Deploy中使用了一些新功能。Runbooks带来了巨大的变化，让事情变得简单多了。但是回想起来，我希望我知道这种方法，因为我知道我可以得到一些工作，即使是在3.x版本的Octopus Deploy上。这将涉及更多的API脚本，但我知道我可以让它工作。</p>
+
+<p>很难相信这其实是一个简单的例子。在本文中，我只介绍了数据库；我没有介绍web服务器或应用服务器。除此之外，我没有涉及涉及多个应用程序的大项目。对于这篇文章，我想把重点放在一件事情上，即数据库。我的想法是，如果我可以解决数据库，其余的应该相当简单。</p>
+
+<p>下次再见，愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

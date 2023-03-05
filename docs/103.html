@@ -1,0 +1,60 @@
+<html>
+<head>
+<title>Calamari: open sourcing Tentacle deployments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>卡拉马里:开源触手部署-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/calamari#2015-09-25">https://octopus.com/blog/calamari#2015-09-25</a></blockquote>
+                        <p>我最近写了关于作为Octopus 3.x 一部分的<a href="http://octopusdeploy.com/blog/deployment-targets-in-octopus-3">新部署目标，我解释说我们将把触手变成一个“壳”:</a></p>
+
+<blockquote>
+  <p>从3.0开始，除了支持轮询和监听模式之外，可以把触手看作SSH的面向Windows的版本。它只知道如何执行PowerShell脚本或传输文件。其他的东西——配置转换的东西，IIS的东西——将是PowerShell脚本，Octopus将确保在部署执行之前存在于Octopus服务器上。</p>
+</blockquote>
+
+<p>这导致了一个合乎逻辑的结论:</p>
+
+<blockquote>
+  <p>既然我们将触手<em>的通信通道</em>与触手<em>的部署引擎</em>分离，我们获得了一个新的可能性:触手在部署期间执行的所有脚本和部署逻辑现在都可以开源</p>
+</blockquote>
+
+<p>在过去的几个月里，实现这一点一直是我们的主要关注点，并且表现为<a href="https://github.com/OctopusDeploy/Calamari"> Calamari </a>，一个开源的、约定驱动的部署运行器:</p>
+
+<p><a href="https://github.com/OctopusDeploy/Calamari"><img src="../Images/000f62ed0c400c61a3e2029abe3942c8.png" alt="Calamari GitHub repository" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2015-04-13_at_11.33.12_am_a8usf5.png"/>T2】</a></p>
+
+<p>从一开始，我们就认为部署管道需要大量的时间投入，并且对团队的运作至关重要。因此，避免供应商锁定非常重要。Octopus一直建立在开放/标准技术上，如NuGet和PowerShell，以尽量减少您对Octopus的依赖——开源Calamari和我们在部署期间使用的所有约定是这一目标的自然发展。</p>
+
+<p>Calamari是一个控制台应用程序，包含许多命令，例如:</p>
+
+<pre><code>Calamari deploy-package --package MyPackage.nupkg --variables Variables.json
+</code></pre>
+
+<p>这个包是一个NuGet包，变量JSON文件如下所示:</p>
+
+<pre><code>{
+    "MyVariableA": "My value A",
+    "MyVariableB": "My value B"
+}
+</code></pre>
+
+<p>部署现在是这样工作的:</p>
+
+<ol>
+<li>Octopus获取包并生成变量文件</li>
+<li>这些被推到触手上</li>
+<li>触手被告知运行一个PowerShell脚本，该脚本只调用Calamari</li>
+<li>卡拉马里负责部署，并终止</li>
+</ol>
+
+<p>现在，Calamari是开源的，它可能有助于回答您在触手上部署期间发生的任何问题。例如，你有没有想过惯例是按照什么顺序运行的？</p>
+
+<p><a href="https://github.com/OctopusDeploy/Calamari/blob/master/source/Calamari/Commands/DeployPackageCommand.cs"><img src="../Images/c5a7d721d9db0eab6d0cc205d4cf0034.png" alt="Conventions" data-original-src="https://i.octopus.com/blog/migrated/Screen_Shot_2015-04-13_at_11.40.15_am_yahww2.png"/>T2】</a></p>
+
+<p>或者你可能一直想知道<a href="https://github.com/OctopusDeploy/Calamari/tree/master/source/Calamari/Integration/Scripting/WindowsPowerShell">触手(现在的卡拉马里)如何调用PowerShell，并传递变量给它</a>？</p>
+
+<p>Calamari是在Apache许可下发布的，我们将继续在公开的环境中开发它。我最喜欢这个架构的一个特点是，你可以派生项目，做出自己的改变，然后告诉你的Octopus 3.0服务器使用你自己的Calamari包。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,41 @@
+<html>
+<head>
+<title>Deep Dive - Azure App Integration and Octopus Accounts - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>深入探讨- Azure应用程序集成和八达通帐户-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/azure-app-integration#2021-07-07">https://octopus.com/blog/azure-app-integration#2021-07-07</a></blockquote>
+                        <p>Octopus Deploy集成了流行的云服务，如<a href="https://aws.amazon.com/" rel="nofollow">亚马逊网络服务(AWS) </a>和<a href="https://azure.microsoft.com/" rel="nofollow">微软的Azure平台</a>，可以轻松安全地部署您的应用程序。与Amazon集成就像添加你的AWS访问密钥和秘密密钥一样简单，然而，Azure需要更多的细节，并且如何设置还不是很明显。这是通过Azure Active Directory (AD)注册的应用程序(或应用程序注册)实现的，但设置起来可能很棘手，因此我们将深入探讨并完成整个过程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-04/azure-app-integration/octopus-accounts.png" class="zoom" data-title=""><img src="../Images/0ad83dd891110e7e0c6f2e3f000a9f10.png" class="img-fluid center" alt="Octopus Accounts" data-original-src="https://i.octopus.com/blog/2018-04/azure-app-integration/octopus-accounts.png"/>T2】</a></p>
+
+<p>Octopus中的Azure帐户需要四个值，用于对Azure进行身份验证并与之安全交互。</p>
+
+<ul>
+<li>Azure订阅ID</li>
+<li>Azure AD租户ID</li>
+<li>Azure AD注册的应用程序ID</li>
+<li>Azure AD注册的应用程序密码/密钥</li>
+</ul>
+
+<p>前三个值是GUIDs，最后一个是密码。这些值可以在Azure门户或通过Powershell找到。就我个人而言，我从来不记得所有的值是在哪里找到的，所以我们录制了一个视频来帮助大家！</p>
+
+<h2 id="octopus-deep-dive">章鱼深潜</h2>
+
+<iframe src="https://www.youtube.com/embed/KnN-ahD6nN4" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="further-reading">进一步阅读</h2>
+
+<p>查看我们的<a href="https://octopus.com/docs/infrastructure/azure"> Azure文档</a>获取更多信息，包括如何<a href="https://octopus.com/docs/infrastructure/azure/creating-an-azure-account/creating-an-azure-service-principal-account">创建Octopus Azure账户</a>的逐步说明以及其他重要问题，如<a href="https://octopus.com/docs/infrastructure/azure/creating-an-azure-account/creating-an-azure-service-principal-account#note-on-least-privilege">安全和许可</a>。</p>
+
+<h2 id="wrap-up">总结</h2>
+
+<p>现在你可以走了。您可以将所有这些值输入到Octopus中，或者在您自己的应用程序中使用它们来与Azure集成。如果你曾经很难添加一个八达通Azure帐户，我希望这有所帮助！如果章鱼的另一部分让你困惑，请在评论中告诉我们，我们会更深入地研究。</p>
+
+<p>不要忘记订阅我们的<a href="https://youtube.com/octopusdeploy" rel="nofollow"> YouTube </a>频道，因为我们会定期添加新视频。愉快的部署！😃</p>
+
+                    
+                    
+</body>
+</html>

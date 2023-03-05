@@ -1,0 +1,127 @@
+<html>
+<head>
+<title>Octopus Workers and Performance - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus工作人员和绩效- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/workers-performance#2022-07-20">https://octopus.com/blog/workers-performance#2022-07-20</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/blogimage-workerperf.png" class="zoom" data-title=""><img src="../Images/4b6e4aaea50afb04640996fa9ce307e0.png" class="img-fluid center" alt="Octopus Workers illustration" data-original-src="https://i.octopus.com/blog/2018-08/blogimage-workerperf.png"/>T2】</a></p>
+
+<p><a href="https://octopus.com/blog/octopus-workers">在上一篇</a>中，我介绍了工人和一些可以用他们做的事情。我也答应给你更多的细节。从那以后，我们在2018.7.0版本中交付了工人，八达通客户已经拿起并开始使用它。现在我又有了几个帖子。</p>
+
+<p>外部工作人员让你将一些部署工作从你的Octopus服务器转移到其他机器上。你可以简单地从安全的角度将工作转移给工人，例如，这样脚本就不会在你的Octopus服务器上运行。但是将工作从服务器上移走还有其他原因。其中之一就是性能。这一次，我将研究在部署期间使用Workers对您的Octopus服务器性能的影响。</p>
+
+<p>现在，在这种情况下，我不得不从经典的警告开始，你的里程可能会有所不同。你的八达通服务器上有很多东西。根据您的设置，您可能将数据库放在同一台机器上，也可能放在其他地方，您可能将日志存储在本地或共享上，Octopus运行系统任务以及您的部署，您的<a href="https://octopus.com/docs/administration/managing-infrastructure/performance#tip-task-logs">部署模式将极大地影响服务器正在进行的</a>工作。在这篇文章中，我将研究部署期间服务器上的CPU、磁盘和网络负载。</p>
+
+<p>我们一直在努力提高Octopus的性能。有时这就是数据库性能。有时，它是寻找我们可以优化或缓存以提高API性能的部分。这篇文章不是关于这些。这是关于当你运行一个部署时轮子何时上路的问题。章鱼无法围绕这些位进行优化。这是部署的实际工作，所以必须完成。但是您可以分配工作量，以获得对您来说最好的结果。</p>
+
+<p>您的Octopus服务器是您的部署基础设施的核心，过载的Octopus服务器会使部署变得缓慢，并使部署者沮丧。然而，使用Workers，您可以有效地将CPU、磁盘和网络负载转移到外部机器，让您的Octopus服务器休息一下，并促进您的部署。</p>
+
+<p>在这篇文章中，我将把一些东西分开，这样你就可以理解工作的各个部分，以及将你的服务器的工作分配给工作机的权衡。为此，我将从您可以看到的角度来运行所有内容。因此，这不是关于我可以在内部测量什么，而是关于你可以在你的机器上观察到什么，以及它如何影响你的服务器和你的部署时间。</p>
+
+<p>为了做到这一点，我不打算用数字或基准来谈论，而只是简单地展示资源监视器中的图表。没有花哨的工具，只是AWS中一个新的Octopus服务器，一个每个人都有的工具，以及对图形上下波动的解释。</p>
+
+<p>下面的案例是玩具示例，旨在展示概念，而不是代表真实的部署模式。但是，如果我可以在这些简单的例子上演示负载削减，想象一下您可能在Octopus实例上获得的负载削减，以及随之而来的部署和可用性方面的改进，以及更健壮的Octopus服务器设置。</p>
+
+<h2 id="case-1-a-simple-script">案例1:一个简单的脚本</h2>
+
+<p>好了，让我们用一个非常简单的部署来热身。在部署时模拟任务的脚本。它休眠10秒钟，然后旋转到10，000次写入日志消息。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/workers-simple-script.png" class="zoom" data-title=""><img src="../Images/f8fb14af2c57cd269435880a19b9848b.png" class="img-fluid center" alt="Script Step" data-original-src="https://i.octopus.com/blog/2018-08/workers-simple-script.png"/></a>T2】</p>
+
+<p>因为这是一个紧密的循环，它会影响CPU因为它写日志，所以会撞到磁盘。我已经将脚本定位于默认的工作池。因此，如果池是空的，它将在Octopus服务器上的内置Worker上运行，如果池包含Worker，它将在外部Worker机器上运行。</p>
+
+<p>当缺省池为空时，该步骤在Octopus服务器上的内置Worker上运行，Octopus服务器上的负载如下图所示。当我将一个Worker放入缺省池中时，该步骤在那个外部Worker上运行，Octopus服务器上的负载看起来就像右下图所示。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/workers-script-graphs.png" class="zoom" data-title=""><img src="../Images/31c555b42735dfbc9a47d8b8cdf76b93.png" class="img-fluid center" alt="Script Step performance" data-original-src="https://i.octopus.com/blog/2018-08/workers-script-graphs.png"/>T2】</a></p>
+
+<p>在我的设置中，数据库和日志存储都在Octopus服务器上，所以CPU上的第一个任务包含一些数据库工作以及规划部署。但是在我的例子中，数据库太小了，所以我忽略它的影响。</p>
+
+<p>在左边，我们看到一个CPU命中结果是调用一个新的<a href="https://github.com/OctopusDeploy/Calamari" rel="nofollow"> Calamari </a>(我们的开源的，基于约定的部署可执行文件)进程的成本。睡眠者将工作与第二个尖峰分开，第二个尖峰主要是<code>for</code>循环。在“磁盘”下，您可以看到用于设置日志等并将日志写入磁盘的尖峰。磁盘图表上的比例让您知道，这个简单的日志写操作并没有给我们带来太多负担。</p>
+
+<p>在右边，当实际工作发生在外部工作机器上时，磁盘活动与以前基本相同:因为，在这个例子中，服务器与日志存储在同一个机器上，这些成本总是在这里被看到。然而，CPU使用率消失了，这表明第一个图中的初始峰值是Calamari调用。有一些网络活动将日志从Worker传输回Octopus服务器，但是这里太小了，看不清楚；您将在后面的示例中看到网络点击。</p>
+
+<p>我们可以用一些额外的基础设施来平衡这里的磁盘命中率:例如，将日志存储在其他地方会将这些成本转移到其他机器上(以网络流量为代价)。</p>
+
+<p>关于成本需要记住的一点是，每个步骤的每个角色都会调用Calamari。因此，如果我将脚本定位为代表包含十个部署目标的角色运行，我们将获得10倍的Calamari调用和10倍的脚本成本。在你的Octopus服务器上的内置工作器上，这加起来，但是如果我们把它卸载到外部工作器上，这几乎是不可察觉的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/workers-script-onbehalf-graphs.png" class="zoom" data-title=""><img src="../Images/e4255baee99003c2f07ad6bb8f404f3c.png" class="img-fluid center" alt="Script Step on behalf performance" data-original-src="https://i.octopus.com/blog/2018-08/workers-script-onbehalf-graphs.png"/>T2】</a></p>
+
+<h2 id="case-2-an-s3-file-upload">案例2:S3文件上传</h2>
+
+<p>最后一个例子显示了一个非常明显的例子，如果有计算工作可以转移到一个工人身上，那么这样做就转移了Octopus服务器的整个CPU开销。但这也暗示了需要做出其他的权衡，正如我们将在本例中看到的，有时服务器会产生计算工作。</p>
+
+<p>在这个例子中，我正在S3上传一个296MB的文件。同样，我将这一步的目标放在了默认的工人池。当该池为空时，它在内置的Worker上运行，并在下面的左侧给出了图形，当该池包含外部Worker时，它在该机器上运行，对Octopus服务器的影响由右侧的图形给出。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/workers-s3-graphs.png" class="zoom" data-title=""><img src="../Images/6d28529e67a43a7e811c979dca620e10.png" class="img-fluid center" alt="S3 Upload" data-original-src="https://i.octopus.com/blog/2018-08/workers-s3-graphs.png"/>T2】</a></p>
+
+<p>在左侧，您可以看到将包推送到AWS S3需要一些CPU成本，而通过网络获取包需要一些网络开销。在此示例中，包已经在服务器上。如果服务器必须首先获得包，我们会看到<a href="https://octopus.com/docs/deployments/packages/transfer-package">额外的网络和磁盘成本</a>。</p>
+
+<p>在右边，整个包仍然必须通过网络出去，所以网络成本是相同的，但有趣的是，将包推送到S3比Octopus将它推送到一个工人那里花费更多的CPU。</p>
+
+<p>当我们构建该包的下一个版本并再次部署该项目时会怎么样呢？在这种情况下，在Octopus服务器上运行内置Worker的成本是一样的；然而，在外部工作器上，我们可以选择不推送整个包，而是计算包的差异并只发送差异。如果我们这样做，我们会得到一个如下图所示的图表。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/workers-s3-package-graphs.png" class="zoom" data-title=""><img src="../Images/6a59b85d2e53da155b3df6c0208b718f.png" class="img-fluid center" alt="S3 upload package options" data-original-src="https://i.octopus.com/blog/2018-08/workers-s3-package-graphs.png"/>T2】</a></p>
+
+<p>对于近300MB的包，有一个新的CPU成本，这是差异的计算，在这种情况下，我们可以看到磁盘上的表现，因为Octopus必须访问包的两个版本来计算差异。在任务日志中，我看到</p>
+
+<pre><code>22:24:14   Verbose  |         Finding earlier packages that have been uploaded to this Tentacle.
+22:24:15   Verbose  |         Found 1 earlier version of bigpackage on this Tentacle
+22:24:15   Verbose  |         - 2018.7.6: C:\Octopus\TestInstance1\Files\bigpackage@S2018.7.6@103E651645EFF14EB4E34C8DA3AC2E6C.zip
+22:24:15   Verbose  |         Process C:\Windows\system32\WindowsPowershell\v1.0\PowerShell.exe in C:\Octopus\TestInstance1\Work\20180806222409-891-383 exited with code 0
+22:24:15   Info     |         Found matching version 2018.7.6: C:\Octopus\Packages\bigpackage\bigpackage.2018.7.6.zip
+22:24:39   Info     |         Delta for package bigpackage v2018.7.7 successfully uploaded and applied.
+                    |       
+                    |         Success: Building delta for bigpackage v2018.7.7 (296.824 MB)
+22:24:15   Info     |           Using package C:\Octopus\Packages\bigpackage\bigpackage.2018.7.6.zip with hash 68dc6388f3f467eeeec802c8ad6e8f207309c982 for creating delta.
+22:24:15   Verbose  |           Building signature file: C:\Octopus\OctopusServer\PackageCache\bigpackage.2018.7.6.zip.octosig
+22:24:15   Verbose  |           - Using nearest package: C:\Octopus\Packages\bigpackage\bigpackage.2018.7.6.zip
+22:24:18   Verbose  |           Building delta file: C:\Octopus\OctopusServer\PackageCache\bigpackage.2018.7.6_68DC6388_to_2018.7.7_19AF67C0.octodelta
+22:24:18   Verbose  |           - Using package: C:\Octopus\Packages\bigpackage\bigpackage.2018.7.7.zip.
+22:24:18   Verbose  |           - Using signature: C:\Octopus\OctopusServer\PackageCache\bigpackage.2018.7.6.zip.octosig
+22:24:32   Info     |           Original package was 296.824 MB, delta file is 109.195 MB (63.21% size reduction).
+</code></pre>
+
+<p>因此，在这种情况下，我得到了63.21%的不错的减少，但如果这两个包更相似，计算差异的成本回报会更好(有趣的是，这两个包是Octopus Server版本2018.7.7和2018.7.8，所以我预计它们会更相似——这只是显示了我们在每个版本中塞进了多少工作)。</p>
+
+<p>触手还可以选择直接获取包，而不是把包放在服务器上。我们正在添加新的特性来允许每步多个包，所以我们正在修改它在UI中的外观，但是对于这个测试，我设置了<a href="https://octopus.com/docs/projects/variables/system-variables"> Octopus系统变量</a> <code>Octopus.Action.Package.DownloadOnTentacle</code>。在这种情况下，我们的Octopus服务器几乎不做任何事情(上图右侧),它只是询问工人是否完成并写入日志的成本。</p>
+
+<h2 id="case-3-an-azure-web-app-deploy">案例Azure Web应用部署</h2>
+
+<p>Azure部署都需要一个工人。所有的Azure步骤要么使用WebDeploy，要么使用Azure CmdLets，所以要么是内置的，要么是外部的。</p>
+
+<p>为了这个测试，我从Github克隆了一个公共的ASP.NET核心项目，做了一些小的修改以允许Octopus变量替换，使用<code>dotnet publish</code>和<code>octo pack</code>构建和打包，并使用我们的内置步骤部署为一个Web应用程序。最终的包非常小，只有21MB多一点。</p>
+
+<p>同样，该步骤的目标是在默认的工作池中运行。因此，当池为空时，它在Octopus服务器上的内置Worker上运行，并在下面的左侧给出图形，当池包含Worker时，该步骤在该机器上运行，对Octopus服务器的影响显示在右侧的图形中。</p>
+
+<p>【T2 <img src="../Images/9468e2e205a8dbabb77424fbd694a2ea.png" class="img-fluid center" alt="Azure Web App deployment" data-original-src="https://i.octopus.com/blog/2018-08/workers-azure-graphs.png"/></p>
+
+<p>左边，CPU成本是开始部署，调用Calamari，解包，做变量替换，和Azure协商需要上传什么文件。磁盘成本是出于同样的原因，网络成本是与Azure的协商和将数据推送到云。这是一个非常小的封装，因此所有这些成本都会随着封装尺寸的增加而增加。如果你正在把100兆以上的包推给Azure，通过预部署和后部署脚本、配置转换、变量替换等等。，然后你会在这里看到一个更大的点击。</p>
+
+<p>在右边，当该步骤在外部工作器上运行时，Octopus服务器上唯一的开销是少量的网络流量和写入一个1.1MB的日志文件。注意，在这种情况下，磁盘图形上的刻度缩小了10倍。同样，通过选择将包直接下载到Worker和外部日志存储，可以进一步降低这些成本。</p>
+
+<h2 id="case-4-all-together">案例4:全部在一起</h2>
+
+<p>我已经描述了三个漂亮的玩具部署示例，但是每一个都涉及一些必须完成的内在工作，以使部署成功。所以没有理由优化掉这些成本，但是这些成本是可以转移的。下图显示了所有三个项目同时运行时Octopus服务器的成本。左边是使用内置工作人员，右边是外部工作人员执行实际的部署工作。请注意磁盘图表上的比例——服务器左侧是右侧的10倍。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-08/workers-together-compare-graphs.png" class="zoom" data-title=""><img src="../Images/05b0b823ff6d8a67c2d402f45388e010.png" class="img-fluid center" alt="Three Deployments" data-original-src="https://i.octopus.com/blog/2018-08/workers-together-compare-graphs.png"/>T2】</a></p>
+
+<p>现在，左边的图表并不是该服务器有史以来最艰难的一天，但是如果这还没有接近您的Octopus实例上的工作负载，那么您可能可以通过将CPU工作、磁盘命中和网络流量从您的Octopus服务器上移走来释放更多的资源。一旦工作负载变得更大，它也会开始对总部署时间产生影响，因为并行部署会争夺资源，因此转移到工作人员可能会加快您的部署，并将工作转移到服务器之外。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，通过三个简单的部署，我挑选了部署在你的Octopus服务器上的各种成本。这些例子并不大也不真实，所以如果我可以在这些玩具例子中减少负载，你应该可以在真实的工作负载中做更多的事情。我希望它们让您对部署中的一些活动部分有了更多的了解，并帮助您理解如何为使用Workers 的<a href="https://octopus.com/docs/getting-started/best-practices/worker-configuration">步骤优化部署。有很多选择，例如，从从服务器部署，到只推送包差异，到将整个包处理转移到工作器——也许差异足够小，以至于在服务器上花费CPU将在网络流量上取得巨大胜利，或者也许你可以将你的包feeds、工作器和Azure目标放在一起，以便证明是最好的网络选项。工作人员只是为您提供如何设置部署以及如何分配工作的选项。</a></p>
+
+<p>我们也有<a href="https://octopus.com/docs/administration/managing-infrastructure/performance">性能文档</a>来帮助你优化你的八达通服务器。</p>
+
+<p>记住，工人没有什么特别的。它只是一台触须或SSH机器，因此您可以获得您拥有的任何备用计算资源——可能是工作不多的现有触须虚拟机，可能是本地机器，可能是具有备用周期的开发或测试箱——或者您可以仅为部署负载提供特殊的工作人员基础架构。</p>
+
+<p>下一次，我将仔细观察每个目标都连接了默认工作人员池的PaaS目标，这样您就可以让您的工作人员靠近您的目标，甚至可以用防火墙隔离您的基础架构，以便工作人员从安全的网络轮询服务器，并且只有工作人员有权部署到目标。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

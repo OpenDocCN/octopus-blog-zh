@@ -1,0 +1,268 @@
+<html>
+<head>
+<title>Mapping manual deployments with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus Deploy映射手动部署- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/mapping-manual-deployments#2022-09-20">https://octopus.com/blog/mapping-manual-deployments#2022-09-20</a></blockquote>
+                        <p>虽然Octopus Deploy使复杂的部署自动化变得简单，但您可能仍在运行手动部署。我们与拥有遗留应用程序的客户交谈过，这些遗留应用程序在发布过程中需要特殊的步骤，或者拥有深奥的技术，使得很难确定从哪里开始自动化之旅。</p>
+
+<p>在这篇文章中，我解释了如何使用手动干预步骤对您的手动部署进行建模，以及这给您的发布过程带来的好处。</p>
+
+<p>如果您是Octopus的新手，您可能会发现这是从您当前的部署过程向完全自动化推进的一种实用方法。现有客户可能会发现这种技术带来了他们已经从自动部署到手动发布中获得的熟悉的好处。</p>
+
+<h2 id="benefits-of-using-octopus-for-manual-deployments">使用Octopus进行手动部署的优势</h2>
+
+<p>使用Octopus进行手动部署有很多好处。这些超出了您从任务管理应用程序中可能获得的好处。您可以:</p>
+
+<ul>
+<li>使用生命周期来跟踪跨多个环境的部署</li>
+<li>提供完成每个步骤的说明</li>
+<li>确保授权团队成员完成每个步骤</li>
+<li>提高部署的可靠性和可追溯性</li>
+<li>用更少的努力满足审计要求</li>
+</ul>
+
+<p>为了进一步的好处，您还可以自动执行手动部署中的一些步骤。</p>
+
+<h2 id="modeling-your-manual-deployments">为您的手动部署建模</h2>
+
+<p>您需要完成4个步骤来模拟您的手动部署:</p>
+
+<ol>
+<li>创建清单</li>
+<li>为您的团队建模</li>
+<li>定义生命周期</li>
+<li>将您的清单转变为部署流程</li>
+</ol>
+
+<p>第一步是帮助设计您稍后将使用的流程的书面练习。其他步骤在Octopus中完成，以便根据您在设计阶段发现的步骤对您的部署进行建模。</p>
+
+<h3 id="create-a-checklist">创建清单</h3>
+
+<p>当您有一个手动发布过程时，现有的文档或清单通常描述了安装软件的步骤。您当前的文档可能还会详细说明谁可以执行每个操作。在用Octopus重新创建之前，有必要花一些时间来细化这些阶段，以确定谁做什么，以什么顺序做。</p>
+
+<p>如果你的文档很长，试着用提供自然任务列表的标题来分割它。</p>
+
+<p>您最终应该会看到类似于以下清单的内容:</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>步骤</th>
+<th>标题</th>
+<th>谁</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>一</td>
+<td>备份数据库</td>
+<td>工商管理学博士(Doctor of Business Administration)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>升级数据库</td>
+<td>工商管理学博士(Doctor of Business Administration)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>将新应用程序复制到服务器上的临时文件夹中</td>
+<td>工作</td>
+</tr>
+<tr>
+<td>四</td>
+<td>删除临时文件夹中的配置文件</td>
+<td>工作</td>
+</tr>
+<tr>
+<td>5</td>
+<td>将实时配置文件复制到临时文件夹中</td>
+<td>工作</td>
+</tr>
+<tr>
+<td>6</td>
+<td>将任何新设置添加到配置文件中</td>
+<td>工作</td>
+</tr>
+<tr>
+<td>七</td>
+<td>将临时文件夹复制到活动文件夹中</td>
+<td>工作</td>
+</tr>
+<tr>
+<td>8</td>
+<td>按照预期检查应用程序负载</td>
+<td>试验</td>
+</tr>
+</tbody>
+</table>
+
+<p>如果您没有现成的核对表，您可能会发现创建和使用核对表可以确保所有步骤都按正确的顺序进行，从而提高部署的可靠性。</p>
+
+<p>现在，您可以将它转移到Octopus中，以获得工作流管理和跟踪的好处。</p>
+
+<h3 id="model-your-teams">为您的团队建模</h3>
+
+<p>示例清单包括负责部署的<em>列中的3个团队:DBA、Ops和Test。当您在Octopus中创建流程时，您可以将每个步骤分配给一个负责团队<em>。</em></em></p>
+
+<p>按照以下步骤在Octopus中创建每个团队:</p>
+
+<ol>
+<li>导航至<strong>配置</strong>然后<strong>团队</strong>并选择<strong>添加团队</strong>。</li>
+<li>输入<strong>新团队名称</strong>，例如<code>DBA Team</code>，选择<strong>保存</strong>。</li>
+<li>打开<strong>用户角色</strong>选项卡，选择<strong>包含用户角色</strong>。</li>
+<li>从列表中选择<strong>项目部署者</strong>，选择<strong>定义范围</strong>。</li>
+<li>在<strong>选择项目组</strong>下选择<strong>默认项目组</strong>，点击<strong>应用</strong>，最后<strong>保存</strong>。</li>
+</ol>
+
+<p><strong>项目部署者</strong>角色授予用户所有项目贡献者权限，此外还有:部署版本和执行操作手册。</p>
+
+
+<p>您可以通过选择<strong>添加成员</strong>选项来添加团队成员。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-deployment-teams.jpg" class="zoom" data-title=""> T38 </a></p>
+
+<h3 id="define-a-lifecycle">定义生命周期</h3>
+
+<p><a href="https://octopus.com/docs/releases/lifecycles">生命周期</a>让你控制你的软件版本在你的环境之间升级的方式。对于手动部署，您可以使用生命周期来控制升级的顺序，例如，如果某个版本的软件没有首先部署到<em>测试</em>环境中，就可以防止它被部署到<em>生产</em>环境中。</p>
+
+<p>您需要首先定义环境，然后使用生命周期来设置发布在环境中流动的顺序。</p>
+
+<p>您可以通过以下步骤添加环境:</p>
+
+<ol>
+<li>导航至<strong>基础设施</strong>然后<strong>环境</strong>并选择<strong>添加环境</strong>。</li>
+<li>输入一个<strong>新环境名</strong>，例如<code>Test</code>，点击<strong>保存</strong>。</li>
+</ol>
+
+<p>您通常将部署目标添加到新环境中，但是您可以跳过这一步，直到您需要执行某种形式的自动化。</p>
+
+
+<p>添加环境后，您可以创建一个生命周期，并将环境添加为<em>阶段</em>:</p>
+
+<ol>
+<li>导航到<strong>库</strong>然后<strong>生命周期</strong>并选择<strong>添加生命周期</strong>。</li>
+<li>输入生命周期的<strong>名称</strong>，例如<code>Manual Deployment Lifecycle</code>。</li>
+<li>在<strong>阶段</strong>下，选择<strong>添加阶段</strong>添加每个环境。</li>
+<li>添加完阶段后，选择<strong>保存</strong>。</li>
+</ol>
+
+<p>您的完整生命周期应该包含每个环境的一个阶段，如下所示。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-lifecycles.jpg" class="zoom" data-title=""><img src="../Images/6d61ff562d76867bd4f288691551c745.png" class="img-fluid center" alt="A manual deployment lifecycle with a test phase and a live phase" data-original-src="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-lifecycles.jpg"/>T2】</a></p>
+
+<h3 id="turn-your-checklist-into-a-deployment-process">将您的清单转变为部署流程</h3>
+
+<p>现在您的团队、环境和生命周期已经配置好了，您可以使用它们来定义您的手动部署过程。该流程存储在Octopus Deploy中的一个<em>项目</em>中，因此下一步是创建一个新项目。为此，请按照下列步骤操作:</p>
+
+<ol>
+<li>导航到<strong>项目</strong>并选择<strong>添加项目</strong>。</li>
+<li>添加一个<strong>新项目名称</strong>，如<code>Manual Deployment</code>。</li>
+<li>选择要添加新项目的<strong>项目组</strong>，例如“默认项目组”。</li>
+<li>选择<strong>生命周期</strong>，例如您之前创建的“手动部署生命周期”，点击<strong>保存</strong>。</li>
+</ol>
+
+<p>您现在可以看到您的项目列在<strong>默认项目组</strong>下。您还可以在仪表板上看到该项目。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-project-dashboard.jpg" class="zoom" data-title=""><img src="../Images/e2806aa5acb1afbc5a6d28e5a7d9f21c.png" class="img-fluid center" alt="The manual deployment project listed on the dashboard" data-original-src="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-project-dashboard.jpg"/>T2】</a></p>
+
+<p>您现在已经准备好添加步骤的所有资源，所以导航到<strong>项目</strong>，然后<strong>手动部署</strong>，然后<strong>流程</strong>开始。</p>
+
+<p>您可以为每个清单项目添加一个步骤，以创建一个驱动您的手动部署的流程。对列表中的每项任务重复以下过程。</p>
+
+<ol>
+<li>点击<strong>添加步骤</strong>，使用搜索词<code>Manual Intervention</code>过滤步骤模板。</li>
+<li>在<strong>需要手动干预的</strong>步骤上点击<strong>添加</strong>，并将你的检查表中的标题输入<strong>步骤名称</strong>，例如<code>Backup the database</code>。</li>
+<li>如果你有这个步骤的文档，你可以把它添加到<strong>指令</strong>字段，它使用markdown格式。</li>
+<li>使用<strong>责任团队</strong>下的列表选择正确的团队，例如“DBA团队”并点击<strong>保存</strong>完成步骤配置。</li>
+</ol>
+
+<p>您可能希望调整阻止部署的默认选项，以防止同时发布。在<strong>阻止部署</strong>设置下，选择<strong>防止其他部署等待干预</strong>。</p>
+
+
+<p>在您添加您的步骤之后，导航到<strong>项目</strong>、<strong>手工部署</strong>，然后<strong>流程</strong>并查看流程概述，它应该看起来像这个例子。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-deployment-process.jpg" class="zoom" data-title=""><img src="../Images/d9098bcd7f2f9a38791a654af6db36d6.png" class="img-fluid center" alt="The process shows the checklist steps and the manual deployment lifecycle" data-original-src="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-deployment-process.jpg"/>T2】</a></p>
+
+<h2 id="using-the-process-to-track-a-release">使用流程跟踪发布</h2>
+
+<p>虽然您没有要部署的包，但是您仍然可以使用Octopus中的一个发行版来跟踪部署。</p>
+
+<ol>
+<li>导航到<strong>项目</strong>，然后<strong>手动部署</strong>，然后<strong>流程</strong>并选择<strong>创建发布</strong>。</li>
+<li>输入一个<strong>版本</strong>，您可以输入您正在部署的应用的版本或内部版本号，然后点击<strong>保存</strong>。</li>
+</ol>
+
+<p>现在，您可以跟踪每个环境的手动部署。如果按照您之前配置的生命周期的控制，发布首先被部署到<em>测试</em>环境中，那么发布只能进行到<em>活动</em>环境中。</p>
+
+<ol>
+<li>从新版本的发布屏幕中，选择<strong>部署以测试</strong>。</li>
+<li>将出现确认屏幕，查看信息并选择<strong>部署</strong>。</li>
+</ol>
+
+<p>为发布创建了部署，并且第一个手动干预步骤<strong>备份数据库</strong>，已经准备好由DBA团队的成员来执行。发布有一个手动干预图标，向您显示它正在等待一个团队成员来拾取它。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-intervention-needed.jpg" class="zoom" data-title=""><img src="../Images/0822ce4b18e37852826f3f3c11f5a96e.png" class="img-fluid center" alt="The Octopus dashboard with an orange eye icon that indicates a manual intervention is required" data-original-src="https://i.octopus.com/blog/2022-10/mapping-manual-deployments/manual-intervention-needed.jpg"/>【T37】T2】</a></p>
+
+<p>只有DBA团队的成员可以给自己分配<strong>备份数据库</strong>任务。他们通过点击仪表板上的发布并选择<strong>分配给我</strong>来完成此操作。</p>
+
+<p>手动部署的每个步骤的流程是:</p>
+
+<ol>
+<li>在步骤上选择<strong>分配给我</strong>。</li>
+<li>使用任务摘要中的步骤说明来完成该步骤。</li>
+<li>在<strong>注释</strong>字段中输入任何注释、日志或手动步骤的输出。</li>
+<li>选择<strong>继续</strong>完成该步骤。</li>
+</ol>
+
+<p>团队成员完成一个步骤后，下一个步骤就可供相关团队成员使用。</p>
+
+<p>任务日志记录了步骤完成的日期和时间、完成者以及他们输入的任何注释。</p>
+
+<pre><code class="language-no-highlight">                    |   == Success: Step 1: Backup the database ==
+15:13:26   Verbose  |     Backup the database completed
+13:21:28   Verbose  |     Resuming after completion
+13:21:28   Info     |     Submitted by: Sarah (DBA) at 2022-03-03T13:21:24.3250260+00:00
+...
+
+...
+                    |   == Success: Step 8: Check the application loads as expected ==
+13:25:53   Verbose  |     Check the application loads as expected completed
+13:27:33   Verbose  |     Resuming after completion
+13:27:33   Info     |     Submitted by: Tina (Test) at 2022-03-03T13:27:25.7892278+00:00
+13:27:33   Info     |     Notes: 42 passed
+                    |     0 failed
+                    |     PASS
+</code></pre>
+
+<p>第一次部署后，您可能会决定调整流程。当您创建一个版本时，会对该流程进行快照，以确保该流程在所有部署中保持一致。如果您对流程进行了任何更改，要运行新流程，请创建新版本。</p>
+
+<h2 id="look-for-opportunities-to-automate">寻找自动化的机会</h2>
+
+<p>当您第一次开始规划您的手动部署过程时，自动化可能不是您的目标。然而，您现在有了自动化的起点，并且可以回顾这些步骤，看看您是否可以通过这些成熟度级别来推进它们:</p>
+
+<ol>
+<li>手动步骤</li>
+<li>可以手动运行的脚本</li>
+<li>自动运行并手动检查的脚本化步骤</li>
+<li>自动运行的脚本化步骤</li>
+</ol>
+
+<p>例如，数据库备份当前是手动执行的，但是您可以更新此步骤的指令，以包括运行备份的脚本。尽管脚本仍将手动运行，但每次备份更有可能以相同的方式完成。</p>
+
+<p>在手动执行脚本指令后，您可以将该脚本移动到新的自动化步骤中。现有的手动干预步骤可以成为自动化按预期工作的“检查”,当您对自动化有信心时，您可以完全删除手动步骤。</p>
+
+<p>您可能会发现现有的步骤模板将有助于您的自动化；例如，有用于在AWS、Azure和SQL Server上备份SQL数据库的步骤模板。导航到<strong>库</strong>、<strong>步骤模板</strong>、<strong>浏览库</strong>可以找到步骤模板。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>现在，您可以在Octopus Deploy中映射手动部署，并了解这样做的一些好处。您可以使用Octopus的流程控制和跟踪来引入或改进实用部署的十大支柱中的几个<a href="https://octopus.com/blog/ten-pillars-of-pragmatic-deployments"/>，因为您的部署将更加可重复、可见、可审计、标准化和协调。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

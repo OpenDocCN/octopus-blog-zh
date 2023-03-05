@@ -1,0 +1,308 @@
+<html>
+<head>
+<title>Deploying to Azure with GitHub Actions and Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用GitHub Actions和Octopus - Octopus Deploy部署到Azure</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-to-azure-with-github-actions-and-octopus#2022-12-14">https://octopus.com/blog/deploying-to-azure-with-github-actions-and-octopus#2022-12-14</a></blockquote>
+                        <p>GitHub Actions是一个持续集成和持续交付(CI/CD)工具，它使用自动化操作来部署您的代码。如果您将代码存储在GitHub中，GitHub Actions会用CI/CD功能增强每个GitHub存储库，从而简化部署。</p>
+
+<p>许多开发人员希望有一种简单的方法来入门，而不需要臃肿的企业工具，GitHub Actions满足了这种需求。</p>
+
+<p>在这篇文章中，我将向您展示如何开始使用GitHub Actions，以及如何使用Octopus将一个示例web应用程序部署到Azure。</p>
+
+<h2 id="before-you-start">开始之前</h2>
+
+<p>要完成这篇文章中的步骤，你需要:</p>
+
+
+
+<p>部署流程从GitHub开始。GitHub托管web应用程序代码。GitHub Actions自动检测代码库的变化，构建代码，并将Docker映像部署到Docker Hub。Octopus Deploy在编排步骤中使用这个映像将web应用程序部署到Azure。</p>
+
+<p>这个过程的第一步是分叉<a href="https://GitHub.com/OctopusSamples/RandomQuotes-JS" rel="nofollow">随机报价库</a>。Random Quotes是一个简单的web应用程序，它生成随机的历史报价，以展示GitHub Actions的功能。</p>
+
+<p>接下来，您需要设置GitHub动作来自动化构建、推送和部署过程。为此，您需要从Docker和Octopus中检索一些凭证。</p>
+
+<p>转到<strong> Docker Hub账户</strong>，然后是<strong>账户设置</strong>，然后是<strong>安全</strong>，创建一个新的访问令牌。请确保保存此令牌，因为您只能查看一次。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/docker-token.png" class="zoom" data-title="Docker Token"><img src="../Images/0ec0b9db9291f9de1f5204e8a02b1d7d.png" class="img-fluid center" alt="Docker Token" title="Docker Token" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/docker-token.png"/>T2】</a></p>
+
+<p>转到你的Octopus实例，然后<strong>配置文件</strong>，然后<strong>我的API密匙</strong>并创建一个API密匙。保存该键值。记下你的八达通服务器网址。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/octopus-api-key.png" class="zoom" data-title="Octopus API key"><img src="../Images/453cc9d00c529a593c0799bef260b1f9.png" class="img-fluid center" alt="Octopus API key" title="Octopus API key" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/octopus-api-key.png"/>T2】</a></p>
+
+<p>在你的分叉随机报价存储库中，进入<strong>设置</strong>然后<strong>秘密、</strong>然后<strong>动作</strong>，添加以下存储库秘密:</p>
+
+<pre><code>DOCKER_HUB_ACCESS_TOKEN
+DOCKER_HUB_USERNAME
+OCTOPUS_APIKEY
+OCTOPUS_SERVER
+</code></pre>
+
+<p>导航到。GitHub/workflows，您可以在其中看到node.yml文件。这个文件指导GitHub如何部署代码。用以下代码替换文件的内容:</p>
+
+<pre><code>name: deploytoazure
+
+on:
+  push:
+    branches: [ master ]
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check Out Repo 
+        uses: actions/checkout@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          context: ./
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/randomquotes-js:latest
+</code></pre>
+
+<p>这段代码在每次新的push to main时构建代码并将其作为Docker映像推送到Docker Hub。转到<strong> GitHub动作</strong>选项卡查看步骤。</p>
+
+<p>【T2 <img src="../Images/17e4eb34e48667fd5837de706e0b5860.png" class="img-fluid center" alt="GitHub Success Initial" title="Github Success Initial" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/github-success-initial.png"/></p>
+
+<p>构建完成后，导航到<a href="https://hub.docker.com/" rel="nofollow"> Docker Hub </a>查看图像。</p>
+
+<h2 id="configuring-an-azure-account">配置Azure帐户</h2>
+
+<p>您需要配置一个Azure帐户和web应用程序作为Octopus部署的目标。其他目标也是可能的，例如AWS或local。</p>
+
+<p>接下来，通过导航到<a href="https://portal.azure.com/" rel="nofollow"> Azure门户</a>，在Azure中创建一个帐户。</p>
+
+<h3 id="create-service-principal-account-in-azure">使用Azure门户创建Azure服务主体</h3>
+
+<ol>
+<li>在Azure门户中，打开菜单<a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/menu.png" class="zoom" data-title=""> <img src="../Images/ae52612e55ef8f899534bc9fe0e12c9b.png" class="img-fluid center" alt="hamburger menu" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/menu.png"/> </a>并导航到<strong> Azure Active Directory，</strong>然后是<strong>属性</strong>，并从<strong>租户ID </strong>字段中复制值。这是你的房客身份证。</li>
+<li>接下来你需要你的<strong>应用ID </strong>。</li>
+</ol>
+
+<ul>
+<li>如果您创建了一个AAD注册的应用程序，导航到<strong> Azure Active Directory、</strong>然后<strong>应用程序注册</strong>，点击<strong>查看所有应用程序</strong>，选择应用程序并复制<strong>应用程序ID </strong>。请注意，Azure UI默认为<strong>自有应用</strong>标签。点击<strong>所有应用</strong>选项卡查看所有应用注册。</li>
+<li>如果您尚未创建注册的应用程序，请导航至<strong> Azure Active Directory、</strong>然后<strong>应用程序注册</strong>，点击<strong>新注册</strong>并添加您的应用程序的详细信息，然后点击<strong>保存</strong>。记下<strong>应用ID </strong>。</li>
+</ul>
+
+<ol>
+<li>通过导航到<strong>证书&amp;机密、</strong>然后<strong>证书&amp;机密</strong>来生成一次性密码。添加新的<strong>秘密</strong>，输入描述，点击<strong>保存</strong>。记下显示的应用程序密码，以便在Octopus中使用。如果您不想接受默认的密码一年到期，您可以更改到期日期。</li>
+</ol>
+
+<p>您现在拥有以下内容:</p>
+
+<ul>
+<li><strong>租户ID </strong></li>
+<li><strong>应用ID </strong></li>
+<li><strong>应用程序密码/秘密</strong></li>
+</ul>
+
+<p>现在，您可以<a href="#add-service-principal-account">在八达通</a>中添加服务主账户。</p>
+
+<p>接下来，您需要配置您的资源权限。</p>
+
+<h3 id="resource-permissions">资源权限</h3>
+
+<p>资源权限确保您注册的应用程序有权使用您的Azure资源。</p>
+
+<ol>
+<li>在Azure门户中，导航到<strong>资源组</strong>并选择您希望注册的应用程序访问的资源组。</li>
+<li>接下来，点击<strong>访问控制(IAM) </strong>选项。在<strong>角色分配</strong>下，如果你的应用没有列出，点击<strong>添加角色分配</strong>。选择适当的角色(<strong>贡献者</strong>是一个常见选项)，并搜索您的新应用程序名称。从搜索结果中选择它，然后单击<strong>保存</strong>。</li>
+</ol>
+
+<p>接下来，您将设置一个Azure web应用程序并配置其属性。</p>
+
+<h3 id="web-application-setup">Web应用程序设置</h3>
+
+<ol>
+<li>如果一个资源组不存在，通过转到<strong>主页</strong>，然后<strong>资源组</strong>，然后<strong>创建</strong>来创建一个。创建之后，记下资源组的Azure订阅ID。</li>
+<li>在您的<strong>资源组</strong>中，点击<strong>创建</strong>，然后点击<strong> Web App </strong></li>
+<li>对于发布设置，选择Docker容器。</li>
+<li>对于操作系统，选择Linux。</li>
+<li>记下你的Azure应用名称。这将是您的web应用程序的地址:<code>[webapp-name].azurewebsites.net</code></li>
+<li>设置应用程序时，请注意应用程序服务计划和资源组。</li>
+</ol>
+
+<p>在您的Octopus实例中，进入<strong>库</strong>，然后进入<strong>外部提要</strong>，通过输入您的Docker凭证添加Docker容器注册表提要。点击<strong>保存并测试</strong>确认连接。</p>
+
+<h3 id="add-service-principal-account">在八达通上加入服务主账户</h3>
+
+<p>使用以下值，您现在可以将您的帐户添加到Octopus:</p>
+
+<ul>
+<li>应用程序ID</li>
+<li>租户ID</li>
+<li>应用程序密码/密钥</li>
+</ul>
+
+<ol>
+<li>导航至<strong>基础设施、</strong>然后是<strong>账户</strong>。</li>
+<li>选择<strong>添加账户</strong>，然后选择<strong> Azure订阅</strong>。</li>
+<li>在Octopus中给帐户起一个你想要的名字。</li>
+<li>给账户一个描述。</li>
+<li>添加您的Azure订阅ID。这可以在Azure门户的<strong>订阅</strong>下找到。</li>
+<li>添加<strong>应用ID </strong>、<strong>租户ID </strong>和<strong>应用密码/关键字</strong>。</li>
+</ol>
+
+<p>点击<strong>保存并测试</strong>确认账户可以与Azure交互。Octopus然后尝试使用帐户凭证来访问Azure资源管理(ARM) API，并列出该订阅中的资源组。您可能需要将目标Azure数据中心的IP地址列入白名单。请参见<a href="https://octopus.com/docs/deployments/azure">通过防火墙部署到Azure】了解更多详细信息。</a></p>
+
+<p>新创建的服务主体可能需要几分钟才能通过凭据测试。如果您已经仔细检查了您的凭据值，请等待15分钟，然后重试。</p>
+
+
+<h2 id="adding-deployment-targets">添加部署目标</h2>
+
+<p>使用Octopus，您可以将软件部署到Windows服务器、Linux服务器、Microsoft Azure、AWS、Kubernetes集群、云区域或离线软件包。无论您在哪里部署软件，这些机器和服务都是您的部署目标。Octopus将您的部署目标(您部署软件的虚拟机、服务器和服务)组织到环境中。</p>
+
+<ol>
+<li>转到<strong>基础设施、</strong>然后是<strong>部署目标</strong>。</li>
+<li>选择一个Azure Web应用。</li>
+<li>输入显示名称。</li>
+<li>填写<strong>环境</strong>和<strong>目标角色</strong>。</li>
+<li>选择之前创建的Azure帐户和web应用。</li>
+</ol>
+
+<h2 id="creating-the-project-environment">创建项目环境</h2>
+
+<p>通过导航到<strong>项目、</strong>然后<strong>添加项目</strong>来创建项目。这些步骤假设一个名为<code>docker</code>的项目。</p>
+
+<p>通过转到<strong>基础设施</strong>，然后<strong>环境</strong>，然后<strong>添加环境</strong>，添加一个名为<code>Production</code>的环境。</p>
+
+<p>导航到您创建的项目。在<strong>变量</strong>下，添加以下变量及其值:</p>
+
+<ul>
+<li><code>app-service-plan</code></li>
+<li><code>resource-group</code></li>
+<li><code>webapp-name</code></li>
+</ul>
+
+<p>在流程步骤中，添加一个Azure脚本步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/azure-script.png" class="zoom" data-title="Azure script"><img src="../Images/0b4c330ce4d302c0dc462292a050221b.png" class="img-fluid center" alt="Azure script" title="Azure script" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/azure-script.png"/>T2】</a></p>
+
+<p>添加您之前配置的Azure帐户，并将以下代码复制到脚本步骤中:</p>
+
+<pre><code> $pi = $OctopusParameters["Octopus.Action.Package[randomquotes-js].PackageId"]
+ $pv = $OctopusParameters["Octopus.Action.Package[randomquotes-js].PackageVersion"]
+ $dockerImage = "${pi}:${pv}"
+ $ImageName = $OctopusParameters["Octopus.Action.Package[randomquotes-js].Image"]
+ $RegistryUrl = $OctopusParameters["Octopus.Action.Package[randomquotes-js].Registry"]
+
+ az webapp create --resource-group $OctopusParameters["resource-group"] --plan $OctopusParameters["app-service-plan"] --name $OctopusParameters["webapp-name"] --deployment-container-image-name $dockerImage
+
+ az webapp config container set --name $OctopusParameters["webapp-name"] --resource-group $OctopusParameters["resource-group"] --docker-custom-image-name $ImageName --docker-registry-server-url $RegistryUrl
+</code></pre>
+
+<p>通过导航到Docker提要并搜索Random Quotes包，在脚本步骤下添加一个引用包。勾选<strong>不获取包</strong>引用脚本中的包。点击<strong>确定</strong>。点击<strong>保存</strong>保存工艺步骤。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/referenced-package.png" class="zoom" data-title="Referenced package"><img src="../Images/25cca2aebffa94965e4df302f1de240b.png" class="img-fluid center" alt="Referenced package" title="Referenced package" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/referenced-package.png"/>T2】</a></p>
+
+<p>您希望让GitHub Actions自动构建Docker映像，将其推送到Docker Hub，创建一个发布，并在GitHub代码中部署它。每次提交main时都会进行更新。将node.yml更新为以下内容:</p>
+
+<pre><code>name: deploytoazure
+
+on:
+  push:
+    branches: [ master ]
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Octopus CLI
+        uses: OctopusDeploy/install-octopus-cli-action@v1.1.1
+        with:
+          version: latest
+
+      - name: Check Out Repo 
+        uses: actions/checkout@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          context: ./
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/randomquotes-js:latest
+
+      - name: sleep
+        run: sleep 60
+
+      - name: create Octopus release
+        run: octo create-release --project docker --version 0.0.i --server=${{ secrets.OCTOPUS_SERVER }} --apiKey=${{ secrets.OCTOPUS_APIKEY }}
+
+      - name: deploy Octopus release
+        run: octo deploy-release --project docker --version=latest --deployto Production --server=${{ secrets.OCTOPUS_SERVER }} --apiKey=${{ secrets.OCTOPUS_APIKEY }}
+</code></pre>
+
+<p>这些更改将Octopus Deploy CLI安装到机器上，以代表Octopus Deploy实例运行命令。在每次推送Docker时，脚本会等待60秒，然后为Azure创建一个新的部署。</p>
+
+<p>提交更改并导航到操作选项卡以确认部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/github-success.png" class="zoom" data-title="GitHub success"><img src="../Images/3d2babb6834b07aea907bf16b57c5400.png" class="img-fluid center" alt="GitHub success" title="GitHub success" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/github-success.png"/>T2】</a></p>
+
+<p>导航到Octopus Deploy <strong>项目，</strong>然后<strong>发布</strong>以查看最新的部署。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/octopus-success.png" class="zoom" data-title="Octopus success"><img src="../Images/f46e22cc520f2b270282d5375777933a.png" class="img-fluid center" alt="Octopus success" title="Octopus success" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/octopus-success.png"/>T2】</a></p>
+
+<p>前往<code>[webapp-name].azurewebsites.net</code>查看您的网络应用程序:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/random-quotes-2018.png" class="zoom" data-title="Random Quotes 2018"><img src="../Images/3f31b13ebc3f57651c536fd9f117d491.png" class="img-fluid center" alt="Random Quotes 2018" title="Random Quotes 2018" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/random-quotes-2018.png"/>T2】</a></p>
+
+<p>进行更改以确认部署已自动更新。在GitHub中，编辑文件:</p>
+
+<pre><code>RandomQuotes-JS/source/www/index.html
+</code></pre>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/random-quotes-year-change.png" class="zoom" data-title="Random Quotes year change"><img src="../Images/7c0869e9963624485eed41fd39bf5040.png" class="img-fluid center" alt="Random Quotes year change" title="Random Quotes year change" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/random-quotes-year-change.png"/>T2】</a></p>
+
+<p>将年份改为<code>2021</code>，并将代码提交给GitHub。提交和推送将触发GitHub操作构建。部署完成后，导航到年份发生变化的web应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/random-quotes-2021.png" class="zoom" data-title="Random Quotes 2021"><img src="../Images/3fb606f2830c6a42d8f65a58d7ce30df.png" class="img-fluid center" alt="Random Quotes 2021" title="Random Quotes 2021" data-original-src="https://i.octopus.com/blog/2022-06/deploying-to-azure-with-github-actions-and-octopus/random-quotes-2021.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>GitHub Actions是一个CI/CD平台，增强了所有GitHub项目的CI/CD功能。GitHub Actions让开发者可以轻松部署他们的GitHub项目。<a href="https://octopus.com/github"> Octopus Deploy与GitHub Actions </a>协同工作，为管理部署提供专用的连续交付工具。CI/CD流程可以连接到云目标，比如Microsoft Azure或Amazon Web Services，为应用程序提供一个部署目标。</p>
+
+<p>本教程使用Octopus Deploy、GitHub Actions、Docker和Azure建立了一个连续交付流程。GitHub自动检测代码的变化，触发构建，并推送到Docker。Octopus Deploy然后创建一个新的版本并部署Azure Web应用程序。</p>
+
+<p><a href="https://oc.to/GithubActionsWorkflowGenerator" rel="nofollow">试用我们免费的GitHub Actions工作流工具</a>，帮助您快速为GitHub Actions部署生成可定制的工作流。</p>
+
+<p>有关持续集成(CI)和构建服务器的更多信息，<a href="https://octopus.com/blog/tag/CI%20Series">请查看我们的CI博客系列</a>。浏览<a href="https://octopus.com/devops/"> DevOps工程师手册</a>了解有关DevOps和CI/CD的更多信息。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

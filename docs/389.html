@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>Kubernetes deployment strategies visualized - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Kubernetes部署策略可视化- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/kubernetes-deployment-strategies-visualized#2021-08-12">https://octopus.com/blog/kubernetes-deployment-strategies-visualized#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/kubernetes-deployment-strategies-visualized/kubernetes-deployments-strategies.png" class="zoom" data-title=""><img src="../Images/121936dee45ef56035fd72ecdba66155.png" class="img-fluid center" alt="Kubernetes deployment strategies" data-original-src="https://i.octopus.com/blog/2020-02/kubernetes-deployment-strategies-visualized/kubernetes-deployments-strategies.png"/>T2】</a></p>
+
+<p>Kubernetes为管理员和开发人员提供的好处之一是能够智能地管理新软件或配置的部署。</p>
+
+<p>Kubernetes包括两个内置的部署策略，称为<em>重建</em>和<em>滚动更新</em>，它们直接配置在部署资源上。Octopus提供了第三种Kubernetes部署策略，称为<em>蓝绿色</em>，通过<em>部署Kubernetes容器</em>步骤进行管理。</p>
+
+<p>但是这些策略实际上是干什么的呢？在这篇博文中，我们将可视化这些部署策略，以突出它们的差异，并说明为什么您会选择一种策略而不是另一种。</p>
+
+<h2 id="the-test-deployment">测试部署</h2>
+
+<p>在下面的视频中，我们将观看在多节点Kubernetes集群上更新的部署。集群中的每个节点都有一个唯一的标签，部署会更新以将新的pod放在特定的节点上。</p>
+
+<p>最终结果是新的部署将pod从一个节点转移到另一个节点。然后，我们可以观察pod如何在节点之间移动，以了解不同部署策略的效果。</p>
+
+<h2 id="kubernetes-deployment-recreate-strategy">Kubernetes部署再造战略</h2>
+
+
+
+
+
+<p>Kubernetes部署<em>重建</em>策略是三种策略中最简单的。当使用<em>重建</em>策略配置的部署被更新时，Kubernetes将首先从现有部署中删除pod，一旦这些pod被删除，新的pod将被创建。</p>
+
+<p>在上面的视频中，您可以看到节点1上的所有pod都被删除，只有在它们被删除后，第二个节点上的新pod才会被创建。</p>
+
+<p><em>重建</em>策略确保新旧pod不会同时运行。当同步对不支持从两个不同客户端版本访问的后端数据存储库的更改时，这可能是有益的。然而，在新的pod开始接受流量之前，有一段停机时间。</p>
+
+<h2 id="kubernetes-rolling-update">Kubernetes滚动更新</h2>
+
+
+
+
+
+<p>顾名思义，Kubernetes <em>滚动更新</em>策略是在拆除旧单元的同时逐步部署新单元。您可以在上面的视频中看到这一点，在第一个节点上的许多pod被删除，同时在第二个节点上创建新的pod。最终，第一个节点上的pod将被全部删除，而所有新的pod将在第二个节点上创建。</p>
+
+<p><em>滚动更新</em>策略确保在更新期间有一些pod可用于继续服务流量，因此没有停机时间。但是，在进行更新时，新旧pod会并排运行，这意味着任何数据存储或客户端都必须能够与两个版本进行交互。</p>
+
+<h2 id="kubernetes-blue-green-deployment">Kubernetes蓝绿色部署</h2>
+
+
+
+
+
+<p>与其他部署策略不同，Kubernetes <em>蓝绿色</em>部署策略不是Kubernetes自己实现的。它包括创建全新的部署资源(即，具有新名称的部署资源)，等待新部署就绪，将流量从旧部署切换到新部署，最后删除旧部署。这个过程通过<em>部署Kubernetes容器</em>步骤在Octopus中实现。</p>
+
+<p>在上面的视频中，您可以看到在蓝/绿部署期间，第二个节点上的单元被部署和初始化，当它们准备好时，第一个节点上的单元被删除。</p>
+
+<p><em>蓝/绿</em>策略确保新部署在任何流量发送到它之前完全初始化并保持健康。如果新部署失败，旧部署将继续为流量提供服务。</p>
+
+<p>与<em>滚动更新</em>策略一样，<em>蓝/绿</em>策略在一段时间内并排部署两个版本，因此任何后备数据存储都需要支持两个不同的客户端。但是，通过在新部署就绪时将所有流量转移到新部署，任何时候都只能访问一个版本的部署。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>选择正确的部署策略对于确保您的Kubernetes更新的可靠性以及消除或最小化停机时间至关重要。可视化可用的更新策略有助于理解它们之间的差异，在这篇文章中，我们看到了如何使用Kubernetes的本地策略<em> recreate </em>和<em> rolling updates </em>来创建和销毁pod，然后使用Octopus实现的<em> blue/green </em>策略。</p>
+
+                    
+                    
+</body>
+</html>

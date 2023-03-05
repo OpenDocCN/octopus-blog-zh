@@ -1,0 +1,57 @@
+<html>
+<head>
+<title>Octopus 2.0 UI: Angular, Grunt and responsiveness - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Octopus 2.0 UI:角度、咕噜声和响应性- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-2.0-ui-release-creation-angular-grunt-responsiveness#2015-09-25">https://octopus.com/blog/octopus-2.0-ui-release-creation-angular-grunt-responsiveness#2015-09-25</a></blockquote>
+                        <p>既然做出了大胆的决定，首先使用API，我们就有了一个选择。我们可以重构旧的Razor/C# HTML UI来使用新的API。或者，我们可以拥抱新的API，在它的基础上为Octopus重新构建整个UI，坦率地说，使用看起来更适合这项工作的工具。</p>
+
+<p>对于UI堆栈，我们使用:</p>
+
+<ul>
+<li>Angular.js</li>
+<li>Twitter引导和Angular UI引导</li>
+<li>强调</li>
+<li>jQuery</li>
+</ul>
+
+<p>事实上，在过去的一周里，我几乎没有去过Visual Studio我在<a href="http://www.jetbrains.com/webstorm/"> WebStorm </a>中编写所有代码，并使用<a href="http://gruntjs.com/"> Grunt </a>构建应用程序。Grunt在Node下运行，类似于MSBuild。它:</p>
+
+<ul>
+<li>将所有的Angular HTML模板编译成JavaScript ( <a href="https://github.com/karlgoldstein/grunt-html2js"> Html2JS </a>)</li>
+<li>将所有的JavaScript文件连接并缩小成一个文件(<a href="https://github.com/trek/grunt-neuter">中性</a>和<a href="https://github.com/gruntjs/grunt-contrib-uglify">丑陋</a>任务)</li>
+<li>合并和缩小CSS文件(<a href="https://github.com/gruntjs/grunt-contrib-cssmin"> CssMin </a>)</li>
+</ul>
+
+<p>最终结果是我得到了一个HTML、CSS和JavaScript文件，这就是Octopus应用程序。它指向一个Octopus 2.0服务器(Octopus为<a href="http://en.wikipedia.org/wiki/Cross-origin_resource_sharing"> CORS </a>启用)。这带来了非常好的开发体验，也意味着我没有作弊——我必须像其他人一样使用公共API来构建UI。</p>
+
+<p>不管怎样，下面是一些截图。</p>
+
+<p>下面是迄今为止在发布细节页面上取得的进展。你可以看到有些部分还没有出现。然而，一个改进是更清楚地显示是否可以找到NuGet包:</p>
+
+<p><a href="https://i.octopus.com/blog/migrated/1_s5bujh.png"><img src="../Images/7b43ff0b7b74037cf899c3ae1503bc88.png" alt="Octopus 2.0 UI: Release details" data-original-src="https://i.octopus.com/blog/migrated/1_s5bujh.png"/>T2】</a></p>
+
+<p>我一直在确保应用程序能随时响应。以下是同一屏幕不同尺寸的一些图像。</p>
+
+<p><a href="https://i.octopus.com/blog/migrated/2_roqjt5.png"><img src="../Images/92ecf1b322d25a446f9937e9bb246ac0.png" alt="Octopus 2.0 on a smaller screen" data-original-src="https://i.octopus.com/blog/migrated/2_roqjt5.png"/>T2】</a></p>
+
+<p><a href="https://i.octopus.com/blog/migrated/3_j6czss.png"><img src="../Images/d3eb90f85a385c2bb9def6a6688d4ca3.png" alt="Octopus 2.0: Even smaller" data-original-src="https://i.octopus.com/blog/migrated/3_j6czss.png"/>T2】</a></p>
+
+<p><a href="https://i.octopus.com/blog/migrated/4_f11g7f.png"><img src="../Images/e5b355658a0f6e13a6480ac311744bfd.png" alt="Octopus 2.0 on mobiles" data-original-src="https://i.octopus.com/blog/migrated/4_f11g7f.png"/></a>T2】</p>
+
+<p>当创建发行版时，您现在可以选择使用在以前的发行版中使用的NuGet包。我还添加了一个基于<a href="http://markitup.jaysalvat.com/"> MarkItUp </a>的markdown编辑器:</p>
+
+<p><a href="https://i.octopus.com/blog/migrated/create-release_gzrvdz.png"><img src="../Images/54fd5805f8b936a53e22b2bcbb00549a.png" alt="Octopus 2.0: Selecting the package from previous release" data-original-src="https://i.octopus.com/blog/migrated/create-release_gzrvdz.png"/>T2】</a></p>
+
+<p>当搜索旧包时，您现在可以通过预发行标签进行过滤，并包括发行说明:</p>
+
+<p><a href="https://i.octopus.com/blog/migrated/old-packages_v4cf6s.png"><img src="../Images/7290d13528156f7b2952448fbb483ab0.png" alt="Octopus 2.0: Searching for previous packages" data-original-src="https://i.octopus.com/blog/migrated/old-packages_v4cf6s.png"/>T2】</a></p>
+
+<p>随着章鱼2.0界面的发展，我会贴更多的截图，如果你有任何建议，请写在下面的框里:)</p>
+
+                    
+                    
+</body>
+</html>

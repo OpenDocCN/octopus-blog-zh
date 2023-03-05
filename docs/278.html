@@ -1,0 +1,145 @@
+<html>
+<head>
+<title>Getting started with Kind and Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>Kind和Octopus - Octopus部署入门</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/getting-started-with-kind-and-octopus#2022-07-21">https://octopus.com/blog/getting-started-with-kind-and-octopus#2022-07-21</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/octopus-kind.png" class="zoom" data-title=""><img src="../Images/c5b1a9074db276ebc99354ebcf6dcc31.png" class="img-fluid center" alt="Getting started with Kind and Octopus" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/octopus-kind.png"/>T2】</a></p>
+
+<p>当您第一次开始使用Kubernetes时，在部署哪怕是最简单的示例应用程序之前，可用的工具和选项的数量会是一个很大的障碍。与大多数其他平台不同，Kubernetes不提供可以下载并安装到本地开发PC上的标准包。社区用许多选项填补了这一空白，如<a href="https://github.com/kubernetes/minikube" rel="nofollow"> Minikube </a>、<a href="https://microk8s.io/" rel="nofollow"> MicroK8s </a>、<a href="https://k3s.io/" rel="nofollow"> k3s </a>和<a href="https://docs.docker.com/desktop/kubernetes/" rel="nofollow">Docker Desktop with Kubernetes</a>。</p>
+
+<p>在这篇博文中，我们将关注<a href="https://kind.sigs.k8s.io/" rel="nofollow">类</a>。虽然前面提到的任何解决方案都是很好的选择，但我更喜欢Kind，因为它可以无缝地跨所有主要操作系统工作，并且在<a href="https://docs.microsoft.com/en-us/windows/wsl/wsl2-about" rel="nofollow"> WSL2 </a>中运行良好，这使得Windows开发人员可以很容易地在Windows和Linux之间切换。</p>
+
+<h2 id="install-kind">安装种类</h2>
+
+<p>Kind创建一个Kubernetes集群作为Docker容器。想到实现Kubernetes平台的Docker容器可能有点令人费解，这反过来又编排了更多的Docker容器，但在实践中，建立一个友好的Kubernetes集群的过程既快又容易。</p>
+
+<p>在<a href="https://docs.docker.com/get-docker/" rel="nofollow">安装好Docker </a>之后，安装<a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/" rel="nofollow"> kubectl </a>和<a href="https://kind.sigs.k8s.io/docs/user/quick-start/" rel="nofollow">类可执行文件</a>。kubectl和Kind都是自包含的可执行文件，这意味着它们只需要下载并保存在您的路径下的一个目录中。</p>
+
+<p>然后用命令<code>kind create cluster</code>创建一个集群。这个命令使用名为<code>kind-kind</code>的集群和用户在<code>~/.kube/config</code>创建或更新Kubernetes配置文件。下面显示了一个<code>config</code>文件的例子:</p>
+
+<pre><code>apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSU...
+    server: https://127.0.0.1:55827
+  name: kind-kind
+contexts:
+- context:
+    cluster: kind-kind
+    user: kind-kind
+  name: kind-kind
+current-context: kind-kind
+kind: Config
+preferences: {}
+users:
+- name: kind-kind
+  user:
+    client-certificate-data: LS0tLS1CRUdJTiBDRVJUSU...
+    client-key-data: LS0tLS1CRUdJTiBSU0EgUF...
+</code></pre>
+
+<p>要验证集群是否正在运行，请执行<code>kubectl get nodes</code>。您应该会看到类似这样的输出:</p>
+
+<pre><code>$ kubectl get nodes
+NAME                 STATUS   ROLES    AGE    VERSION
+kind-control-plane   Ready    master   101s   v1.18.2
+</code></pre>
+
+<p>我们现在有了一个本地Kubernetes集群，可以进行测试了。</p>
+
+
+
+<p>Kind创建的<code>config</code>文件嵌入了用于保护API流量的集群证书，以及用于识别Kubernetes用户的客户端密钥和证书。我们需要将这些值提取到可以导入Octopus的文件中。</p>
+
+<p>下面的Bash和PowerShell脚本提取数据，对其进行解码，并将客户端密钥和证书合并到一个PFX文件中。这些脚本给了我们两个文件:<code>cluster.crt</code>和<code>client.pfx</code>:</p>
+
+<p>下面是Bash脚本:</p>
+
+<pre><code class="language-bash">kubectl config view --raw -o json | jq -r ".users[] | select(.name==\"$1\") | .user[\"client-certificate-data\"]" | base64 -d &gt; client.crt
+kubectl config view --raw -o json | jq -r ".users[] | select(.name==\"$1\") | .user[\"client-key-data\"]" | base64 -d &gt; client.key
+kubectl config view --raw -o json | jq -r ".clusters[] | select(.name==\"$1\") | .cluster[\"certificate-authority-data\"]" | base64 -d &gt; cluster.crt
+openssl pkcs12 -export -in client.crt -inkey client.key -out client.pfx -passout pass:
+rm client.crt
+rm client.key
+</code></pre>
+
+<p>下面是PowerShell脚本，其中的<code>openssl</code>可执行文件是从<a href="https://slproweb.com/products/Win32OpenSSL.html" rel="nofollow">这里的</a>下载的:</p>
+
+<pre><code class="language-powershell">param($username)
+
+kubectl config view --raw -o json |
+  ConvertFrom-JSON |
+  Select-Object -ExpandProperty users |
+  ? {$_.name -eq $username} |
+  % {
+    [System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($_.user.'client-certificate-data')) | Out-File -Encoding "ASCII" client.crt
+    [System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($_.user.'client-key-data')) | Out-File -Encoding "ASCII" client.key
+    &amp; "C:\Program Files\OpenSSL-Win64\bin\openssl" pkcs12 -export -in client.crt -inkey client.key -out client.pfx -passout pass:
+    rm client.crt
+    rm client.key
+  }
+
+  kubectl config view --raw -o json |
+  ConvertFrom-JSON |
+  Select-Object -ExpandProperty clusters |
+  ? {$_.name -eq $username} |
+  % {
+    [System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($_.cluster.'certificate-authority-data')) | Out-File -Encoding "ASCII" cluster.crt
+  }
+</code></pre>
+
+<h2 id="creating-the-octopus-kubernetes-target">创建章鱼Kubernetes目标</h2>
+
+<p>文件<code>cluster.crt</code>和<code>client.pfx</code>被上传到八达通证书商店。这里我将这些证书称为<strong>类用户</strong>和<strong>类集群证书</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/certificates.png" class="zoom" data-title=""><img src="../Images/336ca86e4d0674bc1018464422957c16.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/certificates.png"/>T2】</a></p>
+
+<p>我们还需要一个本地环境:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/environments.png" class="zoom" data-title=""><img src="../Images/b8c80ac3256b83dfd03e7ce77bef60bb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/environments.png"/>T2】</a></p>
+
+<p>最后一步是创建Kubernetes目标。该目标使用证书<strong>种类用户</strong>进行身份验证，使用<strong>种类集群证书</strong>进行服务器证书授权，使用https://127.0.0.1:55827进行集群URL。这个URL来自Kubernetes <code>config</code>文件中的<code>clusters[].clusters.server</code>字段:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/k8starget.png" class="zoom" data-title=""><img src="../Images/3d21d02f71610641b240e45d61f2c2cb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/k8starget.png"/>T2】</a></p>
+
+<h2 id="a-word-on-workers">关于工人的一句话</h2>
+
+<p>因为Kubernetes URL引用了<code>127.0.0.1</code>(或<code>localhost</code>)，所以我们要么需要在本地开发PC上运行Octopus，要么需要在本地PC上安装一个Worker，这允许远程Octopus实例通过隧道进入我们的本地PC。</p>
+
+<p>在下面的截图中，你可以看到触手管理器配置一个工人的一些步骤:</p>
+
+<p>选择一个轮询触手:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker1.png" class="zoom" data-title=""><img src="../Images/3cb33bf0c0063d10f7927b867b970026.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker1.png"/></a>T2】</p>
+
+<p>将触手配置为工作者:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker2.png" class="zoom" data-title=""><img src="../Images/a95928ac754e7e39281bde165326cbdb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker2.png"/>T2】</a></p>
+
+<p>向Octopus服务器注册员工:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker3.png" class="zoom" data-title=""><img src="../Images/a322476582087167813a6e1079be4c8d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker3.png"/>T2】</a></p>
+
+<p>这里我们可以看到分配给<strong>默认工作线程池</strong>的新工作线程:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker-instance.png" class="zoom" data-title=""><img src="../Images/f453ba6c8beae833313cd0953ee321cc.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/worker-instance.png"/>T2】</a></p>
+
+<p>工作人员就位后，远程Octopus服务器上的Kubernetes目标现在可以访问我们的本地Kubernetes集群:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/health-check.png" class="zoom" data-title=""><img src="../Images/c23bf6a520a53dee197d9b97216f52f3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/getting-started-with-kind-and-octopus/health-check.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>我们现在已经成功地用Kind创建了一个本地Kubernetes集群，从Kubernetes配置文件中提取了证书，将证书导入到Octopus中，并在Octopus中创建了一个Kubernetes目标，它通过一个Worker连接到我们的本地集群。</p>
+
+<p>从这里，我们可以了解如何使用Octopus来部署Kubernetes资源。以下博客文章向您展示了如何:</p>
+
+
+
+                    
+                    
+</body>
+</html>

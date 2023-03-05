@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>Octopus Deploy 4.0 - History - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通部署4.0 -历史-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-v4-history#2021-08-12">https://octopus.com/blog/octopus-v4-history#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-10/4.0_history_blogimage.png" class="zoom" data-title=""><img src="../Images/4b0b998da6cac165639a12f2854780a8.png" class="img-fluid center" alt="Octopus 4.0 coming soon" data-original-src="https://i.octopus.com/blog/2017-10/4.0_history_blogimage.png"/>T2】</a></p>
+
+<p>这篇文章是我们章鱼4.0博客系列的一部分。在我们的<a href="https://octopus.com/blog">博客</a>或我们的<a href="https://twitter.com/octopusdeploy" rel="nofollow">推特</a>上关注它。</p>
+
+<p><strong> Octopus Deploy 4.0已经发货！今天就阅读<a href="/blog/octopus-release-4-0">博文</a>和<a href="https://octopus.com/downloads">下载</a>吧！</strong></p>
+
+<hr/>
+
+<p>我知道你们中的一些人想知道为什么我们决定重写Octopus UI，这篇博文试图对这个问题提供一个高层次的答案。我们将在以后的博客文章中解释每个重大变化的细节。</p>
+
+<p>Octopus <code>3.x</code>的UI是建立在Angular <code>1.x</code>之上的，大约一年前Angular <code>2.0</code>取代了Angular<code>1.x</code>。从<code>1.4</code>到<code>2.0</code>的迁移需要付出巨大的努力，所以我们不只是问如何/何时迁移<code>1.4</code>到<code>2.0</code>，而是问自己下一个版本的Octopus UI应该是什么样子。而<code>v4</code>就是这样诞生的。</p>
+
+<h2 id="user-experience">用户体验</h2>
+
+<p>自从<code>2.0</code>于2013年12月发布以来，Octopus UI一直没有显著变化，我们认为是时候对其进行现代化改造并解决几个长期存在的问题了。这不能仅仅通过应用一个新的样式表来完成，因为我们想要引入新的交互，去除很多不一致的地方，并重新设计一些最常用的页面。变量编辑器、部署页面或环境仪表板不能仅仅通过修复错误而得到显著改进。它们需要完全重新设计。</p>
+
+<p>当你第一次访问Octopus UI时，你需要等待超过1MB的静态资产被下载。这不是一个很好的第一印象。为了解决这个问题，我们重新构建了UI代码，只同步加载绝对必要的内容，然后在后台异步加载所有其他区域。这有效地减少了用户开始与应用程序交互之前需要发送给浏览器的代码量。</p>
+
+<h2 id="developer-experience">开发者体验</h2>
+
+<p>从开发的角度来看，我们想要一个可以使用现代JavaScript的环境，我们可以在未来安全地维护和扩展它。满足这些要求的技术不止一种，我们已经对其中的一些进行了试验。在这个练习的最后，我们选择了<a href="https://www.typescriptlang.org/" rel="nofollow"> TypeScript </a>、<a href="https://reactjs.org/" rel="nofollow"> React </a>和<a href="https://github.com/css-modules/css-modules" rel="nofollow"> CSS模块</a>作为我们的基本构建模块。</p>
+
+<p>TypeScript让我们的JavaScript成为强类型，这有助于消除许多手动重构，现在可以由代码编辑器自动完成。TypeScript还将几个常见的运行时错误转换为编译时错误。我不记得上一次看到由打字错误引起的错误是什么时候了😃。</p>
+
+<p>TypeScript编译器<a href="https://en.wikipedia.org/wiki/Source-to-source_compiler" rel="nofollow">是一个transpiler </a>，这意味着我们可以使用现代JavaScript(例如<code>arrow functions</code>、<code>async/await</code>)，而不用担心浏览器还不支持它。</p>
+
+<p>我们从Angular到React的转变需要一个单独的帖子，但我至少应该在这里提供一个高水平的总结。我们选择React是因为它在概念上很简单，并且大量使用现代JavaScript(例如<code>Array.map</code>)而不是依赖自定义语法(例如Angular <code>v1</code>中的<code>ng-repeat</code>或<code>*ngFor</code> Angular <code>v2</code>)。梅里克·克里斯滕森的<a href="http://merrickchristensen.com/articles/react-vs-angular-2.html#my-conclusion" rel="nofollow"> React vs Angular 2 </a>帖子的结论很好地总结了这两者之间的主要区别。实际上，React让你成为更好的JavaScript开发人员，Angular让你成为更好的Angular开发人员。</p>
+
+<p>CSS模块让我们保持组件的样式彼此完全隔离。我们可以全力以赴，用JavaScript指定我们的CSS，但我们对更少的东西感到满意，唯一缺少的就是隔离。</p>
+
+<p>正如你所看到的，我们已经决定同时解决相当多的复杂问题，这需要大量的协调努力，但我们将Octopus UI视为Octopus Deploy生态系统的重要组成部分，并愿意投资于它。</p>
+
+                    
+                    
+</body>
+</html>

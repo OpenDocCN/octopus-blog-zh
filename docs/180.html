@@ -1,0 +1,56 @@
+<html>
+<head>
+<title>Deploy a Helm chart with Octopus - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>用章鱼-章鱼展开舵图</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploy-helm-chart-with-octopus#2021-08-12">https://octopus.com/blog/deploy-helm-chart-with-octopus#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/octopus-helm.png" class="zoom" data-title=""><img src="../Images/62e4c902fb07c3adcf52633c1f85ca29.png" class="img-fluid center" alt="Deploy a Helm chart with Octopus" data-original-src="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/octopus-helm.png"/>T2】</a></p>
+
+<p>赫尔姆已经成为事实上的Kubernetes包经理。它提供了丰富的模板、强大的CLI工具、用于共享图表的集中存储库，最近发布的Helm 3解决了之前Helm版本的安全问题。</p>
+
+<p>Octopus为部署Helm图表提供了本地支持，在这篇博客文章中，我们将看看如何在Octopus中管理Helm部署到Kubernetes集群，该集群是在之前的一篇博客文章中创建的。</p>
+
+<h2 id="the-sample-chart">样本图表</h2>
+
+<p>在博文《通过Octopus 将您的第一个容器部署到Kubernetes》中，我们介绍了创建Docker映像并将其推送到Docker Hub的过程。最终结果是图像<a href="https://hub.docker.com/r/mcasperson/mywebapp" rel="nofollow"> mcasperson/mywebapp </a>。我们将从我们的舵图中重用这个Docker图像。</p>
+
+<p>舵图示例可以在<a href="https://github.com/OctopusSamples/SampleHelmChart" rel="nofollow"> GitHub </a>上找到。这个图表创建了一个Kubernetes部署和服务来公开嵌入在Docker映像中的web应用程序。</p>
+
+<p>首先克隆GitHub存储库，并用命令<code>helm package .\SampleHelmChart</code>将文件打包成图表:</p>
+
+<pre><code>$ helm package .\SampleHelmChart
+Successfully packaged chart and saved it to: C:\Code\SampleHelmChart-0.1.0.tgz
+</code></pre>
+
+<p>结果图表的文件名为<code>SampleHelmChart-0.1.0.tgz</code>。通常，这个文件会被上传到一个图表库，比如由<a href="https://chartmuseum.com/" rel="nofollow"> ChartMuseum </a>托管的图表库。Octopus本身支持这样的图表存储库，对于那些希望利用Helm的人来说，建立一个图表存储库是一个非常有效的选择:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/chart-feed.png" class="zoom" data-title=""><img src="../Images/754a403a3b898fe1a78925ab5d67da42.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/chart-feed.png"/>T2】</a></p>
+
+<p>然而，从2020.3.0版本开始，Octopus提供了将舵图直接上传到内置提要的能力。这消除了配置单独图表存储库的需要。将图表上传到内置提要的唯一要求是在文件名后附加一个包版本，这意味着我们需要在上传之前将图表文件从<code>SampleHelmChart-0.1.0.tgz</code>重命名为<code>SampleHelmChart.0.1.0.tgz</code>:</p>
+
+<p>【T2 <img src="../Images/d0ae32c32c6ece813018a13a2b50775b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/upload-chart.png"/></p>
+
+<h2 id="deploy-the-chart">部署图表</h2>
+
+<p>为了部署舵图，我们将使用<strong>升级舵图</strong>步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/helm-step.png" class="zoom" data-title=""><img src="../Images/1b2f68abd94063ec95d1824dda622990.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/helm-step.png"/>T2】</a></p>
+
+<p>然后，我们引用上传到内置提要的包，并为Helm版本定义一个名称:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/helm-step-populated.png" class="zoom" data-title=""><img src="../Images/822f5b0d2e8b171afc90bf054cdbef6d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploy-helm-chart-with-octopus/helm-step-populated.png"/>T2】</a></p>
+
+<p>仅此而已。只需几个简单的步骤，我们就可以在Kubernetes上部署我们的第一个Helm chart。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>通过在内置提要中托管掌舵图表并使用本地掌舵步骤来消费它们，Octopus使得向Kubernetes共享和部署掌舵图表变得非常简单。</p>
+
+<p>如果你已经部署了一个或者希望利用可用的<a href="https://github.com/helm/charts" rel="nofollow">公共存储库</a>，Octopus也可以访问外部舵图存储库。任何成熟的Kubernetes基础设施将不可避免地包括一系列外部服务，如入口控制器、仪表盘、监控解决方案和其他Kubernetes运营商。这些第三方应用程序通常会以Helm charts的形式发布，因此访问外部Helm feeds允许Octopus像管理内部应用程序一样管理它们的部署。</p>
+
+                    
+                    
+</body>
+</html>

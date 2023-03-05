@@ -1,0 +1,194 @@
+<html>
+<head>
+<title>Deploying to Red Hat OpenShift with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus Deploy - Octopus Deploy部署到Red Hat OpenShift</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/deploying-to-openshift-with-octopus-deploy#2021-11-22">https://octopus.com/blog/deploying-to-openshift-with-octopus-deploy#2021-11-22</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/openshift-octopus.png" class="zoom" data-title=""><img src="../Images/43e94581f81a2a35a164b27abab34f04.png" class="img-fluid center" alt="Deploying to Red Hat OpenShift with Octopus Deploy" data-original-src="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/openshift-octopus.png"/>T2】</a></p>
+
+<p>在之前的一篇文章中，我写了使用Octopus Deploy部署到由Rancher管理的Kubernetes (K8s)集群。在这篇文章中，我将讨论一个类似的主题，如何部署到Red Hat OpenShift。</p>
+
+<h2 id="red-hat-openshift">红帽OpenShift</h2>
+
+<p>和Rancher一样，Red Hat OpenShift也是一个K8s管理平台。然而，这是相似性的终点，这两种产品是非常不同的。运行OpenShift的系统需求并不是无足轻重的。至少有三个主节点，每个主节点至少有4个vCPUs和16 GB RAM。工作节点需要更少的资源:1个vCPU和8gb RAM。</p>
+
+<p>OpenShift有一个精简版，设计用于在笔记本电脑上运行，用于开发和试用目的，称为CodeReady Containers (CRC)。我在这篇文章中使用的是CRC版本，因为我的虚拟机管理程序没有足够的剩余资源来托管完整版本的OpenShift。即使它是一个精简版，CRC仍然具有相同的整体功能。</p>
+
+<h3 id="using-crc">使用CRC</h3>
+
+<p>本节分享了我在使用CRC时学到的一些经验。如果您不打算使用它，可以跳过这一部分。</p>
+
+<p>要下载CRC，您需要一个红帽帐户。</p>
+
+<p>CRC有三种类型:</p>
+
+<ul>
+<li>Windows (Hyper-V)</li>
+<li>macOS (HyperKit)</li>
+<li>Linux (Libvirt)</li>
+</ul>
+
+<p>在这篇文章中，我使用的是Windows Hyper-V版本。</p>
+
+<h4 id="hyper-v-virtual-switches">Hyper-V虚拟交换机</h4>
+
+<p>Windows CRC下载是一个单一的。exe文件。这个文件负责创建和配置VM，以便在笔记本电脑上运行OpenShift。我使用CRC发现的一件事是，它专门使用Hyper-V中的默认虚拟交换机。一段时间前，Windows禁用了编辑默认虚拟交换机的功能，因此它永久地停留在使用网络地址转换(NAT)上。然而，我确实发现了CRC的一个未被广泛宣传的功能，如果您创建一个名为<code>crc</code>的虚拟交换机，虚拟机的配置将使用该虚拟交换机。</p>
+
+<h4 id="crc-changes-the-dns-server-to-itself">CRC将DNS服务器更改为自身</h4>
+
+<p>Red Hat的人员试图通过一个包罗万象的解决方案来帮助您学习OpenShift产品，从而使事情变得尽可能简单。这包括更改您的网络设置，将DNS服务器更改为自身，以便您可以解析内置DNS条目。我承认，在一切都准备好的时候，我没有对这些消息给予足够的关注，然后我挠头了一会儿，试图找出为什么我的本地DNS条目不再工作了。在我弄明白这一点之后，很容易就可以在笔记本电脑本地复制DNS条目，这样外部机器就可以与OpenShift集群进行交互。</p>
+
+<h3 id="openshift-perspectives">OpenShift透视图</h3>
+
+<p>OpenShift的接口有两种模式，称为透视图:</p>
+
+
+
+<p>显示的选项会根据您使用的透视图而变化。管理员透视图显示了与操作和管理相关的选项，而开发人员透视图只显示了开发人员关心的选项。</p>
+
+<h3 id="create-a-project">创建项目</h3>
+
+<p>OpenShift使用项目来帮助您组织您需要的资源，并将所有东西放在一起。项目由应用程序的所有组件组成，可以从项目屏幕进行监控。要创建项目，请执行以下操作:</p>
+
+<ol>
+<li>确保您已经选择了管理员视角。</li>
+<li>如果您切换了视角，请等待显示更新(如果您使用CRC，这可能需要几秒钟)。</li>
+<li>从管理员的角度，点击蓝色的<strong>创建项目</strong>按钮。</li>
+<li>给你的项目命名，然后点击<strong>创建</strong>。</li>
+</ol>
+
+<h4 id="create-service-account">创建服务帐户</h4>
+
+<p>为了部署到OpenShift，我们需要向Octopus Deploy提供它可以用来连接到OpenShift的凭证。每个OpenShift项目都有一个可以定义服务帐户的部分。创建项目后:</p>
+
+<ol>
+<li>展开<strong>用户管理</strong>。</li>
+<li>点击<strong>服务账户</strong>。</li>
+<li>点击<strong>创建服务账户</strong>。</li>
+</ol>
+
+<h4 id="create-role-binding">创建角色绑定</h4>
+
+<p>创建服务帐户后，我们需要给它一个角色，以便它可以在集群上创建资源。</p>
+
+<p>我在使用UI获得正确的权限时遇到了一些困难，但是我发现使用命令行<strong>oc.exe</strong>工具可以让我给我的服务帐户提供正确的权限:</p>
+
+<pre><code>C:\Users\Shawn.Sesna\.kube&gt;oc.exe policy add-role-to-user cluster-admin -z octopusdeploy
+</code></pre>
+
+<p>通过运行以下命令确保您在正确的项目中，</p>
+<pre><code>C:\Users\Shawn.Sesna\.kube&gt;oc project &lt;project name&gt;
+</code></pre>
+
+
+<h4 id="service-account-token">服务帐户令牌</h4>
+
+<p>OpenShift将自动为您的服务帐户创建一个令牌。该令牌是服务帐户从Octopus Deploy向OpenShift进行身份验证的方式。要检索令牌的值，请执行以下操作:</p>
+
+<ol>
+<li>点击<strong>服务账户</strong>。</li>
+<li>点击<code>octopusdeploy</code>(或任何您命名的名称)。</li>
+<li>向下滚动到<strong>机密</strong>部分。</li>
+<li>点击带有<code>kubernetes.io/service-account-token</code>的<code>type</code>的条目。</li>
+</ol>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/openshift-service-account-secrets.png" class="zoom" data-title=""><img src="../Images/ffa87cd13033a0930ee79bb71a4bbf0d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/openshift-service-account-secrets.png"/>T2】</a></p>
+
+<p>通过单击令牌右侧的复制到剪贴板图标来复制令牌值。</p>
+
+<h4 id="the-cluster-url">群集URL</h4>
+
+<p>我们需要来自OpenShift的最后一条信息是集群的URL。使用<code>oc.exe</code>命令行工具，我们可以通过<code>status</code>命令快速检索我们需要的URL:</p>
+
+<pre><code>C:\Users\Shawn.Sesna\.kube&gt;oc.exe status
+In project testproject on server https://api.crc.testing:6443
+</code></pre>
+
+<h2 id="connect-openshift-to-octopus-deploy">将OpenShift连接到Octopus部署</h2>
+
+<p>将OpenShift连接到Octopus Deploy的过程与其他K8s集群相同。首先，创建一个帐户，然后添加一个K8s集群目标。</p>
+
+<h3 id="create-an-account">创建一个帐户</h3>
+
+<p>在我们可以连接我们的OpenShift K8s目标之前，我们必须创建一个帐户来验证它。在Octopus门户网站中，导航至<strong>基础设施</strong>选项卡，并点击<strong>账户</strong>:</p>
+
+<ol>
+<li>点击<strong>添加账户</strong>。</li>
+<li>选择<strong>令牌</strong>。</li>
+<li>输入账户值，点击<strong>保存</strong>。</li>
+</ol>
+
+<p>现在我们已经创建了一个帐户，我们准备创建我们的Kubernetes目标。</p>
+
+<h3 id="add-the-k8s-cluster">添加K8s集群</h3>
+
+<p>要添加OpenShift K8s集群:</p>
+
+<ol>
+<li>导航至<strong> <span class="path">基础设施➜部署目标</span> </strong>。</li>
+<li>点击<strong>添加部署目标</strong>。</li>
+<li>点击<strong> KUBERNETES集群</strong>类别。</li>
+<li>然后在Kubernetes集群上点击<strong>添加</strong>。</li>
+</ol>
+
+<p>Kubernetes部署目标表单的两个最重要的部分是:</p>
+
+<ul>
+<li>证明</li>
+<li>Kubernetes详细信息</li>
+</ul>
+
+<h4 id="authentication">证明</h4>
+
+<p>我们将为OpenShift集群使用的身份验证类型是token。</p>
+
+<h4 id="kubernetes-details">Kubernetes详细信息</h4>
+
+<p>这就是我们使用从<strong>oc.exe</strong><code>status</code>命令中获取的URL的地方:https://api.crc.testing:6443。我的集群正在使用自签名证书，因此我选择了<strong>跳过TLS验证</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-kubernetes-target.png" class="zoom" data-title=""> T31 </a></p>
+
+<p>将“名称空间”框留空。</p>
+
+
+<p>点击<strong>保存</strong>就完成了。</p>
+
+<p>通过观察<strong>任务</strong>选项卡中的初始健康检查来验证连接。</p>
+
+<h2 id="deploy-to-openshift">部署到OpenShift</h2>
+
+<p>在这篇文章的开始，我们在OpenShift中创建了这个项目。项目名是我们部署到的K8s名称空间。这很重要，因为当我们为部署创建步骤时，我们需要确保指定要部署到哪个名称空间。</p>
+
+<p>就像在Rancher帖子中一样，我使用了来自《Hello World》之外的<a href="https://octopus.com/blog/build-a-real-world-kubernetes-cicd-pipeline">帖子中的相同部署过程:构建一个真实世界的Kubernetes CI/CD管道</a>帖子。我给<code>Project.Kubernetes.Namespace</code>变量添加了一个值<code>testproject</code>,以将它限定在我们的新目标范围内:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-project-variable.png" class="zoom" data-title=""><img src="../Images/1af18f980faec8f8af958a535938f24f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-project-variable.png"/>T2】</a></p>
+
+<p>该值将用于我们的部署步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-step.png" class="zoom" data-title=""><img src="../Images/2365cbec166993804c402e30e70b412d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-step.png"/>T2】</a></p>
+
+<h3 id="execute-the-deployment">执行部署</h3>
+
+<p>我必须对负载平衡器资源的YAML做一个小的更改。OpenShift不喜欢使用外部IP:</p>
+
+<pre><code>Forbidden: externalIPs have been disabled
+</code></pre>
+
+<p>在我注释掉它之后，我能够成功地部署:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-deployment-successful.png" class="zoom" data-title=""><img src="../Images/148eda84f8a283a8ed1e37433771194b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/octopus-deployment-successful.png"/>T2】</a></p>
+
+<p>在OpenShift中，我们可以看到我们所有的资源确实都是被创建的:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/openshift-deployed-resources.png" class="zoom" data-title=""><img src="../Images/d59d97276fd950abd1be6d6e54d4e385.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-08/deploying-to-openshift-with-octopus-deploy/openshift-deployed-resources.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我演示了如何将Red Hat OpenShift与Octopus Deploy集成。愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

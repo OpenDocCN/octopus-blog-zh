@@ -1,0 +1,169 @@
+<html>
+<head>
+<title>Create a public AWS VPC with CloudFormation - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用CloudFormation - Octopus Deploy创建公共AWS VPC</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/aws-vpc-public#2022-07-04">https://octopus.com/blog/aws-vpc-public#2022-07-04</a></blockquote>
+                        <p>在我们的第一篇文章<a href="https://octopus.com/blog/aws-vpc-private">用CloudFormation </a>创建一个私有的AWS VPC中，您看到了如何创建一个带有私有子网的VPC。此VPC中的实例无法访问互联网，只能与同一VPC的子网中的实例通信。</p>
+
+<p>在本文中，您将创建一个带有公共子网的VPC，允许实例访问互联网以及从互联网被访问。</p>
+
+<h2 id="types-of-subnets">子网的类型</h2>
+
+<p>AWS有两种类型的子网:公共子网和私有子网。</p>
+
+<p>公共子网通过<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html" rel="nofollow">互联网网关</a>连接到互联网，并且可以托管具有公共IP地址的资源。AWS将互联网网关定义为:</p>
+
+<blockquote class="blockquote">
+<p>一个水平扩展、冗余且高度可用的VPC组件，允许您的VPC和互联网之间的通信。</p>
+</blockquote>
+
+<p>私有子网不会将流量路由到互联网网关。私有子网中的资源没有公共IP地址，只能与同一VPC内其他子网中的资源通信。</p>
+
+<p>带有公共子网的VPC允许实例访问互联网。如果这些实例有公共IP地址，也可以从互联网访问它们。</p>
+
+<h2 id="creating-a-vpc-with-public-subnets">创建带有公共子网的VPC</h2>
+
+<p>以下CloudFormation模板创建了一个包含两个公共子网的VPC:</p>
+
+<pre><code class="language-yaml">Parameters:
+  Tag:
+    Type: String
+
+Resources: 
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      InstanceTenancy: "default"
+      Tags:
+      - Key: "Name"
+        Value: !Ref "Tag"    
+
+  SubnetA:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.0.0/24"
+
+  SubnetB:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.1.0/24"
+
+  RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref "VPC"
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+
+  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref "VPC"
+      InternetGatewayId: !Ref "InternetGateway"
+
+  InternetRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  SubnetARouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+
+  SubnetBRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetB
+
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref VPC
+</code></pre>
+
+<p>上面的模板建立在上一篇文章中的模板之上，<a href="https://octopus.com/blog/aws-vpc-private">使用CloudFormation </a>创建一个私有AWS VPC，添加一个互联网网关和将流量定向到互联网所需的路由表。参考<a href="https://octopus.com/blog/aws-vpc-private">以前的帖子</a>阅读VPC、子网和路由表资源的详细信息。</p>
+
+<p>要将VPC连接到互联网，您必须连接一个互联网网关，由<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-internetgateway.html" rel="nofollow">AWS<span>EC2</span>internet gateway</a>资源表示。除了添加自定义标记之外，此资源不支持任何配置属性:</p>
+
+<pre><code class="language-yaml">  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+</code></pre>
+
+<p>互联网网关通过<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpc-gateway-attachment.html" rel="nofollow">AWS<span>EC2</span>VPCGatewayAttachment</a>资源连接到VPC:</p>
+
+<pre><code class="language-yaml">  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref "VPC"
+      InternetGatewayId: !Ref "InternetGateway"
+</code></pre>
+
+<p>要通过internet网关引导外部流量，您必须创建一个路由，由<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-route.html" rel="nofollow"> AWS <span> EC2 </span> Route </a>资源表示。</p>
+
+<p>下面的路由定义了一个<code>0.0.0.0/0</code>的<code>DestinationCidrBlock</code>，匹配所有流量。此路由将在连接同一VPC子网中实例的默认路由之后应用，因此只有不是发往VPC中另一个实例的流量才会受到此路由的影响。实际上，这意味着任何外部流量都通过互联网网关进行定向:</p>
+
+<pre><code class="language-yaml">  InternetRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+</code></pre>
+
+<p>然后，该路由通过<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet-route-table-assoc.html" rel="nofollow">AWS<span>EC2</span>SubnetRouteTableAssociation</a>资源与两个子网相关联，这使它们成为公共子网:</p>
+
+<pre><code class="language-yaml">  SubnetARouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+
+  SubnetBRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetB
+</code></pre>
+
+<p>要部署该模板，请使用<a href="https://octopus.com/docs/deployments/aws/cloudformation">部署AWS CloudFormation模板</a>步骤。请注意放置在此VPC中的EC2实例如何选择接收公共IP地址:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/aws-vpc-public/public-ip.png" class="zoom" data-title=""><img src="../Images/c367b76e2434dd5b85c7ebfba04cfc7f.png" class="img-fluid center" alt="Auto-assign Public IP option" data-original-src="https://i.octopus.com/blog/2022-q2/aws-vpc-public/public-ip.png"/>T2】</a></p>
+
+<p>分配给EC2实例的IP地址允许您从本地PC SSH到它:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-q2/aws-vpc-public/ec2-public-ip.png" class="zoom" data-title=""><img src="../Images/dc668ccc6cbecb2f30c4df6905afadad.png" class="img-fluid center" alt="EC2 public IP" data-original-src="https://i.octopus.com/blog/2022-q2/aws-vpc-public/ec2-public-ip.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>公共子网允许实例访问互联网，并为它们提供分配公共IP地址的选项。创建带有公共子网的VPC需要构建一个internet网关，将其连接到VPC，定义一个路由以引导公共流量通过internet网关，并将路由分配给子网。</p>
+
+<p>在这篇文章中，您看到了一个创建带有两个公共子网的VPC的云形成模板。在下一篇<a href="https://octopus.com/blog/aws-vpc-public-private">文章</a>中，您将学习如何创建一个包含公共和私有子网的VPC，以及一个NAT网关，以允许私有子网中的实例访问互联网。</p>
+
+<p>阅读我们的<a href="https://octopus.com/blog/tag/Runbooks%20Series"> Runbooks系列</a>的其余部分。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>Deploying a Multi-Tenant Web App to Multiple Customers - Will it Deploy? Episode 5 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>向多个客户部署多租户Web应用程序——它能部署吗？第5集-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/will-it-deploy-episode-05#2021-07-07">https://octopus.com/blog/will-it-deploy-episode-05#2021-07-07</a></blockquote>
+                        <p>欢迎来到另一个<strong>它会部署吗？</strong>我们尝试使用Octopus Deploy自动部署不同技术的那一集。在这特别的两集节目中，我们试图为运行在亚马逊网络服务(AWS)虚拟机上的不同客户部署一个多租户SaaS网络应用。</p>
+
+<iframe src="https://www.youtube.com/embed/KGqlKduFohI" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="problem">问题</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/tenants-multipleapplication.png" class="zoom" data-title=""><img src="../Images/a679d3ca6ed9b052ba96552b84e16c98.png" class="img-fluid center" alt="Multi-Tenant architecture" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/tenants-multipleapplication.png"/>T2】</a></p>
+
+<h3 id="tech-stack">技术堆栈</h3>
+
+<p>我们的应用程序是一个报价生成器，名为<a href="https://github.com/OctopusSamples/WillItDeploy-Episode005" rel="nofollow">随机报价</a>。该应用程序相对简单，但它包含许多通用特性，使我们能够说明多租户部署的复杂性。</p>
+
+<p>特点:</p>
+
+<ul>
+<li>为每位客户定制应用程序设置</li>
+<li>应用程序启动时的动态特征/模块加载</li>
+<li>为每位顾客定制颜色和款式</li>
+</ul>
+
+<p>技术:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/sqlserver-logo.png" class="zoom" data-title=""><img src="../Images/bebf8078b283deb4ee3ef2d298bb9346.png" class="img-fluid center" alt="SQL Server logo" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/sqlserver-logo.png"/>T2】</a></p>
+
+
+
+<p>向我们的营销经理安德鲁致敬，他一直在学习编码并开发了这款应用的第一部分。干得好！</p>
+
+<h3 id="deployment-target">部署目标</h3>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/aws-logo.png" class="zoom" data-title=""><img src="../Images/28e8568f9dd0f4d9b20416a10068d857.png" class="img-fluid center" alt="Amazon web services logo" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/aws-logo.png"/>T2】</a></p>
+
+
+
+<h2 id="solution">解决办法</h2>
+
+<p>那么它会部署吗？是的，会的！我们的部署流程如下所示。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/octopus-first-class-tenants.png" class="zoom" data-title=""><img src="../Images/f92ca9d41bb15bd3392a82b604872c65.png" class="img-fluid center" alt="Octopus Multi-Tenant Deployments" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/octopus-first-class-tenants.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/deployment-process.png" class="zoom" data-title=""><img src="../Images/ba515c143e44556a0dfb37e9d536d25b.png" class="img-fluid center" alt="Octopus deployment process" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/deployment-process.png"/></a>T2】</p>
+
+<p>然后，我们添加以下步骤来成功部署我们的应用程序。</p>
+
+<ul>
+<li>Octopus <strong>部署包</strong>步骤将我们的数据库脚本复制到我们的数据库部署目标</li>
+<li>Octopus社区贡献了step template-<strong><a href="https://library.octopusdeploy.com/step-template/actiontemplate-sql-execute-script-file" rel="nofollow">SQL-Execute Script File</a></strong>来针对我们的SQL Server数据库执行我们的实体框架核心迁移脚本。</li>
+<li>Octopus <strong>部署到IIS </strong>部署多租户ASP.NET核心web应用程序的步骤</li>
+<li>Octopus <strong>部署一个包</strong>步骤，将管理模块复制到客户的网站，如果他们为此功能付费的话</li>
+<li>Octopus <strong>部署一个包</strong>步骤，将共享模块复制到客户的网站，如果他们为该功能付费的话</li>
+</ul>
+
+<p>这个项目使用以下变量，变量模板和公共变量模板来存储我们的应用程序设置，数据库连接细节和web应用程序配置。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/project-variables.png" class="zoom" data-title=""><img src="../Images/354822a68bff8bf40e5d0e69b316f9ac.png" class="img-fluid center" alt="Project variables" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/project-variables.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/project-variable-templates.png" class="zoom" data-title=""><img src="../Images/956e054e5061028ddc0f94d3e8c06bcb.png" class="img-fluid center" alt="Project variable templates" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/project-variable-templates.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/common-variable-templates.png" class="zoom" data-title=""><img src="../Images/ab3beae5d0b30d780648c7db0e31b33c.png" class="img-fluid center" alt="Common variable templates" data-original-src="https://i.octopus.com/blog/2018-03/will-it-deploy-episode-05/common-variable-templates.png"/>T2】</a></p>
+
+<p>本集的<a href="https://github.com/OctopusSamples/WillItDeploy-Episode005" rel="nofollow"> GitHub repo </a>包含了本视频使用的所有资源和链接。</p>
+
+<h3 id="wrap-up">总结</h3>
+
+<p>我们希望你喜欢这一集，因为我们有更多的作品！如果你想让我们探索某个框架或技术，请在评论中告诉我们。</p>
+
+<p>不要忘记订阅我们的YouTube频道，因为我们会定期添加新视频。愉快的部署！😃</p>
+
+                    
+                    
+</body>
+</html>

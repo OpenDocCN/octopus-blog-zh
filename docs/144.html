@@ -1,0 +1,204 @@
+<html>
+<head>
+<title>Creating an Octopus Deploy step template - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>创建Octopus部署步骤模板- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/creating-an-octopus-deploy-step-template#2022-09-30">https://octopus.com/blog/creating-an-octopus-deploy-step-template#2022-09-30</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/octopus-step-template.png" class="zoom" data-title=""><img src="../Images/a4e8fb4db2495d7965139408c0975794.png" class="img-fluid center" alt="Creating an Octopus Deploy step template" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/octopus-step-template.png"/>T2】</a></p>
+
+<p>今天，我将在Octopus Deploy中创建一个<a href="https://octopus.com/docs/deployment-process/steps/custom-step-templates">自定义步骤模板</a>。</p>
+
+<p>自定义步骤模板对于扩展Octopus的功能非常有用。他们还可以在您的项目中标准化操作。</p>
+
+<p>我在Firebase上主持了一些项目，所以我选择为<a href="https://firebase.google.com/docs/cli/#deployment" rel="nofollow"> Firebase CLI deploy命令</a>创建一个模板。</p>
+
+<p>我们开始吧！</p>
+
+<h2 id="choosing-a-base-template">选择基础模板</h2>
+
+<p>我需要做出的第一个决定是，我将在哪个现有的步骤模板上进行构建。</p>
+
+<p>我将一个包的内容部署到Firebase，所以<strong>部署一个包</strong>看起来是一个合理的选择。<strong>部署包</strong>步骤用于将包的内容部署到它将运行的机器或PaaS目标。</p>
+
+<p>对于我的Firebase部署来说，情况并非如此。</p>
+
+<p>我只需要对我的文件运行Firebase CLI。运行命令的机器并不重要。<strong>运行脚本</strong>步骤非常适合于此。</p>
+
+<p>我点击<strong>运行脚本</strong>模板上的<strong>添加</strong>，这将我带到步骤模板编辑器。</p>
+
+<h2 id="settings">设置</h2>
+
+<p>Octopus让我进入<strong>设置</strong>选项卡。在这里，我可以提供名称、徽标和描述。</p>
+
+<p>选择一个好的、描述性的步骤名称至关重要。这个名字对我来说很容易。因为我包装了Firebase deploy命令，所以我将我的步骤称为<strong> Firebase Deploy </strong>。</p>
+
+<p>接下来是logo。徽标不是必需的，但我喜欢添加它们。看到与技术相关的技术的标志为这一步提供了一点天赋。</p>
+
+<p>最后，我给这个步骤一个描述。描述字段支持降价。我利用这一点链接回Firebase CLI文档:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-step-settings.png" class="zoom" data-title=""><img src="../Images/5afe497bde09ee51c1ce31af5bc08941.png" class="img-fluid center" alt="Firebase Deploy Step Settings" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-step-settings.png"/>T2】</a></p>
+
+<h2 id="what-to-do-next">下一步做什么？</h2>
+
+<p>接下来我应该向我的步骤添加参数，还是添加步骤细节和逻辑？</p>
+
+<p>看情况。我通常从我知道我会需要的参数开始。然后，我开始处理步骤细节，并在进行过程中添加新发现的参数。</p>
+
+<p>在这篇文章中，我描述了所有的参数，然后才进入步骤细节。</p>
+
+<h2 id="parameters">因素</h2>
+
+<p>我为包含我的Firebase资产的包添加了一个参数。打包参数是Octopus Deploy中相对较新的特性。包参数允许我的步骤的使用者提供一个包供该步骤使用。</p>
+
+<p>当添加参数时，我提供名称、标签、帮助文本和控件类型。</p>
+
+<p>我将我的包参数命名为<code>FirebaseDeploy.Package</code>。参数的前缀将防止与其他Octopus变量的名称冲突。</p>
+
+<p>我给它标签和控件类型<code>Package</code>。我将帮助文本设置为“包含正在部署的Firebase项目的包”</p>
+
+<p>一个参数下降:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-package-parameter.png" class="zoom" data-title=""><img src="../Images/a52fed8ecf825f37990fc89a21e48053.png" class="img-fluid center" alt="Firebase package parameter settings" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-package-parameter.png"/>T2】</a></p>
+
+<p>其余的参数将遵循类似的命名约定，只有类型不同。</p>
+
+<p><code>Firebase Path</code>:包含Firebase CLI的目录的路径，如果不在＄PATH中。</p>
+
+<p><code>CI Token</code>:Octopus需要CI令牌才能代表我使用Firebase CI。我把这个参数设为敏感参数。敏感参数值将在数据库中加密，并在日志中屏蔽。</p>
+
+<p><code>Public Path</code>:覆盖<strong> firebase.json </strong>中指定的托管公共目录。</p>
+
+<p><code>Message</code>:描述此部署的可选消息。</p>
+
+<p><code>Force?</code>:删除当前工作目录中缺失的云功能，无需确认。<code>Force?</code>是一个复选框参数。</p>
+
+<p><code>Only Targets</code>:仅部署到指定的逗号分隔目标(例如<code>hosting,storage</code>)。</p>
+
+<p><code>Except Targets</code>:部署到指定目标以外的所有目标(如<code>database</code>)。</p>
+
+<p><code>Print Command?</code>:我添加这个参数是为了在命令运行时使用<code>set -x</code>打印命令。在调试和测试该步骤时，这很方便。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-parameters.png" class="zoom" data-title=""><img src="../Images/b8c3525f3ff15213753ef058024887d1.png" class="img-fluid center" alt="Parameters for the Firebase Deploy step" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-parameters.png"/>T2】</a></p>
+
+<h2 id="step">步骤</h2>
+
+<p>参数排序后，我切换到<strong>步骤</strong>选项卡。我的脚本源代码将保持设置为<strong>内联源代码</strong>。<strong>包中的脚本文件</strong>如果您的团队在包中存储了标准脚本，那么它会非常有用。它不太适合您计划提供给公众的模板(伏笔)。</p>
+
+<p><strong>步骤</strong>选项卡下有<strong>内联源代码</strong>部分。我将跳过这一步，创建一个引用包，因为我的脚本需要它。</p>
+
+<h3 id="referenced-packages">参考包</h3>
+
+<p><a href="https://octopus.com/docs/deployment-examples/custom-scripts/run-a-script-step#referencing-packages">引用的包</a>是额外的包，您可以在<strong>运行脚本</strong>步骤中使用。</p>
+
+<p>在这一步中，引用的包是包含我们的Firebase资产的包。我将把包参数作为引用包连接到脚本。</p>
+
+<p>我可以选择直接选择一个包，但我将设置更改为<code>Let the project select the package</code>。然后我从列表中选择我的包参数。我可以通过使用参数名<code>FirebaseDeploy.Package</code>在我的脚本中使用这个包。</p>
+
+<p>我确保去查<code>Extract package during deployment</code>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-referenced-package.png" class="zoom" data-title=""> <img src="../Images/f916d396ce824d0b03a88dfb4ac0b2d0.png" class="img-fluid center" alt="Referenced package" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-referenced-package.png"/> </a></p>
+
+<h3 id="the-script">剧本</h3>
+
+<p>我选择用Bash编写我的脚本，因为我预计大多数消费者会在Linux Worker上运行它。</p>
+
+<p>我的脚本的第一部分是获取参数值并将它们存储在变量中。</p>
+
+<p>第一个变量是提取包的路径。变量名与其他变量名略有不同。<code>Octopus.Action.Package</code>变量是一个集合。我使用参考包的名称作为索引来访问包信息:</p>
+
+<pre><code class="language-bash">packagePath=$(get_octopusvariable "Octopus.Action.Package[FirebaseDeploy.Package].ExtractedPath")
+</code></pre>
+
+<p>其余的变量都很标准，我用它们的名字来引用它们:</p>
+
+<pre><code class="language-bash">token=$(get_octopusvariable "FirebaseDeploy.CIToken")
+public=$(get_octopusvariable "FirebaseDeploy.Public")
+message=$(get_octopusvariable "FirebaseDeploy.Message")
+force=$(get_octopusvariable "FirebaseDeploy.Force")
+only=$(get_octopusvariable "FirebaseDeploy.Only")
+except=$(get_octopusvariable "FirebaseDeploy.Except")
+printCommand=$(get_octopusvariable "FirebaseDeploy.PrintCommand")
+firebasePath=$(get_octopusvariable "FirebaseDeploy.FirebasePath")
+</code></pre>
+
+<p>如果步骤消费者为Firebase提供了一个路径，我将它添加到path变量中:</p>
+
+<pre><code class="language-bash">if [ ! -z "$firebasePath" ] ; then
+    PATH=$firebasePath:$PATH
+fi
+</code></pre>
+
+<p>如果<code>Force?</code>被选中，我将该值设为true。如果不是，我就取消设置:</p>
+
+<pre><code class="language-bash">if [ "$force" = "True" ] ; then
+    force=true
+else
+    force=
+fi
+</code></pre>
+
+<p>如果<code>Print Command?</code>被选中，我打开命令跟踪:</p>
+
+<pre><code class="language-bash">if [ "$printCommand" = "True" ] ; then
+    set -x
+fi
+</code></pre>
+
+<p>最后，我切换到包目录并调用Firebase deploy命令:</p>
+
+<pre><code class="language-bash">cd $packagePath
+
+firebase deploy ${public:+ -p "$public"} ${message:+ -m "$message"} ${force:+ -f} ${only:+ --only "$only"} ${except:+ --except "$except"} --token $token
+</code></pre>
+
+<p>对于可选参数，我用了最近学的一个<a href="https://dev.to/octopus/til-about-shell-parameter-expansion-in-bash-3c5m" rel="nofollow">招数</a>。</p>
+
+<p>在下面的示例中，如果<code>public</code>为空或未设置，则命令中不会添加任何内容。如果<code>public</code>不为空或未置位，则将<code>-p "$public"</code>添加到命令中。</p>
+
+<pre><code>${public:+ -p "$public"}
+</code></pre>
+
+<p>瞧，我已经完成了剧本。</p>
+
+<h2 id="testing">测试</h2>
+
+<p>将步骤模板保存在我的库中后，我可以将其添加到部署流程中。自定义步骤模板在<em>库步骤模板</em>类别中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-add-step.png" class="zoom" data-title=""><img src="../Images/6dae68cb5d76eec3c8612727a426c3dc.png" class="img-fluid center" alt="Adding the Firebase step to a deployment process" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-add-step.png"/>T2】</a></p>
+
+<p>我将该步骤配置为在我的Worker上运行，并在安装了Firebase CLI的容器中运行:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-run-on-worker.png" class="zoom" data-title=""><img src="../Images/f3617a175e80503bfb3be9028fe7106b.png" class="img-fluid center" alt="Firebase step configured to run on a worker" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-run-on-worker.png"/>T2】</a></p>
+
+<p>我将参数设置为我在部署中使用的值。</p>
+
+<p>首先，我从内置提要中选择了包。</p>
+
+<p>我将CI令牌设置为存储令牌的敏感变量。</p>
+
+<p>基于我的firebase.json设置，我只设置了<strong>目标</strong>到<code>hosting:blog</code>。</p>
+
+<p>最后，我检查了<code>Print Command?</code>,这样我就可以看到该步骤构建的命令:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-set-parameters.png" class="zoom" data-title=""><img src="../Images/bc483b8ceb0cdd2b985c3c05e5f2a770.png" class="img-fluid center" alt="Set parameters for Firebase step" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-set-parameters.png"/>T2】</a></p>
+
+<p>我创建了一个版本，并将其部署到我的环境中。一切看起来都很好！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-deploy-logs.png" class="zoom" data-title=""><img src="../Images/81f70e928483a4b134e7b9401bf3dcaa.png" class="img-fluid center" alt="Firebase deploy logs" data-original-src="https://i.octopus.com/blog/2020-07/creating-an-octopus-deploy-step-template/firebase-deploy-logs.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p><a href="https://octopus.com/docs/deployment-process/steps/custom-step-templates">自定义步骤模板</a>对于扩展Octopus的功能非常有用。他们还可以在您的项目中标准化操作。</p>
+
+<p>我为Firebase CLI deploy命令创建了一个自定义模板，可以在我的任何项目中使用。</p>
+
+<h2 id="next-time">下次</h2>
+
+<p>我提到过，我希望这一步涵盖所有的部署参数，并可供其他人使用。阅读我的下一篇文章，<a href="https://octopus.com/blog/contributing-a-step-template-to-the-octopus-deploy-community-library">向Octopus Deploy社区库</a>贡献一个步骤模板，了解我如何向<a href="https://library.octopus.com" rel="nofollow"> Octopus Deploy库</a>提交这个步骤。</p>
+
+                    
+                    
+</body>
+</html>

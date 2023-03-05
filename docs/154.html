@@ -1,0 +1,213 @@
+<html>
+<head>
+<title>Database deployment automation using Octopus and Redgate Deployment Suite for Oracle - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用Octopus和Redgate Deployment Suite for Oracle实现数据库部署自动化</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools#2021-08-12">https://octopus.com/blog/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/blogimage-redgate-database.png" class="zoom" data-title=""><img src="../Images/e439d64b809371741120ba5b7fb74bf3.png" class="img-fluid center" alt="Database deployment automation using Octopus and Redgate Deployment Suite for Oracle" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/blogimage-redgate-database.png"/>T2】</a></p>
+
+<p>在加入Octopus Deploy之前，我在一个. NET应用程序上工作了大约三年，使用Oracle作为它的数据库。在Octopus Deploy版本发布前几年，我开始在那里工作。这些都是艰难的部署。一切都是手动的，我们只能在周六凌晨2点进行部署，部署需要两到四个小时。</p>
+
+<p>谢天谢地，那些日子已经过去了。今天可用的工具比以前先进了好几光年。在这篇文章中，我将介绍如何将更改部署到Oracle数据库中。本文的目标是使用TeamCity作为构建服务器来构建整个CI/CD管道(尽管核心概念确实转移到了Jenkins、Bamboo、TFS/VSTS/Azure DevOps)，Octopus Deploy作为部署工具，Redgate Oracle工具集在数据库端完成繁重的工作。</p>
+
+<p><em>免责声明:</em>我在2010年至2013年间使用甲骨文。Oracle实例是10g，我用Benthic和SQL Developer查询Oracle。从那时起，发生了很多变化。我是一名SQL Server人员，毫无疑问，我在本文中做了一些愚蠢的事情，这些事情不再是最佳实践。</p>
+
+
+
+<h2 id="getting-started">入门指南</h2>
+
+<p>如果您想继续学习，您需要下载并安装以下工具:</p>
+
+
+
+<p>为了从Oracle下载任何东西，您必须创建一个帐户。我选择了个人版，因为就像SQL Server Developer Edition一样，它功能齐全，但在使用许可证时会受到限制，而且我只在这个演示中使用它。</p>
+
+<p>出于本文的目的，我将部署到运行在Windows机器上的同一个Oracle数据库。然而，在现实环境中，您应该遵循与此类似的设置。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/docs/deployment-examples/database-with-jump-box.png" class="zoom" data-title=""><img src="../Images/3a58a984d90a5d42b193b8e74fb72d55.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/docs/deployment-examples/database-with-jump-box.png"/>T2】</a></p>
+
+<p>通过这种设置，您可以在Octopus Deploy和Oracle数据库前面的VIP之间的一个<a href="https://octopus.com/docs/infrastructure/workers">工人</a>或一个<a href="https://octopus.com/docs/infrastructure/windows-targets"> jumpbox运行触手</a>上安装一个触手。</p>
+
+<h2 id="creating-a-source-database">创建源数据库</h2>
+
+<p>Redgate的Oracle工具集是一个基于状态的工具。对于那些没有读过我以前文章的人来说，基于状态的工具是一种将数据库的期望状态保存到源代码控制中的工具。在部署过程中，会生成一个独特的增量脚本来针对Oracle数据库运行。该增量脚本将仅用于该环境的数据库。下一个环境将获得一个新的增量脚本。</p>
+
+<p>我要从头开始。我设置了一个虚拟机并安装了Oracle。接下来，我将创建一个源数据库。这个数据库将代表我希望所有其他数据库处于的理想状态。我将设置我的数据库，然后使用<a href="https://www.red-gate.com/products/oracle-development/source-control-for-oracle/" rel="nofollow"> Redgate的Oracle </a>源代码控制将它签入源代码控制。</p>
+
+<p>我使用Oracle提供的<a href="https://docs.oracle.com/cd/B16254_01/doc/server.102/b14196/install003.htm" rel="nofollow">数据库创建助手</a>来创建数据库。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_empty_database.png" class="zoom" data-title=""><img src="../Images/d6f129dd9e75681c0fc93f610259f8a9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_empty_database.png"/>T2】</a></p>
+
+<p>我将添加一个包含两列的新表:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_add_table.png" class="zoom" data-title=""><img src="../Images/3d00ef342ec20267f4c5692c9b95893a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_add_table.png"/>T2】</a></p>
+
+<p>我还会加入一个序列。对于那些不熟悉Oracle的人来说，当您想对ID字段使用自动递增的数字时，需要一个序列。好吧，反正是在老派神谕里。看起来事情有点变化。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_add_sequence.png" class="zoom" data-title=""><img src="../Images/a8a3279485a8078585f27b3dfccb043d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_add_sequence.png"/>T2】</a></p>
+
+<p>最后，我将把序列和ID字段绑定在一起。这为我提供了一些准备部署到空白数据库的模式更改。您的更改很可能会更加复杂。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_make_id_sequence.png" class="zoom" data-title=""><img src="../Images/993f055862e68c94a7ccf0fd45684d04.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_make_id_sequence.png"/></a>T2】</p>
+
+<h2 id="tying-oracle-to-source-control">将Oracle与源代码管理捆绑在一起</h2>
+
+<p>既然我们想要创建的表已经准备好了，是时候将表和序列定义放入源代码控制中了。为此，我使用<a href="https://www.red-gate.com/products/oracle-development/source-control-for-oracle/" rel="nofollow"> Redgate的Oracle </a>源代码控制。</p>
+
+<p>当我们第一次启动应用程序时，我们看到一个选项，<strong>创建一个新的源代码管理项目… </strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_source_control_getting_started.png" class="zoom" data-title=""><img src="../Images/cede94afd16a301d5755dc9211560190.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_source_control_getting_started.png"/>T2】</a></p>
+
+<p>首先，您需要配置数据库连接。不要忘记测试您的连接，这样您就知道它工作正常:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_configure_connection.png" class="zoom" data-title=""><img src="../Images/03e6ba5d32df78a1644e18033dcb2a3c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_configure_connection.png"/>T2】</a></p>
+
+<p>数据库连接准备就绪。接下来，我们配置要使用的源代码控制系统。这个存储库将是一个git存储库，但是不使用内置的git功能。我更喜欢使用工作文件夹。这样我就可以使用我选择的git GUI，并获得git的全部功能，特别是分支。一旦这个过程开始工作，下一步就是在每个开发人员的机器上安装Oracle。使用专用实例，开发人员可以同时签入他们的源代码和数据库更改。而不是在共享服务器上进行数据库更改，然后等待代码被签入以利用该更改。</p>
+
+<p>如您所见，我有一个空的工作文件夹:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/empty_working_folder.png" class="zoom" data-title=""><img src="../Images/394e22895b9e29ebcaca60cf688fa114.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/empty_working_folder.png"/></a>T2】</p>
+
+<p>我可以将该工作文件夹的目录输入到Redgate的Oracle源代码控制中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_select_working_folder.png" class="zoom" data-title=""><img src="../Images/7d3b8546d50c8d453c25c5c34f32d90a.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_select_working_folder.png"/>T2】</a></p>
+
+<p>我需要选择我想要使用的模式。我将表放在SourceDB模式中，因此我将选择这个模式:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_select_schema.png" class="zoom" data-title=""><img src="../Images/7b1755f4eb0558faf320bdee3aebef9f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_select_schema.png"/>T2】</a></p>
+
+<p>最棒的是，它会显示将要创建的所有文件夹，以及将要创建这些文件夹的目录:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_confirm_schema.png" class="zoom" data-title=""><img src="../Images/7c4edc6f68f8adc7b0c07d5945c300aa.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_confirm_schema.png"/>T2】</a></p>
+
+<p>该工具将监控该数据库和模式的任何更改。我将保持名称不变，以免以后混淆:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_summary.png" class="zoom" data-title=""><img src="../Images/173d2224a8d70ccc92ef5934fd2ca957.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_summary.png"/>T2】</a></p>
+
+<p>有四个要签入的变更:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_project_summary.png" class="zoom" data-title=""><img src="../Images/7b8c8fd52199f5a579fffcabcbee81cd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_project_summary.png"/></a>T2】</p>
+
+<p>当我单击大箭头时，会出现一个摘要屏幕。对于那些使用过Redgate的SQL源代码控制的人来说，这应该很熟悉:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_commit_changes_summary.png" class="zoom" data-title=""><img src="../Images/dbf0edb1a6444d793404f35f5af5e8f2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_commit_changes_summary.png"/>T2】</a></p>
+
+<p>单击“保存”按钮会显示所有内容都已成功保存:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_save_changes_finished.png" class="zoom" data-title=""><img src="../Images/ea2f6a099ffe70b8bbb0d86095f07040.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_save_changes_finished.png"/>T2】</a></p>
+
+<p>打开Git扩展，您可以看到已经创建的所有文件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/git_pending_changes.png" class="zoom" data-title=""><img src="../Images/9ea59861327cf26504424995017df096.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/git_pending_changes.png"/>T2】</a></p>
+
+<p>我将提交这些更改。现在是时候建立一个构建并将这些更改打包成一个zip文件供Octopus Deploy使用了。</p>
+
+<h2 id="setting-up-a-build-server">设置构建服务器</h2>
+
+<p>在我的TeamCity实例中，我创建了一个简单的项目来打包数据库，将包发布到Octopus Deploy，并在Octopus Deploy中创建一个新版本。首先是包数据库。对于这个构建步骤，我将打包整个db/src文件夹(包括任何附加的模式)。现在它只包含了<em> SourceDB </em>模式:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_package_oracle_db.png" class="zoom" data-title=""><img src="../Images/df59f3ac4eb52af42eb67c1d8e3012ca.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_package_oracle_db.png"/></a>T2】</p>
+
+<p>推销产品应该非常简单:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_push_packages.png" class="zoom" data-title=""><img src="../Images/e134f145d05b92eef132aea0d44032a1.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_push_packages.png"/>T2】</a></p>
+
+<p>在Octopus Deploy中，我设置了一个非常简单的部署过程。此时的目标是确保所有东西都能成功打包、推送和部署。我还不太担心部署过程(这将在几分钟内完成):</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_simple_oracle_process.png" class="zoom" data-title=""><img src="../Images/e53f00fd1413701ec0125b76ddfddfa0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_simple_oracle_process.png"/>T2】</a></p>
+
+<p>回到TeamCity，我将在我创建一个发布步骤中使用这个新项目:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_create_octopus_release.png" class="zoom" data-title=""><img src="../Images/8d11956a4ed95cd1bb8eb7714376b104.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_create_octopus_release.png"/>T2】</a></p>
+
+<p>现在是关键时刻，第一次运行构建。和...我搞砸了。当然，我做到了。没有什么事情第一次会完美无缺:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/team_city_first_build.png" class="zoom" data-title=""><img src="../Images/1c78c3311b56b1936d335a7b3cbe56ba.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/team_city_first_build.png"/>T2】</a></p>
+
+<p>试了几次，但我让构建工作正常了:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_successful_build.png" class="zoom" data-title=""><img src="../Images/34ef3817b8504998ecc19a816a5c183b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_successful_build.png"/></a>T2】</p>
+
+<p>问题是我在打包路径的开头放了一个/应该是db/src，就像这样:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_correct_pack_step.png" class="zoom" data-title=""><img src="../Images/d16b10872e2f8ac8c85b89ac7d99b0c0.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/teamcity_correct_pack_step.png"/>T2】</a></p>
+
+<p>如果我从Octopus下载软件包并检查它，我可以看到所有创建的文件都在那里:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_package_contents.png" class="zoom" data-title=""><img src="../Images/4b395aec0d2ea6f37deac3ef2ab9ec87.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_package_contents.png"/>T2】</a></p>
+
+<p>我们有构建服务器打包、发布和触发部署。现在是时候去Octopus并完成这个过程了。</p>
+
+<h2 id="configure-destination-database">配置目标数据库</h2>
+
+<p>如果您像我一样第一次设置所有东西，那么您将需要配置一个目标数据库。我使用数据库创建助手配置了一个名为<strong> DestDB </strong>的新数据库。该数据库的用户名也是<strong> DestDB </strong>。</p>
+
+<p>如您所见，我没有在这个数据库上设置任何东西:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_dest_db_empty.png" class="zoom" data-title=""><img src="../Images/6aa40943efb5c04c30ac0422fe8cdb83.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_dest_db_empty.png"/>T2】</a></p>
+
+<h2 id="setup-octopus-deploy">设置Octopus部署</h2>
+
+<p>如前面的截图所示，您应该在Octopus Deploy和Oracle数据库之间设置一个跳转框。这台机器需要安装Redgate的Oracle Tool-belt、<strong> SQL*Plus </strong>和标准的<strong> tnsnames.ora </strong>文件。tnsnames.ora 文件需要包含您需要从这个跳转框连接到的所有主机(数据库服务器)。</p>
+
+<p>由于Redgate的Oracle Tool-belt中的一个怪癖，您需要作为一个帐户而不是作为本地系统帐户运行触手；否则，您将得到错误消息，指出该工具未被激活，即使它已被激活。请按照<a href="https://octopus.com/docs/infrastructure/windows-targets/running-tentacle-under-a-specific-user-account" class="alert-link">这些说明</a>进行设置。</p>
+
+
+<p>我已经向社区库添加了两个新的步骤模板。<a href="https://library.octopus.com/step-templates/0aa40fba-949c-4065-a438-010349c3fd0c/actiontemplate-redgate-create-oracle-release" rel="nofollow"> Redgate -创建Oracle版本</a>和<a href="https://library.octopus.com/step-templates/c7cd3ab4-5dfb-4f8d-957e-1940ed30359c/actiontemplate-run-oracle-sqlplus-script" rel="nofollow">运行Oracle SQLPlus脚本</a>。请下载并安装在您的Octopus Deploy实例上。</p>
+
+<p>我整理的过程非常简单。第一步生成一个报告和一个增量脚本，在生产前和生产中，DBA批准更改，然后对数据库运行增量脚本。</p>
+
+<p>我故意让这一步只生成一个增量脚本和一个报告文件。通过包含<code>/deploy</code>命令行开关，可以让Redgate的Oracle工具为您完成部署。我省略了命令行开关，因为我觉得首先在过程中建立信任并让一个人批准更改是很重要的。社区图书馆是开源的。您可以随意复制并调整该步骤以满足您的需求:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_deployment_process.png" class="zoom" data-title=""><img src="../Images/96cf9db1695be724da35f89a9fa0ece3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_deployment_process.png"/>T2】</a></p>
+
+<p>在第一步中，有几个选项需要完成。我已经尽力包含尽可能多的帮助文本。如果有不清楚的地方，请发电子邮件给support@octopus.com，让我们知道，我们会解决的。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_redgate_create_oracle_release.png" class="zoom" data-title=""><img src="../Images/55ab4a85838e626b693a1acb737374ab.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_redgate_create_oracle_release.png"/>T2】</a></p>
+
+<p>在该步骤的最后，要求您提供源模式和目标模式。这是由于设置红门的工具。step-template包装了命令行，并提供了模式名作为选项，因此step模板也必须提供它作为选项:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_oracle_schema_compare.png" class="zoom" data-title=""><img src="../Images/7f578dc85d24f13b983d900abfbf60b3.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_oracle_schema_compare.png"/></a>T2】</p>
+
+<p>第二步模板将采用任何脚本，并使用SQL*Plus针对Oracle数据库运行它。这一步只需要运行脚本的路径和访问Oracle数据库所需的凭证。</p>
+
+<p><strong>请注意</strong>，Redgate - Create Oracle发布步骤将在导出目录中生成一个名为<strong> Delta.sql </strong>的文件。我想让这个脚本尽可能通用，这就是为什么您必须提供完整的路径:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_oracle_sqlplus.png" class="zoom" data-title=""><img src="../Images/5b7f8b4bc32c4f5d773a6dbe7fc4a2d2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_oracle_sqlplus.png"/>T2】</a></p>
+
+<p>我喜欢Oracle工具的一点是它生成的报告显示了包中存储的脚本和目标数据库之间的差异。Redgate - Create Oracle版本将使其成为一个工件，供您下载和查看:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_oracle_simple_report.png" class="zoom" data-title=""><img src="../Images/263bb1dd311a3605bb8cc17404c2d414.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_oracle_simple_report.png"/>T2】</a></p>
+
+<p>此外，它还使delta脚本成为一个可以下载的工件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_oracle_delta_script.png" class="zoom" data-title=""><img src="../Images/a74cadec405a186308cdd0032a134917.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/redgate_oracle_delta_script.png"/>T2】</a></p>
+
+<h2 id="running-the-first-deployment">运行首次部署</h2>
+
+<p>Octopus现在已经配置完毕，可以开始第一次测试了。我只打算部署到dev。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_test_run_successful.png" class="zoom" data-title=""><img src="../Images/6bc49c8f3e588f690e593874b6f57697.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/octopus_test_run_successful.png"/></a>T2】</p>
+
+<p>让我们检查一下数据库来确定一下。是的，一切都在那里。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_post_deployment.png" class="zoom" data-title=""><img src="../Images/d8bb1cac15f868566f358ccd4dd36f84.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-03/database-deployment-automation-for-oracle-using-octopus-and-redgate-tools/oracle_post_deployment.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>为每个环境手动编写部署脚本的日子正在迅速结束。在本文中，我们为Oracle数据库创建了一个完整的CI/CD管道。它仍然缺少一些关键特性，比如处理任何类型的初始化数据和静态数据，但是这是一个好的开始。我鼓励你采取这个基本的过程，并开始添加它。</p>
+
+<p>下次再见，愉快的部署！</p>
+
+<hr/>
+
+<p>数据库部署自动化系列文章:</p>
+
+
+
+                    
+                    
+</body>
+</html>

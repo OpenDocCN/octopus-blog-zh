@@ -1,0 +1,187 @@
+<html>
+<head>
+<title>Configuration Management with Octopus and PowerShell DSC - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>部署Octopus和PowerShell DSC - Octopus的配置管理</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-and-powershell-dsc#2016-12-01">https://octopus.com/blog/octopus-and-powershell-dsc#2016-12-01</a></blockquote>
+                        <p><a href="https://msdn.microsoft.com/en-us/powershell/dsc/overview"> PowerShell期望状态配置(DSC) </a>是PowerShell团队采用声明式方法来配置服务器，是标准PowerShell脚本命令式方法的替代方案。PowerShell DSC可用于许多在配置新服务器时需要运行的常见配置任务。一些有用的例子:</p>
+
+<ul>
+<li>安装Windows功能，如用于web服务器的IIS</li>
+<li>设置环境变量</li>
+<li>设置文件和文件夹权限</li>
+</ul>
+
+<p>虽然Octopus专注于不断交付应用程序的新版本(您自己构建的应用程序)，但这些任务是一次性的，通常由不同的工具集来完成。在过去的6个月里，我们一直致力于开发一些功能，这些功能实际上结合在一起，当与PowerShell DSC结合时，使Octopus成为一个真正有效的配置管理工具。</p>
+
+<p>在这篇文章中，我想演示如何使用Octopus来管理、测试和推广PowerShell DSC脚本，以及Octopus和PowerShell DSC如何结合使用。</p>
+
+<h2>概观</h2>
+
+<p>在这篇文章中，我将向你展示如何:</p>
+
+<ul>
+<li>使用Octopus运行PowerShell DSC脚本，在我们的web服务器上安装IIS</li>
+<li>使用Octopus中的健康检查来检测DSC脚本的“漂移”(IIS功能被禁用)</li>
+<li>检测到漂移时设置电子邮件提醒</li>
+<li>使用Octopus中的自动部署来纠正偏差(修复IIS)</li>
+<li>测试我们的DSC脚本的新版本，并在不同环境之间推广它们</li>
+</ul>
+
+<h2>Octopus作为PowerShell DSC推/拉服务器的替代产品</h2>
+
+<p>微软支持在服务器之间部署PowerShell DSC脚本的两种方式——“推”和“拉”服务器。这是一个中央服务器，存储每个节点的配置。</p>
+
+<p>对于我们的大多数客户来说，他们已经在机器之间设置了我们的章鱼和触手代理，你猜怎么着:章鱼和触手可以配置为<a href="http://docs.octopusdeploy.com/display/OD/Listening+Tentacles">监听</a>(推)和<a href="http://docs.octopusdeploy.com/display/OD/Polling+Tentacles">轮询</a>(拉)模式！并且它有一些好处:<a href="http://docs.octopusdeploy.com/display/OD/Octopus+-+Tentacle+communication">章鱼/触手通信是安全的</a>，不期望机器在同一个域，支持代理服务器，以及许多其他特性。</p>
+
+<p>因此，如果您使用Octopus和Tentacle，您应该能够使用Octopus部署您的PowerShell DSC脚本，而不需要DSC拉/推服务器。少了一件要管的事！</p>
+
+<h2>演示环境</h2>
+
+<p>我在Hyper-V中设置了三台虚拟机来构建这个演示:一台Octopus服务器，两台服务器将作为我们的web服务器。一台是“测试”服务器，另一台是“生产”服务器:</p>
+
+<p><img src="../Images/cc82cb0ce4efa475127040bb66bde6f0.png" alt="Octopus and Tentacles in Hyper-V" data-original-src="https://i.octopus.com/blog/201611-servers-WF27.png"/></p>
+
+<p>我在Octopus服务器上设置了SQL Server和Octopus，并在两个web服务器上设置了Tentacle(在轮询模式下)。我没有添加任何其他Windows功能或做任何其他事情来配置它们。</p>
+
+<h2>第一个DSC脚本</h2>
+
+<p>在我们进入IIS之前，让我们首先制作一个非常简单的设置环境变量的DSC脚本。我们将在Octopus中创建一个名为“配置”的新项目，该项目将包含一个PowerShell脚本步骤，其中包含我们的DSC脚本:</p>
+
+<p><img src="../Images/7d0ce224c32cbb44c22d89aa22c07344.png" alt="Configuration project" data-original-src="https://i.octopus.com/blog/201611-config-project-SVQB.png"/></p>
+
+<p>剧本是这样的:</p>
+
+<pre><code>Configuration WebServerConfiguration
+{  
+  Node "localhost"
+  {  
+    Environment HelloMessageVariable
+    {
+        Ensure = "Present"
+        Name = "HelloMessage"
+        Value = "Hello, world!"
+    }
+  } 
+}
+
+WebServerConfiguration -OutputPath "C:\DscConfiguration"
+
+Start-DscConfiguration -Wait -Verbose -Path "C:\DscConfiguration"
+</code></pre>
+
+<p>该脚本做了三件事:</p>
+
+<ol>
+<li>它定义了配置。注意，我们使用<code>localhost</code>，因为这个脚本将直接在每个web服务器上运行。</li>
+<li>它调用配置(生成<code>.mof</code>文件)，将输出发送到一个文件夹</li>
+<li>它会应用该文件夹中的配置</li>
+</ol>
+
+<p>在Octopus中，我们可以创建这个项目的发布，并部署它。DSC脚本将在远程机器上运行，发现环境变量不存在，并创建它:</p>
+
+<p><img src="../Images/def15e027e314ce5717e29e15ed6e547.png" alt="Deploying the DSC script" data-original-src="https://i.octopus.com/blog/201611-deployed-EJUS.png"/></p>
+
+<p>我们可以看到该变量已在机器上创建:</p>
+
+<p><img src="../Images/510aba7abd92da65567ee958027164a9.png" alt="Variable has been set" data-original-src="https://i.octopus.com/blog/201611-variable-M633.png"/></p>
+
+<p>如果我们修改了Windows中的环境变量(比如某个调皮的开发人员在调试某个东西的时候手动更改了变量，忘记告诉任何人)，下一次DSC脚本运行的时候就会被覆盖:</p>
+
+<p><img src="../Images/bac736a5f6add1aee460f497bfa63a63.png" alt="The variable gets overriden" data-original-src="https://i.octopus.com/blog/201611-overwrite-modification-MH2T.png"/></p>
+
+<p>现在，这很有趣，但是DSC现在没有做太多标准PowerShell不能做的事情(尽管它更具声明性，这很好)。我们仍然需要重新部署DSC脚本来强制覆盖它。</p>
+
+<h2>检测漂移</h2>
+
+<p>DSC声明式模型的强大之处在于能够检测到<em>漂移</em>——当机器上配置的实际情况与它应该配置的不匹配时。</p>
+
+<p>PowerShell提供了一个<code>Test-DscConfiguration</code>功能，可以用来检查机器是否漂移。我们可以在Octopus中设置一个<a href="http://docs.octopusdeploy.com/display/OD/Machine+Policies">自定义健康检查策略</a>,以便在每次检查机器健康时运行:</p>
+
+<p><img src="../Images/ea8a8bee56604cd567eac790edec6260.png" alt="Custom policy" data-original-src="https://i.octopus.com/blog/201611-policy-RPVK.png"/></p>
+
+<p>以下是脚本:</p>
+
+<pre><code>$result = Test-DscConfiguration -Verbose -ErrorAction SilentlyContinue
+
+if ($result -eq $false) {
+    Write-Host "Machine has drifted"
+    Fail-HealthCheck "Machine has drifted"
+} elseif ($result -eq $true) {
+    Write-Host "Machine has not drifted"
+} else {
+    Write-Host "No configuration has been applied to the machine yet"
+}
+</code></pre>
+
+<p>如果机器漂移(在这种情况下，有人编辑变量)，机器现在将在环境页面中显示为不健康:</p>
+
+<p><img src="../Images/56958d9c2c4ed5d4976074692905a24f.png" alt="Unhealthy machine" data-original-src="https://i.octopus.com/blog/201611-2016-11-3013_59_02-environments-octopusdeploy-37WX.png"/></p>
+
+<p>您可以将此功能与我们的<a href="http://docs.octopusdeploy.com/display/OD/Subscriptions">订阅</a>功能相结合，以便在机器变得不健康时收到电子邮件通知。订阅可能是这样的:</p>
+
+<p><img src="../Images/91fe978fad54effe9472b57a290db768.png" alt="Subscription" data-original-src="https://i.octopus.com/blog/201611-2016-11-3014_09_57-emailwhenmachinesdriftagainsttheirdscconfiguration-octopusdeploy-J3PZ.png"/></p>
+
+<p>这将导致:</p>
+
+<p><img src="../Images/789b07719c3f4049844db3b1e62a450f.png" alt="Email notification of drift" data-original-src="https://i.octopus.com/blog/201611-email-Q6V3.png"/></p>
+
+<h2>自动校正漂移</h2>
+
+<p>当机器偏离理想的配置时，它将在Octopus中变得“不健康”。这很方便，因为我们可以在Octopus中设置一个自动部署<a href="http://docs.octopusdeploy.com/display/OD/Project+Triggers">触发器</a>来在机器上自动部署当前的DSC脚本。这将重新应用配置，并纠正偏差。</p>
+
+<p><img src="../Images/3e7d757f0eb6bde31e7faa4816d63219.png" alt="Trigger to auto deploy" data-original-src="https://i.octopus.com/blog/201611-trigger-UL24.png"/></p>
+
+<h2>测试和促进DSC变化</h2>
+
+<p>Octopus习惯于处理在环境之间提升应用程序版本，这种方法对于DSC脚本非常有效。如果您有一个新版本的DSC脚本，那么在将它推广到生产环境之前，最好将其应用到测试环境中的服务器上。在这里，我们可以看到我已经将DSC脚本的“1.0.1”版本投入生产，目前我正在测试该脚本的一些新版本:</p>
+
+<p><img src="../Images/d082882fb2b6dd02ce78d5d836401e80.png" alt="Promoting DSC scripts" data-original-src="https://i.octopus.com/blog/201611-2016-11-3016_18_03-configuration-octopusdeploy-FQGR.png"/></p>
+
+<h2>（同ImmigrationInspectors移民检查）</h2>
+
+<p>在介绍中，我用安装IIS作为可以用DSC完成的事情的例子，尽管为了使例子简单，我们把重点放在设置环境变量上。下面是一个安装IIS的DSC脚本示例:</p>
+
+<pre><code>Configuration WebServerConfiguration
+{  
+  Node "localhost"
+  {        
+    WindowsFeature InstallWebServer
+    {
+      Name = "Web-Server"
+      Ensure = "Present"
+    }
+
+    WindowsFeature InstallAspNet45
+    {
+      Name = "Web-Asp-Net45"
+      Ensure = "Present"
+    }
+  } 
+}
+
+WebServerConfiguration -OutputPath "C:\DscConfiguration"
+
+Start-DscConfiguration -Wait -Verbose -Path "C:\DscConfiguration"
+</code></pre>
+
+<p>PS:这里有一个获取这些特性名称的好方法——在Windows Server 2012 R2实例上的PowerShell会话中，如果您调用<code>Get-WindowsFeature</code>，您将看到一个漂亮的树，上面有每个特性的名称:</p>
+
+<p><img src="../Images/d82c4934037ecf50d60d834d942903de.png" alt="Windows Features" data-original-src="https://i.octopus.com/blog/201611-2016-11-3016_34_13-testweb01onpaulsurface-virtualmachineconnection-G3S3.png"/></p>
+
+<h2>摘要</h2>
+
+<p>虽然Octopus专注于传统上所谓的“应用程序发布自动化”，但我们也有越来越多的客户将其用于配置管理。PowerShell DSC和Octopus使您很容易涉足配置管理领域，灵活性意味着您可以构建包含PowerShell DSC、传统脚本、Chocolatey命令和应用程序部署的混合项目。</p>
+
+<p>我们在过去6个月中添加的新功能-自动部署触发器和自定义运行状况检查策略-确实有助于在使用Octopus部署、管理和测试PowerShell DSC脚本时实现闭环。2017年，我们有更多关于PowerShell DSC的计划，我们的目标是在明年年初发布一篇RFC博客文章，介绍我们的想法。</p>
+
+<p>如果你想了解更多关于PowerShell DSC的知识，我非常喜欢这篇文章:<a href="https://www.simple-talk.com/sysadmin/powershell/powershell-desired-state-configuration-the-basics/"> PowerShell DSC:基础知识</a>。</p>
+
+<p>你用的PowerShell DSC有/没有八达通？</p>
+
+                    
+                    
+</body>
+</html>

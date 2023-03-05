@@ -1,0 +1,146 @@
+<html>
+<head>
+<title>Installing Jenkins From Scratch - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>从头开始安装Jenkins-Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/installing-jenkins-from-scratch#2022-07-15">https://octopus.com/blog/installing-jenkins-from-scratch#2022-07-15</a></blockquote>
+                        <p>在<a href="https://www.jetbrains.com/research/devecosystem-2017/team-tools/" rel="nofollow"> 2017 JetBrains开发者生态系统调查</a>中，Jenkins在CI系统中排名第一。凭借丰富的插件和庞大的用户群，Jenkins是构建软件项目的强大解决方案，在这篇博文中，我们将看看如何启动并运行一个基本的Jenkins实例。</p>
+
+
+
+<p>首先，我安装了全新的Ubuntu 17.10。</p>
+
+<p>我们需要安装一些标准Ubuntu安装中没有的便利工具。Jenkins只需要<code>git</code>和<code>openjdk-8-jdk</code>,但是我经常使用其他工具来保证安装它们是理所当然的。</p>
+
+<pre><code>sudo apt-get install htop vim iftop git openssh-server openjdk-8-jdk
+</code></pre>
+
+<h2 id="installing-jenkins">安装Jenkins</h2>
+
+<p>为了安装Jenkins，我们将使用这里的自定义回购文件<a href="https://pkg.jenkins.io/debian-stable/" rel="nofollow"/>。</p>
+
+<pre><code>wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -
+deb https://pkg.jenkins.io/debian-stable binary/
+sudo apt-get update
+sudo apt-get install jenkins
+</code></pre>
+
+<h2 id="initial-jenkins-configuration">初始Jenkins配置</h2>
+
+<p>在web浏览器中打开http://localhost:8080。您将看到一条来自Jenkins的消息，要求您输入在文件<code>/var/lib/jenkins/secrets/initialAdminPassword</code>中找到的密码。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/unlock-jenkins.png" class="zoom" data-title=""><img src="../Images/064d6054206c83df70c119a72b45cf6a.png" class="img-fluid center" alt="Unlock Jenkins" data-original-src="https://i.octopus.com/blog/2017-11/unlock-jenkins.png"/>T2】</a></p>
+
+<p>然后会提示您要安装的插件。此时，我安装了建议的插件。稍后我们会再添加一些。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/install-suggested-plugins.png" class="zoom" data-title=""><img src="../Images/ee62623524e17143b0022313a4fa0c34.png" class="img-fluid center" alt="Install suggested plugins" data-original-src="https://i.octopus.com/blog/2017-11/install-suggested-plugins.png"/>T2】</a></p>
+
+<p>给Jenkins几分钟时间安装建议的插件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/installing-plugins.png" class="zoom" data-title=""><img src="../Images/5bbf387fdfe28e11b1ffbed87958468b.png" class="img-fluid center" alt="Installing plugins" data-original-src="https://i.octopus.com/blog/2017-11/installing-plugins.png"/>T2】</a></p>
+
+<p>创建您的第一个管理员用户。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/create-admin-user.png" class="zoom" data-title=""><img src="../Images/6d6ad9db6ae336b771b29e3187ba3489.png" class="img-fluid center" alt="Create admin user" data-original-src="https://i.octopus.com/blog/2017-11/create-admin-user.png"/>T2】</a></p>
+
+<p>你完了！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/jenkins-done.png" class="zoom" data-title=""><img src="../Images/1d9e2bf3e7410315bcfefb0bcf1f6b1d.png" class="img-fluid center" alt="Jenkins done" data-original-src="https://i.octopus.com/blog/2017-11/jenkins-done.png"/>T2】</a></p>
+
+<h2 id="installing-additional-plugins">安装附加插件</h2>
+
+<p>我们需要一些额外的插件来构建一个Maven项目，并用Octopus部署它。</p>
+
+<p>点击<span class="path">管理詹金斯➜管理</span>插件。</p>
+
+<p>点击<code>Available</code>标签。</p>
+
+<p>勾选以下插件:</p>
+
+
+
+<p>点击<code>Download now and install after restart</code>。</p>
+
+<p>勾选<code>Restart Jenkins when installation is complete and no jobs are running</code>选项。</p>
+
+<p>詹金斯重启后，你将拥有你需要的所有插件。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/additional-plugins.png" class="zoom" data-title=""><img src="../Images/495df32253590df35063a5c092f0bb6f.png" class="img-fluid center" alt="Additional plugins" data-original-src="https://i.octopus.com/blog/2017-11/additional-plugins.png"/>T2】</a></p>
+
+<h2 id="applying-a-custom-jenkins-theme">应用自定义Jenkins主题</h2>
+
+<p>我们之前安装的简单主题插件允许我们用一个CSS文件更新Jenkins的外观。</p>
+
+<p>点击<span class="path">管理詹金斯➜配置系统</span>，在<code>Theme</code>部分下将URL <code>http://afonsof.com/jenkins-material-theme/dist/material-&lt;color&gt;.css</code>添加到<code>URL of theme CSS</code>字段。你可以在<a href="http://afonsof.com/jenkins-material-theme/" rel="nofollow"> Jenkins材料主题网站</a>上找到一个颜色列表来替换<color>标记。我用了蓝色，所以我输入的网址是<code>http://afonsof.com/jenkins-material-theme/dist/material-blue.css</code> </color></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/jenkins-theme-css.png" class="zoom" data-title=""><img src="../Images/d202ff1c87c4db25878f8734aedc846c.png" class="img-fluid center" alt="Jenkins CSS theme" data-original-src="https://i.octopus.com/blog/2017-11/jenkins-theme-css.png"/>T2】</a></p>
+
+<p>我想你会同意这些主题大大改善了詹金斯的外观。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/jenkins-themed.png" class="zoom" data-title=""><img src="../Images/d394e901f2f16abe3ed53e4ee9ec0eac.png" class="img-fluid center" alt="Jenkins themed" data-original-src="https://i.octopus.com/blog/2017-11/jenkins-themed.png"/>T2】</a></p>
+
+<h2 id="preparing-jenkins">准备詹金斯</h2>
+
+<p>我们需要配置一些工具，以便在构建项目时使用。特别是，我们希望添加一个Maven安装以在我们的构建中使用，一个Java安装以运行Maven，以及一个Octopus CLI定制工具以推送和部署文件。</p>
+
+<p>我发现让Jenkins为我下载并安装这些工具更容易，这些工具可以在<span class="path">管理Jenkins ➜全球工具配置</span>下进行配置。</p>
+
+<h3 id="configuring-java">配置Java</h3>
+
+<p>为了构建我们的应用程序，我们需要一份Java。在<code>JDK</code>部分点击<code>ADD JDK</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/java-tool.png" class="zoom" data-title=""><img src="../Images/f0f1ccba05cf59ab617266ed7a09a890.png" class="img-fluid center" alt="Java tool" data-original-src="https://i.octopus.com/blog/2017-11/java-tool.png"/>T2】</a></p>
+
+<p>给这个工具起个名字(我用的是<code>Java 9</code>)并选择要安装的JDK版本。</p>
+
+<p>我们将在下一篇博文中引用这些工具的名称，在这篇博文中，我们将使用<code>Jenkinsfile</code>构建和部署一个Java应用程序。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/java-tool-configured.png" class="zoom" data-title=""><img src="../Images/6477a39e3e42e6ed157667549ee48c97.png" class="img-fluid center" alt="Java tool configured" data-original-src="https://i.octopus.com/blog/2017-11/java-tool-configured.png"/>T2】</a></p>
+
+<p>输入下载JDK所需的Oracle凭据。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/oracle-credentials.png" class="zoom" data-title=""><img src="../Images/cb0a74749b59d4fdc9c239fb81134cce.png" class="img-fluid center" alt="Oracle credentials" data-original-src="https://i.octopus.com/blog/2017-11/oracle-credentials.png"/>T2】</a></p>
+
+<h3 id="configuring-maven">配置Maven</h3>
+
+<p>我们的Java项目将被配置为使用Maven，因此我们需要一个可用的Maven实例来完成构建。在<code>Maven</code>部分点击<code>ADD MAVEN</code>按钮。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/maven-tool.png" class="zoom" data-title=""><img src="../Images/191db39857ede537dfb36c10864df8fb.png" class="img-fluid center" alt="Maven tool" data-original-src="https://i.octopus.com/blog/2017-11/maven-tool.png"/>T2】</a></p>
+
+<p>给这个工具命名，并选择最新版本的Maven。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/maven-configured.png" class="zoom" data-title=""><img src="../Images/4bdeb7b76496f9300c7fe190435fe5b2.png" class="img-fluid center" alt="Maven configured" data-original-src="https://i.octopus.com/blog/2017-11/maven-configured.png"/>T2】</a></p>
+
+<h3 id="configuring-the-octopus-cli">配置Octopus CLI</h3>
+
+<p>虽然在Jenkins中没有自带的Octopus CLI工具，但是我们安装的自定义工具插件确实允许我们很容易地将CLI作为Jenkins工具公开。</p>
+
+<p>在<code>Custom Tools</code>部分，创建一个名为<code>Octo CLI</code>的新工具，并在<code>Download URL for binary archive</code>字段中输入Ubuntu CLI的URL。</p>
+
+<p>确保将<code>Label</code>字段留空。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octo-cli-tool.png" class="zoom" data-title=""><img src="../Images/65f95e4cb0523eef70c00f3277066207.png" class="img-fluid center" alt="Octo CLI Tool" data-original-src="https://i.octopus.com/blog/2017-11/octo-cli-tool.png"/></a>T2】</p>
+
+<p>你可以从<a href="https://octopus.com/downloads"> Octopus下载页面</a>获得Octo CLI的下载链接。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2017-11/octo-cli-download.png" class="zoom" data-title=""><img src="../Images/240fc706f491a6612d7540dd7e30d445.png" class="img-fluid center" alt="Octo CLI Download" data-original-src="https://i.octopus.com/blog/2017-11/octo-cli-download.png"/>T2】</a></p>
+
+<p>虽然Octo CLI支持的Ubuntu最新版本是16.04，但我在Ubuntu 17.10中使用它推送包和创建版本时没有任何问题。</p>
+
+
+<h2 id="conclusion">结论</h2>
+
+<p>至此，我们已经基本安装了Jenkins，并配置了构建和部署Java应用程序所需的所有工具。</p>
+
+<p>在下一篇博文<a href="/blog/deploying-to-octopus-from-jenkins">中，我们将看看如何使用</a><a href="https://jenkins.io/doc/book/pipeline/" rel="nofollow"> Jenkins Pipelines </a>来配置一个要构建并推送到Octopus的Java应用程序。</p>
+
+<p>如果您对Java应用程序的自动化部署感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy的试用版</a>，并查看我们的文档。</p>
+
+                    
+                    
+</body>
+</html>

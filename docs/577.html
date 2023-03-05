@@ -1,0 +1,601 @@
+<html>
+<head>
+<title>Deploying PowerShell Desired State Configuration (DSC) like an App with Octopus Deploy - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>像使用Octopus Deploy - Octopus Deploy的应用程序一样部署PowerShell所需状态配置(DSC)</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/powershelldsc-as-template#2021-07-07">https://octopus.com/blog/powershelldsc-as-template#2021-07-07</a></blockquote>
+                        <p>PowerShell DSC是一项非常棒的技术，可以放在您管理基于Windows的服务器的工具箱中。这篇文章是一系列文章的一部分:</p>
+
+
+
+<p>我们也有关于使用PowerShell DSC和Octopus Deploy的文章:</p>
+
+
+
+<hr/>
+
+<p>在之前的<a href="https://octopus.com/blog/octopus-and-powershell-dsc">帖子</a>中，Paul Stovell向我们展示了如何使用Octopus Deploy将PowerShell期望状态配置(DSC)部署到服务器，以:</p>
+
+<ul>
+<li>管理基础设施。</li>
+<li>使用机器策略监控漂移。</li>
+<li>使用项目触发器自动校正漂移。</li>
+</ul>
+
+<p>这篇博文将通过以下方式阐述这一观点:</p>
+
+<ul>
+<li>将配置数据分离成配置数据文件(. psd1)。</li>
+<li>将PowerShell DSC脚本转换为step模板。</li>
+<li>捕获机器策略中漂移的项目。</li>
+<li>利用文件中的替代变量功能来设置环境或项目中需要更改的属性。</li>
+</ul>
+
+<p>到本文结束时，我们将创建一个可重用的PowerShell DSC脚本，作为可以在部署中使用的步骤模板。我们还将创建一个机器策略，该策略将报告任何已漂移的项目，并将机器标记为不健康。</p>
+
+
+
+<h2 id="powershell-dsc">PowerShell DSC</h2>
+
+<h3 id="pauls-original-script">保罗的原始剧本</h3>
+
+<p>Paul为DSC PowerShell提供的代码示例是一个很好的基本脚本示例:</p>
+
+<pre><code class="language-PS">Configuration WebServerConfiguration
+{  
+  Node "localhost"
+  {        
+    WindowsFeature InstallWebServer
+    {
+      Name = "Web-Server"
+      Ensure = "Present"
+    }
+
+    WindowsFeature InstallAspNet45
+    {
+      Name = "Web-Asp-Net45"
+      Ensure = "Present"
+    }
+  }
+}
+
+WebServerConfiguration -OutputPath "C:\DscConfiguration"
+
+Start-DscConfiguration -Wait -Verbose -Path "C:\DscConfiguration"
+</code></pre>
+
+<h3 id="separating-node-data">分离节点数据</h3>
+
+<p>在他的例子中，节点数据包含在脚本本身中，要配置的特性是静态的。如果我们将脚本中的节点数据分离到配置数据文件(DSC配置)中，我们可以使DSC PowerShell脚本更加动态:</p>
+
+<pre><code class="language-PS">@{
+    AllNodes =  @(
+        @{
+
+            # node name
+            NodeName = $env:COMPUTERNAME
+
+            # required windows features
+            WindowsFeatures = @(
+                @{
+                    Name = "Web-Server"
+                    Ensure = "Present"
+                    Source = "d:\sources\sxs"
+                },
+                @{
+                    Name = "Web-Asp-Net45"
+                    Ensure = "Present"
+                    Source = "d:\sources\sxs"
+                }
+            )
+        }
+    )
+}
+</code></pre>
+
+<h3 id="making-the-dsc-powershell-script-more-dynamic">使DSC PowerShell脚本更加动态</h3>
+
+<p>现在，节点数据已经分离，DSC PowerShell脚本可以更改为动态的，安装配置数据文件(DSC配置)中指定的功能:</p>
+
+<pre><code class="language-PS">Configuration WebServerConfiguration
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration' # We get a warning if this isn't included
+
+    Node $AllNodes.NodeName
+    {
+        # loop through features list and install
+        ForEach($Feature in $Node.WindowsFeatures)
+        {
+            WindowsFeature "$($Feature.Name)"
+            {
+                Ensure = $Feature.Ensure
+                Name = $Feature.Name
+                Source = $Feature.Source # Needed if for some reason the resource isn't on the OS already and needs to be retrieved from something like a mounted ISO
+            }
+        }
+    }
+}
+
+WebServerConfiguration -ConfigurationData "C:\DscConfiguration\WebServer.psd1" -OutputPath "C:\DscConfiguration"
+
+Start-DscConfiguration -Wait -Verbose -Path "C:\DscConfiguration"
+</code></pre>
+
+<h3 id="filling-in-more-details-of-the-dsc-configuration">填写DSC配置的更多详细信息</h3>
+
+<p>太好了！我们的web服务器实现有了一个良好的开端，但是配置web服务器不仅仅是安装Windows功能。让我们通过添加一些额外的Windows功能、站点、应用程序，为IIS站点设置默认日志路径，并使用密码、哈希、协议、密钥交换和指定密码套件顺序来加强我们的安全性，从而为我们的配置数据文件添加更多的数据。</p>
+
+<p>注意:这只是为了演示，请咨询您的安全团队以确定哪些设置最适合您的组织。</p>
+
+<p>以下是一个片段，完整的文件可以在我们的示例GitHub存储库中找到，网址为<a href="https://github.com/OctopusSamples/DSC-as-a-template/blob/master/src/CompleteScript/WebServer.psd1" rel="nofollow">https://GitHub . com/OctopusSamples/DSC-as-a-template/blob/master/src/complete script/web server . PS D1</a>:</p>
+
+<pre><code class="language-PS">@{
+    AllNodes =  @(
+        @{
+
+            # node name
+            NodeName = $env:COMPUTERNAME
+
+            # required windows features
+            WindowsFeatures = @(
+                ...
+                @{
+                    Name = "Web-Server"
+                    Ensure = "Present"
+                    Source = "d:\sources\sxs"
+                },
+                ...
+            )
+
+            # default IIS Site log path
+            LogPath = "c:\logs"
+
+            # Define root path for IIS Sites
+            RootPath = "C:\inetpub\wwwroot"
+
+            # define IIS Sites
+            Sites = @(
+                ...
+                 @{
+                    Name = "OctopusDeploy.com"
+                    Ensure = "Present"
+                    State = "Started"
+                    BindingInformation = @(
+                        @{
+                            Port = "80"
+                            IPAddress = "" # leave blank or comment out to set to All Unassigned
+                            Protocol = "HTTP"
+                        },
+                        @{
+                            Port = "443"
+                            IPAddress = ""
+                            Protocol = "HTTPS"
+                            CertificateStoreName  = "WebHosting" # WebHosting | My
+                            Exportable = $true
+                        }
+
+                    )
+                    Pool = @{
+                            PipeLine = "Integrated"
+                            RuntimeVersion = "v4.0"
+                            State = "Started"
+                        }
+                    Applications = @(
+                        ...
+                        @{
+                            Name = "OctoFX"
+                            FolderName = "OctoFX"
+                            Ensure = "Present"
+                            Pool = @{
+                                Pipeline = "Integrated"
+                                RuntimeVersion = "v4.0"
+                                State = "Started"
+                            }
+                            Authentication = @{
+                                Windows = $false
+                                Anonymous = $true
+                            }
+
+                        },
+                        ...
+                    )
+                }
+            )
+
+            # fill in this section to enable or disable encryption protocols, hashes, ciphers, and specify cipher suite ordering
+            Encryption = @{
+                Ciphers = @(
+                    ...
+                    @{
+                        Name = "DES 56/56"
+                        Enabled = "0" # Disabled = 0, Enabled = -1
+                    },
+                    ...
+                )
+                Hashes = @(
+                    ...
+                    @{
+                        Name = "MD5"
+                        Enabled = "0"
+                    },
+                    ...
+                )
+                Protocols = @(
+                    ...
+                    @{
+                        Name = "Multi-Protocol Unified Hello"
+                        Enabled = "0"
+                    },
+                    ...
+                )
+                KeyExchanges = @(
+                    ...
+                    @{
+                        Name = "Diffie-Hellman"
+                        Enabled = "-1"
+                    },
+                    ...
+                )
+                CipherSuiteOrder = @("TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", ...)
+            }
+        }
+    )
+}
+</code></pre>
+
+<h3 id="a-more-complete-dsc-script">更完整的DSC脚本</h3>
+
+<p>正如您可能已经猜到的，我们需要更新我们的DSC脚本来配置我们在配置数据文件中指定的选项。</p>
+
+<p>以下是一个片段，完整的文件可以在我们的示例GitHub资源库中找到，网址是<a href="https://github.com/OctopusSamples/DSC-as-a-template/blob/master/src/CompleteScript/IISDSC-Complete.ps1" rel="nofollow">https://GitHub . com/OctopusSamples/DSC-as-a-template/blob/master/src/complete script/IISDSC-complete . PS1</a>:</p>
+
+<pre><code class="language-PS">Configuration WebServerConfiguration
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+    Import-DscResource -Module xWebAdministration
+
+    Node $AllNodes.NodeName
+    {
+        # loop through features list and install
+        ForEach($Feature in $Node.WindowsFeatures)
+        {
+            WindowsFeature "$($Feature.Name)"
+            {
+                ...
+            }
+        }
+
+        # stop default web site
+        xWebSite DefaultSite
+        {
+            ...
+        }
+
+        # loop through list of default app pools and stop them
+        ForEach($Pool in @(".NET v2.0", `
+        ".NET v2.0 Classic", `
+        ".NET v4.5", `
+        ".NET v4.5 Classic", `
+        "Classic .NET AppPool", `
+        "DefaultAppPool"))
+        {
+            xWebAppPool $Pool
+            {
+                ...
+            }
+        }
+
+        # make sure log path exists
+        File LoggingPath
+        {
+            ...
+        }
+
+        # loop through the sites
+        ForEach($Site in $Node.Sites)
+        {
+            # create the folder
+            File $Site.Name
+            {
+                ...
+            }
+
+            # create the site app pool
+            xWebAppPool $Site.Name
+            {
+                ...
+            }
+
+            # create the site
+            xWebSite $Site.Name
+            {
+                ...
+            }
+
+            # Loop through site application collection and create folders
+            ForEach($Application in $Site.Applications)
+            {
+                File "$($Site.Name)-$($Application.Name)"
+                {
+                    ...
+                }
+
+
+                # create application pool
+                xWebAppPool $Application.Name
+                {
+                    ...
+                }
+
+                # create application
+                xWebApplication $Application.Name
+                {
+                    ...
+                }
+            }
+        }
+    }
+}
+
+# create credential object
+$Credentials = @()
+
+WebServerConfiguration -ConfigurationData "C:\DscConfiguration\WebServer.psd1" -OutputPath "C:\DscConfiguration"
+
+Start-DscConfiguration -Wait -Verbose -Path "C:\DscConfiguration"
+</code></pre>
+
+<p>这不是一个关于如何做PowerShell DSC的帖子，所以我不会重复添加的所有内容。然而，我确实想强调一行，<code>Import-DscResource -Module xWebAdministration</code>。这个xWebAdministration不像PSDesiredStateConfiguration那样是默认安装的，当我们进行部署时需要包含它。我们将在这篇文章的后面讨论更多。</p>
+
+<h2 id="making-the-dsc-script-a-step-template">使DSC脚本成为步骤模板</h2>
+
+<p>好吧！我们将配置数据分离到它自己的文件中，并且我们有一个DSC脚本来配置IIS Web服务器。现在让我们开始在Octopus Deploy中将它们连接在一起，并使我们的DSC脚本成为一个步骤模板！</p>
+
+<p>我们首先登录Octopus Deploy实例，单击Library选项卡，然后是Step Templates:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-templates.png" class="zoom" data-title=""><img src="../Images/95074bd2d172851c25aa041580efaf30.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-templates.png"/>T2】</a></p>
+
+<p>点击添加按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-templates-add.png" class="zoom" data-title=""><img src="../Images/494700e14652adaed7f8eb289eca3177.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-templates-add.png"/>T2】</a></p>
+
+<p>选择部署包模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/deploy-a-package-template.png" class="zoom" data-title=""><img src="../Images/390bda6c548d633da939baca200fccc6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/deploy-a-package-template.png"/>T2】</a></p>
+
+<h3 id="settings">设置</h3>
+
+<p>填写设置:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/settings-page.png" class="zoom" data-title=""><img src="../Images/56dfaee3f0637353b8e2837c80a28510.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/settings-page.png"/>T2】</a></p>
+
+<h3 id="parameters">因素</h3>
+
+<p>我们将定义三个参数，DSC路径、配置数据文件步骤和配置数据文件名。这些将被我们的DSC脚本使用。</p>
+
+<h4 id="dsc-path">DSC路径</h4>
+
+<p>这是一条小路。DSC执行时将写入MOF文件:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/dsc-path.png" class="zoom" data-title=""><img src="../Images/827eaa79d59ce3ec3abd29f936a9261c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/dsc-path.png"/></a>T2】</p>
+
+<h4 id="configuration-data-file-name">配置数据文件名</h4>
+
+<p>这是我们创建的配置数据文件的名称，WebServer.psd1:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/data-file-name.png" class="zoom" data-title=""><img src="../Images/28226b2cac962583fb6b23e9cbc8f772.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/data-file-name.png"/>T2】</a></p>
+
+<h4 id="package-id">包ID</h4>
+
+<p>这是库中将用于部署的包的ID:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/package-id.png" class="zoom" data-title=""><img src="../Images/a96be540d6e4e95abf563a3c7118f598.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/package-id.png"/>T2】</a></p>
+
+<h3 id="step-tab">步骤选项卡</h3>
+
+<h4 id="configure-features">配置功能</h4>
+
+<p>在步骤选项卡上，单击配置要素按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/configure-features-template.png" class="zoom" data-title=""><img src="../Images/ec54c1d5032a28de6177b800a83c99d2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/configure-features-template.png"/>T2】</a></p>
+
+<p>在文件中启用自定义部署脚本和替代变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/template-enabled-features.png" class="zoom" data-title=""><img src="../Images/a3029bff3d8aa4ab51d998ef8561336e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/template-enabled-features.png"/>T2】</a></p>
+
+<h4 id="setting-package-variable">设置包变量</h4>
+
+<p>在“步骤”选项卡的“包详细信息”下，单击链式链接图标以启用到变量的绑定:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/chain-link-icon.png" class="zoom" data-title=""><img src="../Images/00ba05160a80dfa786585f7ba35ddcdd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/chain-link-icon.png"/>T2】</a></p>
+
+<p>现在，单击#调出变量列表，并选择我们创建的DSCPackageId参数:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/package-id-variable.png" class="zoom" data-title=""><img src="../Images/94e1ecf8315ea038e7e1dbd35a352ccd.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/package-id-variable.png"/>T2】</a></p>
+
+<h4 id="implementing-the-dsc-script">实现DSC脚本</h4>
+
+<p>展开自定义部署脚本，并将我们的PowerShell DSC脚本粘贴到部署脚本框中:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-code.png" class="zoom" data-title=""><img src="../Images/ea2db0513ea04f8abf5ad7e499318d37.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-code.png"/>T2】</a></p>
+
+<p>通过单击相反的箭头进入全屏模式，这样我们可以更容易地调整我们的脚本以使用我们定义的参数:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/full-screen.png" class="zoom" data-title=""><img src="../Images/ffce33774b5e330363634e3c297339ad.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/full-screen.png"/>T2】</a></p>
+
+<p>滚动到底部并更改:</p>
+
+<pre><code class="language-PS">WebServerConfiguration -ConfigurationData "C:\DscConfiguration\WebServer.psd1" -OutputPath "C:\DscConfiguration"
+
+Start-DscConfiguration -Wait -Verbose -Path "C:\DscConfiguration"
+</code></pre>
+
+<p>收件人:</p>
+
+<pre><code class="language-PS"># set location for mof files
+Set-Location -Path $DSCTempPath
+
+# get the configuration data file
+$ConfigurationDataFile = (Get-ChildItem -Path $OctopusParameters["Octopus.Action.Package.InstallationDirectoryPath"] | Where-Object {$_.Name -eq $DataFileName}).FullName
+
+# Display which file it's using
+Write-Host "The configuration data file is: $ConfigurationDataFile"
+
+# Execute and generate .MOF file
+WebServerConfiguration -ConfigurationData $ConfigurationDataFile -OutputPath $DSCTempPath
+
+# Configure the server using the MOF file
+Start-DscConfiguration -Wait -Verbose -Path $DSCTempPath
+</code></pre>
+
+<h4 id="set-up-variable-substitution">设置变量替换</h4>
+
+<p>展开“文件中的替代变量”部分。对于目标文件，单击#并选择数据文件名变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/template-var-sub.png" class="zoom" data-title=""><img src="../Images/8a9319c7925aada552dd3d4cfc9a210d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/template-var-sub.png"/>T2】</a></p>
+
+<p>现在，保存模板。</p>
+
+<p>酷！我们刚刚创建了一个动态的、可重用的步骤模板，它将使用PowerShell DSC配置IIS Web服务器！现在我们需要创建一个新项目来使用它。</p>
+
+<h2 id="caveat-for-powershell-dsc-resource-modules">PowerShell DSC资源模块注意事项</h2>
+
+<p>在这篇文章的前面，我谈到了DSC脚本中的<code>Import-DscResource -Module xWebAdministration</code>行。这是对xweb administration PowerShell DSC资源模块的引用，需要从<a href="https://www.powershellgallery.com/packages?q=xwebadministration" rel="nofollow"> PowerShell Gallery </a>或<a href="https://github.com/PowerShell/xWebAdministration" rel="nofollow"> GitHub </a>下载。需要注意的是，您的脚本中引用的任何DSC模块都必须在DSC脚本执行之前安装。</p>
+
+<h2 id="make-your-configuration-data-file-dsc-configuration-and-your-referenced-powershell-dsc-modules-deployable-packages">使您的配置数据文件(DSC配置)和您引用的PowerShell DSC模块成为可部署包</h2>
+
+<p>假设您已经将配置数据文件(DSC配置)和引用的PowerShell DSC模块放入源代码控制中。一旦进入源代码控制，您的构建服务器就可以很容易地将它们打包并发送到Octopus Deploy进行部署。</p>
+
+<h2 id="configure-your-project">配置您的项目</h2>
+
+<p>现在我们已经有了配置数据文件包和PowerShell DSC模块包，我们可以配置我们的项目了！</p>
+
+<h3 id="create-project-variables">创建项目变量</h3>
+
+<p>在定义我们的流程之前，让我们创建一些将在我们的部署中使用的变量；项目。PowerShellModulePath，项目。DSCPath，项目。PackageId和Project.ConfigurationDataFile。单击Variables选项卡并像这样填写变量:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/variables-1.png" class="zoom" data-title=""><img src="../Images/915d3c3ffa284212bdd0183afb510399.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/variables-1.png"/>T2】</a></p>
+
+<h3 id="define-deployment-process">定义部署流程</h3>
+
+<h4 id="step-1-deploy-the-powershell-dsc-modules">步骤1:部署PowerShell DSC模块</h4>
+
+<p>PowerShell DSC将使用$env:PSModulePath中定义的路径来查找模块。出于演示的目的，我们将把模块放在变量Project.PowerShellModulePath中定义的<code>c:\Program Files\WindowsPowerShell\Modules</code>中。</p>
+
+<p>通过单击“添加步骤”,向我们的项目添加一个新步骤:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/add-step.png" class="zoom" data-title=""><img src="../Images/37fdb5e8113193c8a3b9ad0cef034ef9.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/add-step.png"/>T2】</a></p>
+
+<p>选择部署包模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/deploy-a-package.png" class="zoom" data-title=""><img src="../Images/84d11aeb53640881d93a87f0c79de836.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/deploy-a-package.png"/>T2】</a></p>
+
+<p>要指定特定位置，请单击“配置功能”按钮并启用自定义安装目录:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/custom-install-dir.png" class="zoom" data-title=""><img src="../Images/c1126b3b1ba7048de080f076f85fb1ec.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/custom-install-dir.png"/>T2】</a></p>
+
+<p>要引用变量，请单击#调出列表并选择Project.PowershellModulePath，然后单击Save。</p>
+
+<p>警告！不要在安装前选择清除这个目录，PowerShell需要的其他模块在那里。</p>
+
+<p>完成后，您的步骤应该如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-1.png" class="zoom" data-title=""><img src="../Images/e54aeaad0e3e973df5a54b053821b70b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-1.png"/>T2】</a></p>
+
+<h4 id="step-2-our-custom-step-template">步骤2:我们的自定义步骤模板</h4>
+
+<p>第二步是我们之前创建的自定义步骤模板。通过选择库步骤模板类别，然后选择步骤来添加此步骤，在本例中，它是Web服务器PowerShell DSC:</p>
+
+<p>【T2 <img src="../Images/f5e57afed5d710230126fbe61bd54c17.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/custom-step-template.png"/></p>
+
+<p>用项目中的变量填充我们创建的参数:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-2.png" class="zoom" data-title=""><img src="../Images/892ab0273031651e5843f3a4197fbc46.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/step-2.png"/>T2】</a></p>
+
+<p>就是这样！一旦我们保存了我们的项目，我们就可以创建一个发布并配置一个服务器了！</p>
+
+<h2 id="powershell-dsc-and-octopus-deploy-combine-form-of-awesome">PowerShell DSC和Octopus部署结合，太棒了！</h2>
+
+<p>部署完成后，我们应该会看到如下内容:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/deployment-complete.png" class="zoom" data-title=""><img src="../Images/499df65358eb66d6e424e1da74489792.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/deployment-complete.png"/>T2】</a></p>
+
+<p>登录到我们的Web服务器，我们应该会发现IIS已经安装，并且定义了站点、应用程序池和应用程序:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/web-server.png" class="zoom" data-title=""><img src="../Images/d5b8e98c9ffc2edeae8fecae92bc822c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/web-server.png"/>T2】</a></p>
+
+<h2 id="more-awesomeness-with-variable-substitution">变量替换更牛逼！</h2>
+
+<p>但是等等！在我们的配置数据文件中，我们已经静态地设置了IIS站点登录的位置，但是如果我希望每个项目都有所不同呢？这就是我们可以使用Octopus Deploy的文件替换变量特性的地方！</p>
+
+<p>让我们创建一个名为Project的变量。日志位置的日志路径:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/log-path.png" class="zoom" data-title=""><img src="../Images/956d307786fd92e19a2c71923773a9d2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/log-path.png"/>T2】</a></p>
+
+<p logpath="">让我们将配置数据文件中的<code>LogPath = "c:\logs"</code>行改为<code>LogPath = "#{Project.LogPath}"</code>。#是Octopus Deploy语法，表示变量LogPath的位置。不要忘记检查的变化，以便它可以交付给八达通部署！</p>
+
+<p>因为我们在自定义步骤模板中启用了文件中的替代变量特性，所以我们已经准备好处理这个问题了！</p>
+
+<p>有了我们定义的变量和交付给Octopus Deploy的新配置数据文件包，我们就可以创建新的发布和部署了！部署完成后，我们将弹出到我们的IIS服务器，我们应该看到日志文件路径已经更新:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/updated-log-path.png" class="zoom" data-title=""><img src="../Images/09f7919d9004d4d2b756f5228018c970.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/updated-log-path.png"/></a>T2】</p>
+
+<h2 id="monitoring-for-naughtiness-with-machine-policies">使用机器策略监控淘气行为</h2>
+
+<p>哇！太棒了。我可以像部署应用程序一样部署服务器配置更改！有人调皮手动改了怎么办？你不是说要监控漂移吗？是的，当然了！我们可以调整Paul的机器策略脚本，向我们显示哪些项目不再处于所需状态，并将机器标记为不健康。</p>
+
+<p>Paul监控漂移的机器策略如下所示:</p>
+
+<pre><code class="language-PS">$result = Test-DscConfiguration -Verbose -ErrorAction SilentlyContinue
+
+if ($result -eq $false) {
+    Write-Host "Machine has drifted"
+    Fail-HealthCheck "Machine has drifted"
+} elseif ($result -eq $true) {
+    Write-Host "Machine has not drifted"
+} else {
+    Write-Host "No configuration has been applied to the machine yet"
+}
+</code></pre>
+
+<p>如果我们改变一些事情，我们可以很容易地列出哪些资源已经漂移:</p>
+
+<pre><code class="language-PS"># Capture the detailed results
+$result = Test-DscConfiguration -Detailed
+
+# Check to see if anything is in the NotInDesiredState collection
+if ($result.ResourcesNotInDesiredState.Count -gt 0)
+{
+    # Loop through the resources
+    foreach ($resource in $result.ResourcesNotInDesiredState)
+    {
+        # Display warning
+        Write-Warning "Resource $($resource.ResourceId) is not in desired state!"
+    }
+
+    # Fail the health check
+    Fail-HealthCheck "Machine has drifted."
+}
+else
+{
+    # All good!
+    Write-Host "Machine has not drifted."
+}
+</code></pre>
+
+<p>让我们通过在我们的IIS服务器上停止OctopusDeploy.com网站来测试它。停止站点后，在对机器运行运行状况检查时，我们应该会看到类似这样的内容:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/failed-health-check.png" class="zoom" data-title=""><img src="../Images/c1794c3eea31113c85185a721e80f447.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2019-05/powershelldsc-as-template/failed-health-check.png"/>T2】</a></p>
+
+<h2 id="summary">摘要</h2>
+
+<p>在本文中，我们创建了一个PowerShell期望状态配置(DSC)脚本，将其转换为Octopus部署步骤模板，将节点数据分离到一个配置数据文件(DSC配置)中，并创建了一个用于监控漂移的机器策略。</p>
+
+<p>这篇文章的源代码可以在<a href="https://github.com/OctopusSamples/DSC-as-a-template" rel="nofollow">https://github.com/OctopusSamples/DSC-as-a-template</a>获得</p>
+
+                    
+                    
+</body>
+</html>

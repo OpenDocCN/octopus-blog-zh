@@ -1,0 +1,137 @@
+<html>
+<head>
+<title>RFC: X.509 Certificate Management - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>RFC: X.509证书管理- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/rfc-certificate-management#2016-09-26">https://octopus.com/blog/rfc-certificate-management#2016-09-26</a></blockquote>
+                        <p>X.509证书的管理是一个常见的部署难题。</p>
+
+<p>推动这一特性的具体例子是在IIS中创建HTTPS绑定。</p>
+
+<p>目前在Octopus中，当配置HTTPS绑定时，通过指纹引用证书。</p>
+
+<p><img src="../Images/e23d378af28ba47f5187df6771a725d5.png" alt="Thumbprint in HTTPS IIS binding configuration" data-original-src="https://i.octopus.com/blog/201609-iis_binding_thumbprint-H2XH.png"/></p>
+
+<p>假设证书已经安装到IIS服务器上。当指纹所引用的证书不可避免地过期时，你必须记住更新八达通中的指纹以匹配新证书。</p>
+
+<p>我们相信，我们可以改进这一点，并(希望)改进许多其他与证书相关的场景。</p>
+
+<h2>Octopus ==证书库</h2>
+
+<p>Octopus服务器非常适合作为X.509证书的中央管理点。</p>
+
+<p>我们打算允许你上传你的证书到八达通。</p>
+
+<p><img src="../Images/c851e5b685c185d0175a91589eb02bfa.png" alt="Upload certificate mockup" data-original-src="https://i.octopus.com/blog/201609-upload_certificate_mockup-4WWU.png"/></p>
+
+<p>我们将支持上传各种文件格式(。pfx，。pem，。cer)，您将能够查看和搜索您已上传的证书。</p>
+
+<p>证书的范围可以是环境(和租户)。例如，这将防止意外地将您的生产证书部署到开发环境中。</p>
+
+<h3>私钥</h3>
+
+<p>从技术上讲，X.509证书只包含<em>公共</em>密钥。然而，在许多情况下(包括配置HTTPS IIS绑定)，证书及其对应的<em>私有</em>密钥都是必需的。</p>
+
+<p>PFX (PKCS #12)和PEM格式都支持存储私钥和证书，Octopus将支持上传这些内容。<br/>所以对于学究们(我们不都是这样)，当我们在这个上下文中谈到<em>证书</em>时，我们实际上是指<em>证书及其相关的私钥(如果提供的话)</em>。</p>
+
+<p>因为证书可能包含私钥，它们将被保存在用您的主密钥加密的Octopus数据库<a href="http://docs.octopusdeploy.com/display/OD/Security+and+encryption">中。</a></p>
+
+<h2>第一阶段</h2>
+
+<p>我们希望在初始阶段提供的功能是:</p>
+
+
+
+<h3>证书变量<a name="certificate_variables"/></h3>
+
+<p>为了支持证书，我们计划引入<em>类型变量</em>的概念。当创建一个变量时，您将能够指定它将代表一个证书。</p>
+
+<p><img src="../Images/b61a6768c13eb2158f2ed1081e7519aa.png" alt="Add certificate variable" data-original-src="https://i.octopus.com/blog/201609-certificate_variable_add-BLWP.png"/></p>
+
+<p>使用证书时，有许多潜在的有用属性:</p>
+
+<ul>
+<li>个性特征</li>
+<li>公开密钥</li>
+<li>私人密钥</li>
+<li>完整的原始证书(可能包括私钥)</li>
+<li>等等</li>
+</ul>
+
+<p>在部署时，证书变量将被扩展成许多变量。</p>
+
+<p>即:<code>MyCertificate</code>=&gt;<br/><code>MyCertificate.Type</code>:<code>Certificate</code><br/><code>MyCertificate.Name</code>:将证书导入八达通<br/> <code>MyCertificate.Thumbprint</code>时提供的友好名称:证书指纹。例如<code>A163E39F59560E6FE33A0299D19124B242D9B37E</code> <br/> <code>MyCertificate.Subject</code>:主体的X.500可分辨名称<br/> <code>MyCertificate.Issuer</code>:发行者的X.500可分辨名称<br/> <code>MyCertificate.NotBefore</code>:例如<code>2016-06-15T13:45:30.0000000-07:00</code> <br/> <code>MyCertificate.NotAfter</code>:例如<code>2019-06-15T13:45:30.0000000-07:00</code><br/><code>MyCertificate.Pfx</code>:base64编码的证书，如<a href="https://en.wikipedia.org/wiki/PKCS_12">【PKCS # 12】</a>格式，包括私钥(如果存在)。<br/><code>MyCertificate.PublicKey</code>:base64编码的DER ASN.1主键。<br/><code>MyCertificate.PrivateKey</code>:base64编码的DER ASN.1私钥(如果有)。<br/> <code>MyCertificate.PublicKeyPem</code>:公钥的PEM表示(即带表头\表尾的公钥)。<br/> <code>MyCertificate.PrivateKeyPem</code>:私钥的PEM表示(即带表头\表尾的private key)。</p>
+
+<p>这是一个可能的变量列表。创建的确切变量尚未最终确定。</p>
+
+<p>私钥变量将以与<a href="http://docs.octopusdeploy.com/display/OD/Sensitive+variables">敏感变量</a>相同的方式存储和传输；从不明文。</p>
+
+<p>将来，我们将把类型变量的概念扩展到其他实体。一个明显的候选人是<a href="http://docs.octopusdeploy.com/display/OD/Accounts">账户</a>。</p>
+
+<h3>IIS绑定<a name="IIS_bindings"/></h3>
+
+<p>在为IIS部署配置HTTPS绑定时，目前必须从外部管理证书安装(或者至少通过自定义脚本)。然后将证书的指纹输入到绑定配置中。</p>
+
+<p>此功能将允许您选择证书变量，而不是指纹。</p>
+
+<p><img src="../Images/e4450053ed94816b582f3266074c464b.png" alt="Configure IIS binding using certificate variable" data-original-src="https://i.octopus.com/blog/201609-iis_binding_mockup-R3RH.png"/></p>
+
+<p>有趣的是注意到绑定是到证书<em>变量</em>，而不是直接到证书。我们的推理是，常见的(也是推荐的)场景是拥有一个证书变量，每个环境有不同的实际证书值。</p>
+
+<p>例如</p>
+
+<p><img src="../Images/f53aa6c432fc3cbea3a610e32aa954b1.png" alt="Certificate variables scoped per Environment" data-original-src="https://i.octopus.com/blog/201609-certificate_variables_scoped-GF35.png"/></p>
+
+<p>因此，将使用<code>OctoFX Certificate</code>变量创建IIS绑定，并根据部署到的环境安装正确的证书。</p>
+
+<p>部署时，证书将安装在<code>Cert:\LocalMachine</code>存储中(如果还没有安装的话)，HTTPS绑定将在IIS中配置。</p>
+
+<h3>在自定义脚本中引用证书变量<a name="certificates_in_scripts"/></h3>
+
+<p>无论您选择哪种脚本语言(PowerShell、ScriptCS、F#、Bash)，证书变量都应该使使用定制脚本中的证书变得既好又容易。</p>
+
+<p>变量替换将起作用:</p>
+
+<p><code> Write-Host #{MyCertificate.Thumbprint} </code></p>
+
+<p>威尔也一样:</p>
+
+<p><code> Write-Host $OctopusParameters["MyCertificate.Thumbprint"] </code></p>
+
+<p>为了。基于. NET的脚本语言，我们可能会提供一个helper函数来获取<a href="https://msdn.microsoft.com/en-us/library/system.security.cryptography.x509certificates.x509certificate2(v=vs.110).aspx"> X509Certificate2 </a>对象，因为即使使用pfx表示，在创建这些对象时也有一些常见的陷阱。</p>
+
+<h2>未来</h2>
+
+<p>我们考虑在后续阶段交付的功能包括:</p>
+
+<ul>
+<li>配置到期通知</li>
+<li>报告证书安装在哪些机器上</li>
+<li>允许在上传新证书时自动替换已安装的证书(即，仅为证书创建“部署”)</li>
+<li><a href="https://letsencrypt.org/">让我们加密</a>集成。即实现<a href="https://letsencrypt.github.io/acme-spec/"> ACME协议</a>并充当<a href="https://letsencrypt.org/how-it-works/">加密代理</a></li>
+</ul>
+
+<h3>圣杯</h3>
+
+<p>我们梦想中的工作流程如下:</p>
+
+<ol>
+<li>创建新证书(从“让我们加密”中自动请求)</li>
+<li>在IIS部署步骤的HTTPS绑定配置中引用它</li>
+<li>当证书接近到期时，会自动从Let's Encrypt请求一个新的证书，并作为替换安装在所有使用过过期证书的机器上</li>
+</ol>
+
+<h2>反馈</h2>
+
+<p>这是您指导此功能开发的机会。</p>
+
+<p>这对你有用吗？</p>
+
+<p>你的愿望清单上有什么我们没提到的吗？</p>
+
+                    
+                    
+</body>
+</html>

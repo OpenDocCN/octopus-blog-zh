@@ -1,0 +1,70 @@
+<html>
+<head>
+<title>Recurring Scheduled Deployments - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>定期调度部署- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/recurring-deployments#2021-08-12">https://octopus.com/blog/recurring-deployments#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/recurring-deployments/blogimage-recurring-deployments.png" class="zoom" data-title=""><img src="../Images/2a2587189bb4db78f453e2ce1ec83f05.png" class="img-fluid center" alt="Octo-Cuckoo clock illustating recurring deployments" data-original-src="https://i.octopus.com/blog/2018-03/recurring-deployments/blogimage-recurring-deployments.png"/>T2】</a></p>
+
+<p>Octopus早就有能力在未来的特定时间安排部署。缺少的是将部署安排在<em>重复</em>的能力。这个特性在内部被称为<em> DTGAAA:一次又一次的部署</em>。</p>
+
+<p>这是一个非常受欢迎的<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/6599104-recurring-scheduled-deployments" rel="nofollow">用户声音项目</a>,在我们的列表中排名第四，有460多张选票。理由很充分:没有人喜欢一遍又一遍地做同样的事情。这就是章鱼这样的工具存在的原因！</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/recurring-deployments/groundhog-day.jpg" class="zoom" data-title=""><img src="../Images/20dfa8ff7b8b81ba535942354b66a9be.png" class="img-fluid center" alt="Groundhog Day" data-original-src="https://i.octopus.com/blog/2018-03/recurring-deployments/groundhog-day.jpg"/>T2】</a></p>
+
+<h2 id="why">为什么？</h2>
+
+<p>想象你有三个典型的环境:<code>Dev</code>、<code>Test</code>和<code>Prod</code>。</p>
+
+<p>开发团队配置了他们的持续集成管道，这样每次他们推送新的提交时，构建服务器都会构建包并将其推送到Octopus，在Octopus中自动部署到<code>Dev</code>环境。这既是自动化系统测试的目标，也是开发人员执行任何所需的手动检查的机会。</p>
+
+<p>QA团队希望每天都有最新的版本可用，但是他们也希望它相对稳定，而不是不断变化。因此他们安排了一个每天晚上运行的部署，并将最新版本从<code>Dev</code>升级到<code>Test</code>环境。当QA团队早上到达时，他们可以查看Octopus中的发布说明，并查看那些辛勤工作的开发人员在前一天交付了哪些新的闪亮的功能。</p>
+
+<p>如果QA团队满意，他们可以手动触发从<code>Test</code>到<code>Prod</code>的发布升级。</p>
+
+<p>当然，对于这个特性，你可能有一个完全不同的用例。我们很想听听。</p>
+
+<h2 id="voila">瞧啊。</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/recurring-deployments/recurring-nightly-deployment.png" class="zoom" data-title=""><img src="../Images/639941bb8b3ebdfc2258537bfe245c1b.png" class="img-fluid center" alt="Configuring Recurring Deployment" data-original-src="https://i.octopus.com/blog/2018-03/recurring-deployments/recurring-nightly-deployment.png"/></a>T2】</p>
+
+<p>你可以随心所欲地创建日程表:</p>
+
+<ul>
+<li>每天地；天天地</li>
+<li>一周中的几天</li>
+<li>每月的几天</li>
+<li>Cron表达式</li>
+</ul>
+
+<p>时区很重要，所以我们允许您显式地选择它。例如，如果您所在的时区采用夏令时，那么您可能希望您的7am部署考虑这一点。</p>
+
+<p>您可以选择:</p>
+
+<ol>
+<li><p>升级现有的最新版本，在这种情况下，您需要选择要升级的源环境，并且可以选择限制从给定的渠道中选择版本。</p>
+</li>
+<li><p>每次创建一个新的版本，在这种情况下，您为创建的版本选择目标环境和通道。</p>
+</li>
+</ol>
+
+<p>选项1在如上所述的场景中是有意义的，在这些场景中，您正在提升一个已经被部署到生命周期中的先前环境中的版本。</p>
+
+<p>选项2适用于当您希望部署到生命周期中的第一个环境，并且希望获得最新的包时。</p>
+
+<p>任何设定以下时间表的人都可获得额外的八达通积分😉</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-03/recurring-deployments/recurring-friday-deployment.png" class="zoom" data-title=""><img src="../Images/65f6eef3325c1c79d36990872cc46d80.png" class="img-fluid center" alt="Friday Recurring Deployment" data-original-src="https://i.octopus.com/blog/2018-03/recurring-deployments/recurring-friday-deployment.png"/>T2】</a></p>
+
+<h2 id="when">什么时候？</h2>
+
+<p>Octopus版本2018.4.0将在4月初发布，届时将提供重复部署。</p>
+
+<p>愉快的<em>重复</em>部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,250 @@
+<html>
+<head>
+<title>Why you should take a look at Kotlin's standard library - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>为什么应该看看Kotlin的标准库——Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/kotlin-run-let-also-apply#2021-07-07">https://octopus.com/blog/kotlin-run-let-also-apply#2021-07-07</a></blockquote>
+                        <p>随着我们在Octopus中增加对Java部署的支持，更多的集成代码正在用Kotlin编写。作为一名长期的Java开发人员，我借此机会了解了Kotlin语言设计者对他们的Java语言所做的一些改进。</p>
+
+<p>大约在同一时间，我在Pluralsight上完成了戴夫·范彻(Dave Fancher)的C# 函数式编程课程。我喜欢这门课，因为它提供了一些清晰而实用的建议，教你如何用C#进行函数编程。在书中，Dave提供了两个扩展方法，<code>Map</code>和<code>Tee</code>，这两个方法允许您转换对象并将它们传递给其他变异方法，并提供了如何以及为什么使用它们的示例。</p>
+
+<p>我推荐这门课程，即使是对Kotlin开发人员来说，因为Dave提出的想法很好地映射了Kotlin作为其标准库的一部分提供的类似方法。</p>
+
+<p>科特林<code>run</code>和<code>let</code>方法大致相当于C# <code>Map</code>方法，而科特林<code>also</code>和<code>apply</code>方法大致相当于C# <code>Tee</code>方法。</p>
+
+<p>那么这些标准函数有什么区别呢？为了展示这些差异，我创建了一个简单的Kotlin项目，你可以在GitHub上找到它。</p>
+
+<h2 id="run-vs-let">跑vs让</h2>
+
+<p><code>run</code>和<code>let</code>是变换函数。它们接受被调用对象的值，并返回一个新值。</p>
+
+<p>这些函数之间最明显的区别是它们暴露给块函数的变量。</p>
+
+<p><code>run</code>函数将调用它的对象的值公开为块内的<code>this</code>。</p>
+
+<pre><code class="language-java">@Test
+fun runExample () {
+    val result = "Local String".run {
+        System.out.println(this) // prints "Local String"
+        "New String"
+    }
+    System.out.println(result) // prints "New String"
+}
+</code></pre>
+
+<p><code>let</code>函数将调用它的对象的值公开为块内的<code>it</code>，而<code>this</code>从外部范围保留。</p>
+
+<pre><code class="language-java">@Test
+fun letExample () {
+    val result = "Local String".let {
+        System.out.println(this.name) // prints "Demo Class"
+        System.out.println(it) // prints "Local String"
+        "New String"
+    }
+    System.out.println(result) // prints "New String"
+}
+</code></pre>
+
+<p>您可以重命名默认的<code>it</code>参数。这样做可以避免默认的<code>it</code>参数与作用域中现有的变量发生冲突(如果嵌套两个<code>let</code>函数，就会发生这种情况)。</p>
+
+<pre><code class="language-java">@Test
+fun letExample2 () {
+    val result = "Local String".let {me -&gt;
+        System.out.println(this.name) // prints "Demo Class"
+        System.out.println(me) // prints "Local String"
+        "New String"
+    }
+    System.out.println(result) // prints "New String"
+}
+</code></pre>
+
+<h2 id="also-vs-apply">也vs适用</h2>
+
+<p><code>also</code>和<code>apply</code>通常在调用它们所针对的对象的值需要用于某种变异操作时使用。来自<code>also</code>和<code>apply</code>模块的任何返回值都被忽略，并返回原始对象的值。</p>
+
+<p>通过这种方式，我们可以利用原始值来执行一些变异逻辑(其返回值不被我们自己的代码使用)，同时保留原始值。</p>
+
+<p>像<code>run</code>函数一样，<code>apply</code>将它所调用的对象的值公开为<code>this</code>。</p>
+
+<pre><code class="language-java">@Test
+fun applyExample() {
+    val result = "Local String".apply {
+        System.out.println(this) // prints "Local String"
+        "New String" // return value is ignored
+    }
+    System.out.println(result) // prints "Local String"
+}
+</code></pre>
+
+<p>像<code>let</code>函数一样，<code>also</code>将调用它的对象暴露为块内的<code>it</code>，而<code>this</code>从外部作用域保留。</p>
+
+<pre><code class="language-java">@Test
+fun alsoExample() {
+    val result = "Local String".also {
+        System.out.println(this.name) // prints "Demo Class"
+        System.out.println(it) // prints "Local String"
+        "New String" // return value is ignored
+    }
+    System.out.println(result) // prints "Local String"
+}
+</code></pre>
+
+<p>并且<code>it</code>可以改名。</p>
+
+<pre><code class="language-java">@Test
+fun alsoExample2() {
+    val result = "Local String".also { me -&gt;
+        System.out.println(this.name) // prints "Demo Class"
+        System.out.println(me) // prints "Local String"
+        "New String" // return value is ignored
+    }
+    System.out.println(result) // prints "Local String"
+}
+</code></pre>
+
+<h2 id="transformation-vs-mutation">转化与突变</h2>
+
+<p>我将<code>run</code>和<code>let</code>描述为转换函数，将<code>also</code>和<code>apply</code>描述为变异函数。</p>
+
+<p>正如您在前面的例子中看到的，<code>run</code>和<code>let</code>也很乐意让您在它们的功能块中改变状态(就像我们通过写入控制台所做的那样)，因此转换和改变之间的区别是概念性的，而不是由语言强制的。</p>
+
+<p>然而，这种概念上的区别是有用的，因为它允许您描述代码的意图，允许您简单地从代码的“形状”中了解代码做什么。</p>
+
+<h2 id="what-is-the-shape-of-code">代码的形状是什么？</h2>
+
+<p>那么我所说的代码的“形状”是什么意思呢？让我们来看一个设计用于部署AWS CloudFormation模板的简单函数。</p>
+
+<pre><code class="language-java">fun createCloudFormationStack(newStackName: String) {
+  val credentialsProvider = ProfileCredentialsProvider()
+  val client = AmazonCloudFormationClientBuilder
+          .standard()
+          .withCredentials(credentialsProvider)
+          .withRegion(Regions.US_EAST_1)
+          .build()
+
+  val templatePath = javaClass.classLoader.getResource("WordPress.template.json").file
+  val templateFile = File(templatePath)
+  val template = FileUtils.readFileToString(templateFile, Charset.defaultCharset())
+
+  val request = CreateStackRequest()
+  request.stackName = newStackName
+  request.templateBody = template
+
+  val response = client.createStack(request)
+  System.out.println("StackID: " + response.stackId)
+}
+</code></pre>
+
+<p>现在让我们取出所有的函数调用，看看代码是什么形状。</p>
+
+<pre><code class="language-java">val credentialsProvider = ...
+val client = ...
+
+val templateFile = ...
+val template = ...
+
+val request = ...
+
+val response = ...
+</code></pre>
+
+<p>从这个代码的“形状”我们可以确定什么？</p>
+
+<p>变量名给了我们一些关于我们正在创建的对象种类的指示，并且变量的顺序确实限制了对象之间的依赖种类。比如<code>client</code>可以依赖<code>credentialsProvider</code>，也可以不依赖<code>credentialsProvider</code>，但是<code>credentialsProvider</code>可以不依赖<code>client</code>，因为<code>credentialsProvider</code>是先声明的。</p>
+
+<p>否则，虽然没有太多迹象表明这段代码在做什么。</p>
+
+<p>让我们看一个使用标准库函数的版本。</p>
+
+<pre><code class="language-java">fun createCloudFormationStack2(newStackName: String) {
+    val client = ProfileCredentialsProvider().let { credentials -&gt;
+        AmazonCloudFormationClientBuilder
+                .standard()
+                .withCredentials(credentials)
+                .withRegion(Regions.US_EAST_1)
+                .build()
+    }
+
+    val template = javaClass.classLoader.getResource("WordPress.template.json").file.let { path -&gt;
+        File(path)
+    }.let { templateFile -&gt;
+        FileUtils.readFileToString(templateFile, Charset.defaultCharset())
+    }
+
+    CreateStackRequest().also { request -&gt;
+        request.stackName = newStackName
+        request.templateBody = template
+    }.let { request -&gt;
+        client.createStack(request)
+    }.also { response -&gt;
+        System.out.println("StackID: " + response.stackId)
+    }
+}
+</code></pre>
+
+<p>去掉所有的函数调用(只留下标准函数)，我们得到这样的代码。</p>
+
+<pre><code class="language-java">val client = ... .let { credentials -&gt;
+    ...
+}
+
+val template = ... .let { path -&gt;
+    ...
+}.let { templateFile -&gt;
+    ...
+}
+
+... .also { request -&gt;
+    ...
+}.let { request -&gt;
+    ...
+}.also { response -&gt;
+    ...
+}
+</code></pre>
+
+<p>这个形状告诉我们什么？</p>
+
+<ul>
+<li>我们可以看出，名为<code>credentials</code>的东西被转换(通过<code>let</code>函数)为分配给<code>client</code>的值。</li>
+<li>我们可以看出，名为<code>path</code>的东西被转换为名为<code>templateFile</code>的东西，后者又被转换为分配给<code>template</code>的值。</li>
+<li>我们可以看出，一个叫做<code>request</code>的东西发生了变异(通过<code>also</code>函数)，然后转化成了一个叫做<code>response</code>的东西。</li>
+<li>我们可以看出<code>response</code>被用于一个变异函数调用中。</li>
+</ul>
+
+<h2 id="what-are-the-benefits-of-the-standard-functions">标准功能的好处是什么？</h2>
+
+<p>我们可以从代码中提取更多的上下文。</p>
+
+<p>对象的转换被清楚地描述为:</p>
+
+<ul>
+<li><code>credentials</code> - &gt; - <code>client</code></li>
+<li><code>path</code> - &gt; - <code>templateFile</code> - &gt; - <code>template</code></li>
+<li><code>request</code> - &gt; - <code>response</code></li>
+</ul>
+
+<p>因为标准函数允许我们将一些变量的范围缩小到单个块，所以可以使用的对象组合明显更少。<code>template</code>变量的构造可以利用<code>client</code>(即使我们不这样做，代码的形状也不会阻止它)，并且<code>client</code>和<code>template</code>可以在创建<code>request</code>的最后一个块中使用(它们就是这样)。</p>
+
+<p>将它与原始代码进行比较，在原始代码中，6个变量中的每一个都可以利用它们的任意组合。只看第一个代码示例的形状，我们不知道所有变量是如何相关的。</p>
+
+<p>减少变量也使得代码更容易推理。<a href="https://en.wikipedia.org/wiki/The_Magical_Number_Seven,_Plus_or_Minus_Two" rel="nofollow">这个神奇的数字</a>描述了人类记忆能力的极限，介于5和9之间。虽然这个数字不是一个硬性规定，但根据我自己的经验，它听起来是真实的。</p>
+
+<p>第一版代码中的6个变量意味着该功能正在突破普通人记忆的极限。第二个版本中的3个变量，加上一两个额外的变量，当我们移入和移出<code>let</code>和<code>also</code>函数时，将这段代码很好地放在普通人的记忆容量内。</p>
+
+<p>由于对<code>also</code>的调用，我们也能够快速识别两个变异函数。这让我们知道测试这段代码需要做多少额外的工作，因为变异函数通常表明存在需要在测试环境中模拟和验证的外部状态。</p>
+
+<p>在我们的例子中，第一个变异函数是在没有构建器接口的对象上设置参数，并且不接受构造器中的属性。这不需要跟踪外部状态。</p>
+
+<p>然而，第二个变异函数写入控制台，根据应用程序的上下文，这对于测试可能重要，也可能不重要。</p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>虽然它们非常简单，但Kotlin中的标准函数提供了一种强大的方式来描述代码的意图。它们将减少变量计数，使代码更容易推理，并突出突变。</p>
+
+                    
+                    
+</body>
+</html>

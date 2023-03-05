@@ -1,0 +1,62 @@
+<html>
+<head>
+<title>Octopus April Release 2018.4 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通2018年4月发布-八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2018.4#2022-07-15">https://octopus.com/blog/octopus-release-2018.4#2022-07-15</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-04/blogimage-shipping-2018-4.png" class="zoom" data-title=""><img src="../Images/677499c419e5014f80452c0b01f4eb4a.png" class="img-fluid center" alt="Octopus Deploy 2018.4 release banner" data-original-src="https://i.octopus.com/blog/2018-04/blogimage-shipping-2018-4.png"/>T2】</a></p>
+
+<p>这个月，我们的头条功能是<em>定期计划部署</em>，这是我们<a href="https://octopusdeploy.uservoice.com/forums/170787-general/suggestions/6599104-recurring-scheduled-deployments" rel="nofollow">最受欢迎的功能之一</a>，我们很高兴能够发布它。我们还发布了一个新的一流的AWS S3步骤，使使用亚马逊Web服务更容易，我们还添加了根据需要设置步骤的功能，因此它不能被跳过。</p>
+
+<h2 id="in-this-post">在这篇文章中</h2>
+
+
+
+<h2 id="release-tour">发布之旅</h2>
+
+<iframe src="https://www.youtube.com/embed/AR45wMd1_8o" frameborder="0" allowfullscreen="">VIDEO</iframe>
+
+<h2 id="recurring-scheduled-deployments">定期计划部署</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-04/recurring-scheduled-deployments.png" class="zoom" data-title=""><img src="../Images/5e6fba5e2dd576f78b75647c2b3a8351.png" class="img-fluid center" alt="Recurring Scheduled Deployments screenshot" data-original-src="https://i.octopus.com/blog/2018-04/recurring-scheduled-deployments.png"/>T2】</a></p>
+
+<p>Octopus长期以来一直支持调度部署。您可以简单地指定何时执行一个部署，但是这只能工作一次。我们新的定期计划部署功能让您可以随时触发部署。这可能是将一个版本部署到您的测试或QA环境中进行日常测试，每周五下午5点部署您的最新稳定版本，甚至是在不使用虚拟基础架构时按计划启动和拆除虚拟基础架构以节省资金...比如晚上和周末。</p>
+
+<p>当我们按照时间表交付以运营为中心的维护流程时，这将变得更加强大。请关注这篇博客，了解更多关于即将推出的功能的信息。</p>
+
+<h2 id="first-class-amazon-web-services-s3-support">一流的亚马逊网络服务S3支持</h2>
+
+<p>我们正在通过添加一个<a href="https://octopus.com/docs/deployments/aws/aws-s3-create-bucket">一级S3步骤</a>来继续改进我们的亚马逊网络服务(AWS)支持。这极大地简化了将包/文件放入S3桶以及在AWS生态系统中使用它们的过程。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-04/aws-s3-step.png" class="zoom" data-title=""><img src="../Images/25499c6eb0a0a3607123815a2b96995f.png" class="img-fluid center" alt="AWS S3 step screenshot" data-original-src="https://i.octopus.com/blog/2018-04/aws-s3-step.png"/>T2】</a></p>
+
+<h2 id="required-steps">必需的步骤</h2>
+
+<p>部署过程步骤可以在部署时跳过。这非常方便，但是有时您可能希望避免跳过特定的步骤。手动干预步骤是一个明显的例子(如果责任被限制到指定的团队，它们实际上已经不能被跳过)。其他示例可能是发送通知或运行验证流程的步骤。<br/>对于2018.4，您可以根据需要<a href="https://octopus.com/docs/projects/steps/conditions#required">标记一个步骤</a>，它将没有资格被跳过。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-04/required-step.png" class="zoom" data-title=""><img src="../Images/8df5fecbc5488f8c9f0f0f8f6b8831c2.png" class="img-fluid center" alt="Required steps screenshot" data-original-src="https://i.octopus.com/blog/2018-04/required-step.png"/>T2】</a></p>
+
+<p>这解决了以下用户语音请求:</p>
+
+
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>自动发布创建(ARC)现在会在选择包时强制实施通道约束。因为渠道可以约束包来排除预发布包，所以我们将使用渠道规则来防范预发布包，并在默认情况下启用预发布包选择。这意味着自动发布创建可以开始为在没有渠道规则的渠道中创建的发布选择预发布包，这不同于现有的行为，是一个突破性的变化。</p>
+
+<p>要继续只选择稳定的包进行自动发布创建，请设置创建自动发布的通道，以将包限制为没有预发布标签的包(预发布标签为<code>^$</code>)。</p>
+
+<h2 id="upgrading">升级</h2>
+
+<p>升级Octopus Deploy 的<a href="https://octopus.com/docs/administration/upgrading">步骤照常适用。更多信息请参见</a><a href="https://octopus.com/downloads/compare?to=2018.4.0">发行说明</a>。</p>
+
+<h2 id="wrap-up">包裹</h2>
+
+<p>这个月到此为止。欢迎给我们留下评论，让我们知道你的想法！前进并展开！</p>
+
+                    
+                    
+</body>
+</html>

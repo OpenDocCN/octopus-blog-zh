@@ -1,0 +1,94 @@
+<html>
+<head>
+<title>Octopus Server 2019.9 with Long Term Support (LTS) - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通服务器2019.9与长期支持(LTS) -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-release-2019.9-lts#2021-08-12">https://octopus.com/blog/octopus-release-2019.9-lts#2021-08-12</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/blogimage-ltsrelease.png" class="zoom" data-title=""><img src="../Images/ede22aa2eb22e6b725c9a5246ee153f1.png" class="img-fluid center" alt="Cars on slow lane and fast lane" data-original-src="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/blogimage-ltsrelease.png"/>T2】</a></p>
+
+<p>Octopus Deploy <code>2019.9 LTS</code>现在可用于运行Octopus Deploy自托管的团队，我们向这些客户推荐这个版本。我们的<a href="https://octopus.com/docs/administration/upgrading/long-term-support">长期支持(LTS)计划</a>包括提供六个月支持的版本，包括关键错误修复和安全补丁。LTS版本不包括新功能、次要增强或次要错误修复；这些都包含在下一个LTS版本中。</p>
+
+<p><a href="https://octopus.com/downloads" class="btn btn-primary btn-lg">立即下载</a></p>
+
+<p>下表显示了我们当前的LTS版本。不再支持Octopus 2019.3，我们建议该版本的客户升级到较新的版本。</p>
+
+<table class="table">
+<thead>
+<tr>
+<th>释放；排放；发布</th>
+<th>长期支持</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>章鱼2019.9</td>
+<td>是</td>
+</tr>
+<tr>
+<td>八达通2019.6</td>
+<td>是</td>
+</tr>
+<tr>
+<td>章鱼2019.3</td>
+<td>期满</td>
+</tr>
+</tbody>
+</table>
+
+<p>请继续阅读，了解此版本中的内容以及任何重大变化。</p>
+
+<h2>在这篇文章中</h2>
+
+
+
+<h2 id="streamlined-deployment-process-editor">简化的部署流程编辑器</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/streamlined-deploy-process-editor.png" class="zoom" data-title=""><img src="../Images/ceeaf1f838590d2e3229e063f0427e80.png" class="img-fluid center" alt="Streamlined deployment process editor" data-original-src="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/streamlined-deploy-process-editor.png"/>T2】</a></p>
+
+<p>我们改进了部署流程编辑器，以更好的可视性简化编辑流程。现在您可以看到整个部署过程，这在引用脚本和变量中的其他步骤名称时非常有用。这也应该使浏览步骤更快，点击更少，滚动更少。</p>
+
+<p><a href="https://github.com/OctopusDeploy/Issues/issues/5804" rel="nofollow">了解更多信息</a></p>
+
+<h2 id="tentacle-for-linux">用于Linux的触手</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/linux-tentacle.png" class="zoom" data-title=""><img src="../Images/2078e14d36fc950abef5be4e50c1a34f.png" class="img-fluid center" alt="Tentacle for Linux configuration" data-original-src="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/linux-tentacle.png"/>T2】</a></p>
+
+<p>这个版本包括对我们Linux本地触手代理的支持。这使得团队能够在不可能打开端口22的安全环境中部署Linux服务器。触手支持Octopus服务器和部署目标之间在监听和轮询模式下的安全通信。在轮询模式下，触手代理联系Octopus服务器并根据需要执行部署工作，包括检索应用程序包和部署脚本。</p>
+
+<p>Tentacle for Linux为在高度安全的环境中部署Linux的团队提供了更大的灵活性。</p>
+
+<p><a href="https://octopus.com/docs/infrastructure/deployment-targets/linux/tentacle">了解更多信息</a></p>
+
+<h2 id="tenant-cloning">租户克隆</h2>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/tenant-clone.png" class="zoom" data-title=""><img src="../Images/97060689bc370ca0c1a7bd74fe4c6845.png" class="img-fluid center" alt="Cloning a Tenant" data-original-src="https://i.octopus.com/blog/2019-10/octopus-release-2019.9-lts/tenant-clone.png"/>T2】</a></p>
+
+<p>创建和配置租户可能非常耗时，因为它涉及到链接项目和环境、添加标记以及输入所有必需的变量值等多个步骤。幸运的是，这个过程现在简单多了，因为您可以克隆一个租户，而不是手动执行所有这些步骤。然后，您可以根据需要更新新租户。</p>
+
+<p><a href="https://github.com/OctopusDeploy/Issues/issues/5727" rel="nofollow">了解更多信息</a></p>
+
+<h2 id="other-improvements">其他改进</h2>
+
+<ul>
+<li>添加了<strong>健康检查计划选项</strong>，以便它们可以配置为在cron表达式上运行，或者从不运行。</li>
+<li>增加了对Kubernetes步骤中<strong>覆盖名称空间的支持。</strong></li>
+<li><strong>新增变量过滤表达式</strong>，包括<code>Trim</code>、<code>Substring</code>、<code>Truncate</code>、<code>UriEscape</code>、<code>UriDataEscape</code>。</li>
+<li>添加了对<strong>作为文本粘贴到证书的支持</strong>以直接在门户中添加证书。</li>
+</ul>
+
+<p><a href="https://octopus.com/blog/octopus-release-2019.8">了解更多</a></p>
+
+<h2 id="breaking-changes">重大变化</h2>
+
+<p>这个版本包括一个突破性的变化，因为<a href="https://octopus.com/blog/windows-server-2008-eol-hello-linux"> Octopus服务器不再支持Windows Server 2008 SP2 </a>。</p>
+
+<h2 id="wrapping-up">包扎</h2>
+
+<p>Octopus Server 2019.9现已推出，您可以依赖它。长期部署愉快！</p>
+
+                    
+                    
+</body>
+</html>

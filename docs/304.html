@@ -1,0 +1,113 @@
+<html>
+<head>
+<title>An Introduction to Hollow JARs - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>空心广口瓶介绍-章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/hollow-jars#2022-07-15">https://octopus.com/blog/hollow-jars#2022-07-15</a></blockquote>
+                        <p>我过去曾经写过关于应用服务器和UberJAR之间的区别。简而言之，应用服务器是一个并行托管多个JavaEE应用程序的环境，而UberJAR是一个自包含的可执行JAR文件，它启动并托管单个应用程序。</p>
+
+<p>在这两种风格之间还有另一种风格的JAR文件，叫做空心JAR。</p>
+
+<h2 id="what-are-hollow-jars">什么是空心罐子？</h2>
+
+<p>空心JAR是一个单独的可执行JAR文件，像UberJAR一样，包含启动一个应用程序所需的代码。但是与UberJAR不同，空心JAR不包含应用程序代码。</p>
+
+<p>然后，典型的中空JAR部署将由两个文件组成:中空JAR本身，以及保存应用程序代码的WAR文件。然后，空心JAR引用WAR文件来执行，从那时起，这两个文件就像UberJAR一样运行。</p>
+
+<p>乍一看，用两个文件组成一个空心JAR部署，而不是用一个文件组成UberJAR，这似乎没有什么效果，但是有一些好处。</p>
+
+<p>主要的好处来自于空心JAR部署对的JAR组件不会经常改变。虽然您可能期望每天多次部署WAR半部署的新版本，但是JAR半部署将在几周或几个月内保持静态。这在构建分层容器图像时特别有用，因为只需要将修改后的WAR文件添加为容器图像层。</p>
+
+<p>同样，您也可以使用AWS自动伸缩组这样的技术来减少构建时间。因为JAR文件不经常更改，所以可以将它放入AMI中，而WAR文件可以在EC2实例部署时通过EC2 <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html" rel="nofollow">用户数据</a>字段中的脚本下载。</p>
+
+<h2 id="building-a-hollow-jar">建造一个中空的罐子</h2>
+
+<p>要想看到实际使用的空心罐子，让我们来看看如何用<a href="http://wildfly-swarm.io/" rel="nofollow">野生蜂群</a>来制作一个。</p>
+
+<p>对于这个演示，我们将构建运行一个<a href="https://github.com/jboss-developer/ticket-monster" rel="nofollow"> Ticket Monster </a>演示应用程序所需的一对空心JAR部署文件。Ticket Monster是一个示例应用程序，创建它是为了演示一系列JavaEE技术，旨在构建一个在传统应用服务器上运行的WAR文件。</p>
+
+<p>为了构建中空罐子的一半，我们将使用<a href="https://wildfly-swarm.gitbooks.io/wildfly-swarm-users-guide/content/getting-started/tooling/swarmtool.html" rel="nofollow"> SwarmTool </a>。与WildFly Swarm不同，它通常需要在Maven项目中进行特殊配置来构建UberJAR或空心JAR，SwarmTool通过检查现有的WAR文件并构建一个空心JAR来容纳它。这是一种将现有应用程序迁移到Swarm平台的简洁方式，无需修改现有的构建过程。</p>
+
+<p>首先，从<a href="https://github.com/jboss-developer/ticket-monster" rel="nofollow">https://github.com/jboss-developer/ticket-monster</a>克隆票怪源代码。我们感兴趣的代码在<code>demo</code>子文件夹下。</p>
+
+<p>为了适应Java 9和SwarmTool，我们需要对<code>demo</code>子文件夹下的<code>pom.xml</code>文件做两处修改。</p>
+
+<p>首先，我们需要添加对<code>javax.xml.bind:jaxb-api</code>的依赖。这是因为<code>java.xml</code>包不再是<a href="https://stackoverflow.com/a/43574427/157605" rel="nofollow"> Java 9 </a>的一部分。如果您尝试在Java 9下编译应用程序而没有这个额外的依赖项，您将收到以下错误:</p>
+
+<pre><code>java.lang.NoClassDefFoundError: javax/xml/bind/JAXBException
+</code></pre>
+
+<p>下面的XML添加了所需的依赖项:</p>
+
+<pre><code class="language-xml">&lt;dependencies&gt;
+  &lt;dependency&gt;
+        &lt;groupId&gt;javax.xml.bind&lt;/groupId&gt;
+        &lt;artifactId&gt;jaxb-api&lt;/artifactId&gt;
+        &lt;version&gt;2.3.0&lt;/version&gt;
+    &lt;/dependency&gt;
+&lt;/dependencies&gt;
+</code></pre>
+
+<p>第二个变化是将Ticket Monster使用的Jackson库嵌入到WAR文件中。在原始源代码中，Jackson库的作用域是<code>provided</code>，这意味着我们期望应用服务器(或者在我们的例子中是Hollow JAR)提供这个库。</p>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.jboss.resteasy&lt;/groupId&gt;
+    &lt;artifactId&gt;resteasy-jackson-provider&lt;/artifactId&gt;
+    &lt;scope&gt;provided&lt;/scope&gt;
+&lt;/dependency&gt;
+</code></pre>
+
+<p>然而，我们将使用的Swarm版本与Ticket Monster应用程序使用的Jackson库版本不同。这种不匹配意味着Swarm提供的Jackson库版本无法识别Ticket Monster使用的<code>@JsonIgnoreProperties</code>注释，从而导致一些序列化错误。</p>
+
+<p>幸运的是，所需要的只是使用默认的作用域，这将把Jackson库的正确版本嵌入到WAR文件中。嵌入在WAR文件中的依赖项优先，因此应用程序将按预期运行。</p>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+  &lt;groupId&gt;org.jboss.resteasy&lt;/groupId&gt;
+  &lt;artifactId&gt;resteasy-jackson-provider&lt;/artifactId&gt;
+&lt;/dependency&gt;
+</code></pre>
+
+<p>我们现在可以像构建任何其他WAR项目一样构建Ticket Monster应用程序。以下命令将构建WAR文件。</p>
+
+<pre><code>mvn package
+</code></pre>
+
+<p>现在我们需要使用SwarmTool来构建空心罐子。在本地下载SwarmTool JAR文件。</p>
+
+<pre><code>wget https://repo1.maven.org/maven2/org/wildfly/swarm/swarmtool/2017.12.1/swarmtool-2017.12.1-standalone.jar
+</code></pre>
+
+<p>然后造一个空心罐子。</p>
+
+<pre><code>java -jar swarmtool-2017.12.1-standalone.jar -d com.h2database:h2:1.4.196 --hollow target/ticket-monster.war
+</code></pre>
+
+<p><code>-d com.h2database:h2:1.4.196</code>参数指示SwarmTool将内存数据库依赖关系中的H2添加到空心JAR中。SwarmTool可以通过扫描应用程序代码引用的类来检测启动WAR文件所需的大多数依赖项。然而，它不能像数据库驱动程序那样检测依赖性，所以我们需要手动告诉SwarmTool包含这种依赖性。</p>
+
+<p><code>--hollow</code>参数指示SwarmTool构建一个不嵌入WAR文件的空心JAR。如果我们不使用这个参数，WAR文件将被嵌入到生成的JAR文件中，创建一个UberJAR而不是一个空心的JAR。</p>
+
+<p>现在，我们有了两个文件，它们组成了我们的Hollow JAR部署。位于<code>target/ticket-monster.war</code>的WAR文件包含我们的应用程序，而<code>ticket-monster-swarm.jar</code>文件是我们的空心罐子。</p>
+
+<h2 id="executing-a-hollow-jar">执行空心罐子</h2>
+
+<p>要运行该应用程序，请使用以下命令。</p>
+
+<pre><code>java -jar ticket-monster-swarm.jar target/ticket-monster.war
+</code></pre>
+
+<p>然后，您可以打开http://localhost:8080来查看该应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2018-01/ticket-monster.png" class="zoom" data-title=""><img src="../Images/3c03e81fd9bd0f5d678cbe08bcf2c5af.png" class="img-fluid center" alt="Ticket Monster" data-original-src="https://i.octopus.com/blog/2018-01/ticket-monster.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>空心JAR是一种简洁的解决方案，它在保留UberJAR的便利性的同时，在部署策略上提供了很大的灵活性。你可以从博客文章<a href="https://developers.redhat.com/blog/2017/08/24/the-skinny-on-fat-thin-hollow-and-uber/" rel="nofollow">中找到更多关于不同策略的信息，关于肥胖、瘦、空心和优步</a>。</p>
+
+<p>如果您对Java应用程序的自动化部署感兴趣，<a href="https://octopus.com/downloads">下载Octopus Deploy </a>的试用版，并查看我们的文档。</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,71 @@
+<html>
+<head>
+<title>Octopus Deploy Java Support RFC - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>章鱼部署Java支持RFC -章鱼部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/java-rfc#2021-10-14">https://octopus.com/blog/java-rfc#2021-10-14</a></blockquote>
+                        <p>章鱼最初是用。NET开发人员的想法，并附带了许多约定，使部署。网络应用简单。在基本层面上，Octopus提供了作为传输层的触手，以及执行PowerShell的能力。在此基础之上，还有将应用程序部署到IIS或设置Windows服务的内置步骤，以及需要处理的约定。NET配置文件或转换。</p>
+
+<p>当然，你已经可以使用八达通不仅仅是。NET应用程序——您可以压缩一个Java应用程序，并将其推送到Windows机器上，然后使用PowerShell来配置它。或者最近你可以用SSH和Bash做同样的事情。这足以让Java部署工作——我最近展示了如何部署到<a href="https://octopus.com/blog/wildfly-deploy"> WildFly </a>和<a href="https://octopus.com/blog/octopus-tomcat"> Tomcat </a>，以及将<a href="https://octopus.com/blog/spring-boot-windows-services"> Spring Boot应用程序部署为Windows服务</a>。</p>
+
+<p>你可以让它工作，但是目前还没有任何Java应用程序的高级约定。你可以说Octopus目前支持Java应用程序，但不像它支持的那样，为它们提供一流的支持。网络应用。</p>
+
+<h2 id="first-class-java-support-in-octopus">Octopus中一流的Java支持</h2>
+
+<p>今天，我们宣布我们的长期愿景，让我们的Java部署故事与我们的。NET部署故事——我们希望它们都是平等的、一流的体验。今天的RFC着眼于我们最初的计划，看看这意味着什么——我们计划很快构建什么——但我们也希望从您那里得到指导:Octopus中一流的Java支持对您来说意味着什么？</p>
+
+<h2 id="goals">目标</h2>
+
+<p>本RFC中概述的特性的目标是为在Windows和Linux上运行的Tomcat和wildly/JBoss EAP部署Java应用程序提供一流的支持。</p>
+
+<h2 id="application-server-support">应用服务器支持</h2>
+
+<p>最初Octopus Deploy将支持Tomcat和WildFly / JBoss EAP。选择这些应用服务器是因为它们有很大的市场份额，当结合起来时，它们代表了生产中大约三分之二的Java服务器。</p>
+
+<p>我们将针对红帽JBoss EAP 6及以上，Wildfly 10及以上，Tomcat 7及以上。</p>
+
+<p>我们不可能一开始就实现对所有应用服务器的支持，但是如果你希望看到对WebSphere、WebLogic、Glassfish、Payara等的支持。请添加评论。</p>
+
+<p>支持这些应用服务器意味着向Octopus Deploy添加以下步骤:</p>
+
+<ul>
+<li>部署包</li>
+<li>文件复制(即将WAR文件复制到<code>webapps</code>或<code>deployments</code>目录，或者分解WAR文件)</li>
+<li>通过Tomcat管理器进行HTTP上传</li>
+<li>使用WildFly CLI工具进行CLI部署</li>
+<li>证书管理</li>
+<li>导出JKS Java密钥库</li>
+<li>在WildFly或Tomcat中配置密钥库</li>
+<li>创建和部署WildFly保管库以存储可在WildFly配置文件中引用的敏感信息。</li>
+</ul>
+
+<h2 id="configuration-support">配置支持</h2>
+
+<p>为了支持Java应用程序中的各种配置文件，将添加一些步骤，以便能够转换Java包中任意位置的XML、YAML和属性文件。这将允许Octopus Deploy支持Spring和Java Servlet或JavaEE应用程序广泛使用的XML配置文件，以及<a href="https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-external-config.html" rel="nofollow"> Spring外部化配置</a>。</p>
+
+<h2 id="linux-support">Linux支持</h2>
+
+<p>由于Linux很受Java开发人员的欢迎，部署服务的现有步骤将被扩展到同时支持init和systemd。</p>
+
+<p>目前我们要求Mono安装在Linux服务器上。我们已经把乌贼和触手的部分转移到。NET核心，所以这应该消除Mono依赖。</p>
+
+<h2 id="package-support">包装支持</h2>
+
+<p>目前Octopus Deploy接受ZIP和Nuget包。为了支持Java，将本机支持JAR、WAR、EAR和RAR包格式。这将允许上传Java包，而不需要先将它们打包成ZIP文件。</p>
+
+<p>Octopus还将支持Maven存储库作为一级包提要，这是目前支持NuGet和Docker Registry的方式。</p>
+
+<h2 id="versioning-support">版本支持</h2>
+
+<p>将添加对Maven版本控制方案的支持，以允许Octopus Deploy比较两个Java包的版本。版本信息将在<code>Implementation-Version</code>键下的<code>META-INF/manifest.mf</code>文件中找到。</p>
+
+<h2 id="feedback">反馈</h2>
+
+<p>如果您对我们提议的更改有任何建议或意见，请留下您的评论。如果您希望看到Octopus Deploy支持Java部署场景，或者如果您有特定的功能需求，您的反馈是很有价值的。</p>
+
+                    
+                    
+</body>
+</html>

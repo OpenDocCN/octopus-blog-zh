@@ -1,0 +1,238 @@
+<html>
+<head>
+<title>Using the new ECS deployment step - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>使用新的ECS部署步骤- Octopus部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/using-ecs-deployment-step#2022-06-21">https://octopus.com/blog/using-ecs-deployment-step#2022-06-21</a></blockquote>
+                        <p>我之前写过一篇<a href="https://octopus.com/blog/aws-fargate">文章，演示如何使用Octopus Deploy </a>部署到AWS ECS。我向您展示了如何让它工作，但是使用AWS CLI自己编写脚本并不是一种理想的体验。我们<a href="https://github.com/OctopusDeploy/StepsFeedback/issues/1" rel="nofollow">从社区中收集反馈</a>，发现我们的客户想要更好的ECS支持。从2021.3版本开始，Octopus Deploy包含了一个ECS部署步骤，取代了我最初帖子中的所有内容。</p>
+
+<p>在这篇文章中，我将解释如何实现新的ECS部署步骤。</p>
+
+<h2 id="amazon-ecs-target">亚马逊ECS目标</h2>
+
+<p>首先，您需要创建一个要部署到的ECS集群。以下脚本使用AWS CLI创建集群:</p>
+
+<pre><code class="language-powershell"># Get variables
+$ecsClusterName = $OctopusParameters['AWS.ECS.Cluster.Name']
+
+# Create cluster
+aws ecs create-cluster --cluster-name $ecsClusterName
+</code></pre>
+
+<p>创建集群后，需要将其作为部署目标添加到Octopus Deploy中。创建新目标时，选择<strong> AWS </strong>类别，然后选择新的<strong>亚马逊ECS集群</strong>目标。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-ecs-target.png" class="zoom" data-title=""><img src="../Images/3d63ff56e9ae8bb4044a7d3a9f941ea2.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-ecs-target.png"/>T2】</a></p>
+
+<p>这个帖子使用<code>PetClinic-ECS</code>作为分配的角色。</p>
+
+<p>与其他目标类型一样，您也可以通过API或使用脚本命令来添加目标。</p>
+
+<h3 id="api">应用程序接口</h3>
+
+<p>有许多关于如何通过API注册目标的例子。然而，ECS步骤使用了新的<strong>步骤UI框架</strong>。ECS目标的JSON文档的<code>Endpoint</code>组件不同于其他目标类型。以下示例脚本向您展示了如何通过API注册ECS目标:</p>
+
+<pre><code class="language-powershell"># Define parameters
+$baseUrl = $OctopusParameters['Global.Base.Url']
+$apiKey = $OctopusParameters['Global.Api.Key']
+$spaceId = $OctopusParameters['Octopus.Space.Id']
+$spaceName = $OctopusParameters['Octopus.Space.Name']
+$environmentName = $OctopusParameters['Octopus.Environment.Name']
+$environmentId = $OctopusParameters['Octopus.Environment.Id']
+$awsAccount = $OctopusParameters['AWS.Account']
+$awsECSClusterName = $OctopusParameters['AWS.ECS.Cluster.Name']
+$awsRegion = $OctopusParameters['AWS.Region.Name']
+$name = $OctopusParameters['AWS.ECS.Cluster.Name']
+
+# Get default machine policy
+$machinePolicy = (Invoke-RestMethod -Method Get -Uri "$baseUrl/api/$spaceId/machinepolicies/all" -Headers @{"X-Octopus-ApiKey"="$apiKey"}) | Where-Object {$_.Name -eq "Default Machine Policy"}
+Write-Output "Retrieved $($machinePolicy.Name) ..."
+
+# Build JSON payload
+$jsonPayload = @{
+    Id = $null
+    MachinePolicyId = $machinePolicy.Id
+    Name = $name
+    IsDisabled = $false
+    HealthStatus = "Unknown"
+    HasLatestCalamari = $true
+    StatusSummary = $null
+    IsInProcess = $true
+    EndPoint = @{
+        DeploymentTargetType = "aws-ecs-target"
+        DeploymentTargetTypeId = "aws-ecs-target"
+        StepPackageId = "aws-ecs-target"
+        StepPackageVersion = "1.0.0"
+        Inputs = @{
+            clusterName = $awsECSClusterName
+            region = $awsRegion
+            awsAccount = $awsAccount
+        }
+        RelatedDocumentIds = @($awsAccount)
+        Id = $null
+        CommunicationStyle = "StepPackage"
+        Links = $null
+        DefaultWorkerPoolId = ""
+    }
+    Links = $null
+    TenantedDeploymentParticipation = "Untenanted"
+    Roles = @(
+        "PetClinic-ECS"
+    )
+    EnvironmentIds = @(
+        $environmentId
+    )
+    TenantIds = @()
+    TenantTags = @()
+}
+
+# Register the target to Octopus Deploy
+Invoke-RestMethod -Method Post -Uri "$baseUrl/api/$spaceId/machines" -Headers @{"X-Octopus-ApiKey"="$apiKey"} -Body ($jsonPayload | ConvertTo-Json -Depth 10)
+</code></pre>
+
+<h3 id="script-commands">脚本命令</h3>
+
+<p>使用Step UI框架开发的目标类型利用一个新命令来注册它们的目标类型。下面是如何使用命令通过PowerShell或Bash注册ECS目标的示例:</p>
+
+
+ 
+ 
+  
+<pre><code class="language-powershell">$inputs = @"
+{
+    "clusterName": "$($OctopusParameters["clusterName"])",
+    "region": "$($OctopusParameters["region"])",
+    "awsAccount": "$($OctopusParameters["awsAccount"])",
+}
+"@
+New-OctopusTarget -Name $OctopusParameters["target_name"] -TargetId "aws-ecs-target" -Inputs $inputs -Roles $OctopusParameters["role"]
+</code></pre>
+  
+  
+<pre><code class="language-bash">read -r -d '' INPUTS &lt;&lt;EOT
+{
+    "clusterName": "$(get_octopusvariable "clusterName")",
+    "name": "$(get_octopusvariable "target_name")",
+    "awsAccount": "$(get_octopusvariable "awsAccount")",
+}
+EOT
+new_octopustarget -n "$(get_octopusvariable "target_name")" -t "aws-ecs-target" --inputs "$INPUTS" --roles "$(get_octopusvariable "role")"
+</code></pre>
+  
+ 
+
+
+<h2 id="the-deploy-amazon-ecs-service-step">部署Amazon ECS服务步骤</h2>
+
+<p>为了向您展示如何使用<strong>部署Amazon ECS服务</strong>步骤，这篇文章复制了来自<a href="https://octopus.com/blog/aws-fargate">上一篇文章</a>的Octo宠物店应用程序的容器化版本的部署，使用了新的步骤。</p>
+
+<h3 id="adding-the-deploy-amazon-ecs-service-step">添加部署Amazon ECS服务步骤</h3>
+
+<p>添加<strong>部署亚马逊ECS服务</strong>步骤，点击<strong>添加步骤</strong>，选择<strong> AWS </strong>，然后<strong>部署亚马逊ECS服务</strong>。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-deploy-amazon-ecs-service.png" class="zoom" data-title=""><img src="../Images/a1bb538830076c6a45f5b37e35309da9.png" class="img-fluid center" alt="Octopus dashboard showing process editor and Deploy Amazon ECS Service step" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-deploy-amazon-ecs-service.png"/>T2】</a></p>
+
+
+
+<p>添加步骤后，使用脚本中的相同信息填充表单字段。没有列出的内容可以留空或使用默认值。</p>
+
+<ul>
+<li>名称:<code>octopetshop-web</code></li>
+<li>期望计数:<code>1</code></li>
+<li>任务内存(GB): <code>4 GB</code></li>
+<li>任务CPU(单位):<code>0.5 vCPU</code></li>
+<li>安全组ID:您的AWS安全组ID</li>
+<li>子事件id:两个AWS子网id</li>
+<li>自动分配公共IP: <code>Yes</code></li>
+<li>启用ECS管理的标签:<code>No</code></li>
+</ul>
+
+<p>点击<strong>添加</strong>按钮，将集装箱添加到ECS服务中。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-ecs-step-add-container.png" class="zoom" data-title=""><img src="../Images/3b10f06eaa44a196b7fd819ff53e4fb2.png" class="img-fluid center" alt="Container Definitions section with ADD button highlighted" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-ecs-step-add-container.png"/>T2】</a></p>
+
+<ul>
+<li>容器定义:          <ul>
+<li>容器名称:<code>octopetshop-web</code>          <ul>
+<li>容器图像:这篇文章从AWS ACR中提取octopetshop-web图像</li>
+<li>容器端口映射:</li>
+<li>环境变量          <ul>
+<li>按键:<code>ProductServiceBaseUrl, Value: http://localhost:5011</code></li>
+<li>关键词:<code>ShoppingCartServiceBaseUrl, Value: http://localhost:5012</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>容器名称:<code>octopetshop-productservice</code></li>
+<li>容器图像:这篇文章从AWS ACR中提取octopetshop-productservice图像</li>
+<li>容器端口映射:</li>
+<li>环境变量:          <ul>
+<li>按键:<code>OPSConnectionString, Value: Database connection string (ie: Data Source=localhost;Initial Catalog=OctoPetShop; User ID=#{Project.Database.User.Name}; Password=#{Project.Database.User.Password}</code></li>
+</ul>
+</li>
+<li>容器名称:<code>octopetshop-shoppingcartservice</code>          <ul>
+<li>容器图像:这篇文章从AWS ACR中提取octopetshop-web图像</li>
+<li>容器端口映射:</li>
+</ul>
+</li>
+<li>环境变量:          <ul>
+<li>关键:<code>OPSConnectionString, Value: Database connection string (ie: Data Source=localhost;Initial Catalog=OctoPetShop; User ID=#{Project.Database.User.Name}; Password=#{Project.Database.User.Password})</code></li>
+</ul>
+</li>
+<li>容器名称:<code>sqlserver</code>          <ul>
+<li>容器映像:这篇文章从微软容器注册表中提取mssql/server映像</li>
+<li>容器端口映射:</li>
+<li>环境变量:          <ul>
+<li>关键:<code>ACCEPT_EULA, Value: Y</code></li>
+<li>关键:<code>SA_PASSWORD, Value: (secure password)</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>容器名称:<code>octopetshop-database</code>          <ul>
+<li>容器图像:这篇文章从AWS ACR中提取octopetshop数据库图像</li>
+<li>必备:<code>False</code></li>
+</ul>
+</li>
+<li>环境变量:          <ul>
+<li>关键:<code>DbUpConnectionString, Value: Database connection string (ie: Data Source=localhost;Initial Catalog=OctoPetShop; User ID=#{Project.Database.User.Name}; Password=#{Project.Database.User.Password})</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+<p>就是这样！这一步取代了前一篇文章中的自定义脚本。</p>
+
+<p>部署如下所示:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-deployment-complete.png" class="zoom" data-title=""><img src="../Images/f2c67cb9b2762a1f5ccaca4df7aedf74.png" class="img-fluid center" alt="Octopus task summary with green ticks" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/octopus-deployment-complete.png"/>T2】</a></p>
+
+<h2 id="testing-the-deployment">测试部署</h2>
+
+<p>部署完成后，AWS控制台显示Fargate服务正在运行。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/aws-fargate-service-running.png" class="zoom" data-title=""><img src="../Images/0e4c5ea453ec27d903a5020d29f5971c.png" class="img-fluid center" alt="AWS console showing a Fargate service running" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/aws-fargate-service-running.png"/>T2】</a></p>
+
+<p>点击进入集群，您会看到您的容器正在运行，并且分配了一个公共IP地址。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/aws-ecs-cluster.png" class="zoom" data-title=""><img src="../Images/429c771720ef9c90b2580aa8a3831dc0.png" class="img-fluid center" alt="Cluster showing containers and IP address" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/aws-ecs-cluster.png"/>T2】</a></p>
+
+<p><code>octopetshop-database</code>执行数据库迁移，并被设计为在完成后停止。<code>STOPPED</code>状态正常。</p>
+
+
+<p>octopetshop-web容器被配置为侦听端口5000和5001。导航到<strong>公共IP </strong>地址，端口5000将您重定向到5001上的HTTPS。该证书是不受信任的. NET核心开发证书，因此关于安全风险的对话是正常的。进入该站点后，您会看到Octo宠物店应用程序。</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/aws-octopetshop-app.png" class="zoom" data-title=""><img src="../Images/eb1d2c252f7afcddf683c5a7e4eb06a5.png" class="img-fluid center" alt="Octo Pet Shop welcome screen" data-original-src="https://i.octopus.com/blog/2022-07/using-ecs-deployment-step/aws-octopetshop-app.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>我的<a href="https://octopus.com/blog/aws-fargate">上一篇文章</a>向您展示了如何使用脚本方法部署到Amazon ECS。虽然它有效，但体验并不像内置的部署步骤那样简单。这篇文章演示了如何用新的内置ECS部署步骤替换脚本方法。</p>
+
+<p>愉快的部署！</p>
+
+                    
+                    
+</body>
+</html>

@@ -1,0 +1,660 @@
+<html>
+<head>
+<title>Building a dynamic worker army with Terraform and AWS autoscaling groups - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>用Terraform和AWS自动伸缩组构建动态工人大军- Octopus Deploy</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/dynamic-worker-army#2021-12-16">https://octopus.com/blog/dynamic-worker-army#2021-12-16</a></blockquote>
+                        <p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/dynamic-workers.png" class="zoom" data-title=""><img src="../Images/96f41a0c081996ddd160ab53f7138a87.png" class="img-fluid center" alt="Building a dynamic worker army with Terraform and AWS autoscaling groups" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/dynamic-workers.png"/>T2】</a></p>
+
+<p>基础设施即代码(IaC)的出现是一个巨大的飞跃，尤其是在云领域。以编程方式定义基础设施外观的能力带来了环境一致性和更可预测的应用程序行为。</p>
+
+<p>云提供商已经将基础设施作为代码，提供定制的IaC实现来供应和配置他们产品上的资源。不幸的是，这意味着您必须学习多种工具来与不同的提供商合作；例如，亚马逊网络服务(AWS) CloudFormation或微软Azure资源管理器(ARM)模板。HashiCorp创建了Terraform来解决这个问题，这是一个与多个提供商合作的单一工具。</p>
+
+<p>在本文中，我将向您展示如何使用Terraform和AWS autoscaling为Octopus Deploy动态创建工人。</p>
+
+<p>Octopus中的Workers使您能够将部署工作转移到池中运行的其他机器上。这可以大大减少在Octopus服务器上执行的工作，使其能够更容易地执行更多的部署。工人池可以通过启用可由多个项目和团队使用的专用机器池来提高可伸缩性。这方面的例子包括利用员工进行数据库部署，部署到云基础设施，如Azure、AWS和Kubernetes (K8s)等。</p>
+
+
+<h2 id="what-is-aws-autoscaling">什么是AWS自动缩放？</h2>
+
+<p>AWS自动缩放是基于指定标准增加或减少资源的能力。自动缩放的一个常见用例是电子商务网站。随着需求的增加，需要创建更多的服务器来处理负载。当负载减少时，可以自动取消供应额外的资源。这使得电子商务保持最少数量的服务器运行，并保持主机成本下降。</p>
+
+<p>在这篇文章中，我们使用AWS autoscaling来动态添加更多的工人，以使团队尽可能高效地执行他们的部署。</p>
+
+<h2 id="using-terraform-to-provision-our-cloud-infrastructure">使用Terraform调配我们的云基础架构</h2>
+
+<p>使用声明性配置文件，Terraform可以创建新资源，管理现有资源，或者销毁不再需要的资源。</p>
+
+<p>有了Terraform，我们能够在一个文件中定义我们所有的资源，或者在逻辑上将它们分开。在这篇文章中，我们将把我们的文件分开，以便于使用。</p>
+
+<p>我们将使用八个文件:</p>
+
+<ul>
+<li>自动缩放. tf</li>
+<li>autoscalingpolicy.tf</li>
+<li>后端. tf</li>
+<li>installTentacle.sh</li>
+<li>provider.tf</li>
+<li>安全组. tf</li>
+<li>vars.tf</li>
+<li>vpc.tf</li>
+</ul>
+
+<h3 id="autoscaling.tf">自动缩放. tf</h3>
+
+<p>该文件包含用于创建AWS自动缩放组的资源声明和用于我们的工人的启动配置。我创建了两个启动配置，一个用于Windows，一个用于Linux。每个启动配置执行一个脚本，自动安装和配置Octopus Deploy触手软件，然后将它作为一个工作器连接到我们的Octopus Deploy服务器。为了说明脚本如何连接到启动配置，Linux启动配置读取一个包含命令的文件(installTentacle.sh ),而Windows启动配置内联了脚本。对于Windows和Linux，我们正在配置轮询触角。</p>
+
+
+
+<pre><code class="language-terraform">
+resource "aws_launch_configuration" "dynamic-linux-worker-launchconfig" {
+    name_prefix = "dynamic-linux-worker-launchconfig"
+    image_id = "${var.LINUX_AMIS}"
+    instance_type = "t2.micro"
+
+    security_groups = ["${aws_security_group.allow-octopusserver.id}"]
+
+    # script to run when created
+user_data = "${file("installTentacle.sh")}"
+
+}
+
+resource "aws_launch_configuration" "dynamic-windows-worker-launchconfig" {
+    name_prefix = "dynamic-windows-worker-launchconfig"
+    image_id = "${var.WINDOWS_AMIS}"
+    instance_type = "t2.micro"
+
+    security_groups = ["${aws_security_group.allow-octopusserver.id}"]
+
+    user_data = &lt;&lt;-EOT
+&lt;powershell&gt;
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+$OctopusName = (Invoke-RestMethod http://169.254.169.254/latest/meta-data/hostname)
+
+choco install octopusdeploy.tentacle -y
+
+&amp; "C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" create-instance --config "c:\octopus\home"
+
+&amp; "C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" new-certificate --if-blank
+
+&amp; "C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" configure --noListen True --reset-trust --app "c:\octopus\applications"
+
+Write-Host "Running register with..."
+
+&amp; "C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" register-worker --server "#{Project.Octopus.Server.Url}" --apiKey "#{Project.Octopus.Server.ApiKey}"  --comms-style "TentacleActive" --server-comms-port "#{Project.Octopus.Server.PollingPort}" --workerPool "#{Project.Octopus.Server.WorkerPool}" --policy "#{Project.Octopus.Server.MachinePolicy}" --space "#{Project.Octopus.Server.Space}" --name $OctopusName
+
+Write-Host "Finished register with..."
+
+&amp; "C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" service --install
+
+&amp; "C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" service --start
+
+
+&lt;/powershell&gt;
+
+  EOT
+}
+
+resource "aws_autoscaling_group" "dynamic-linux-worker-autoscaling" {
+    name = "dynamic-linux-worker-autoscaling"
+    vpc_zone_identifier = ["${aws_subnet.worker-public-1.id}", "${aws_subnet.worker-public-2.id}", "${aws_subnet.worker-public-3.id}"]
+    launch_configuration = "${aws_launch_configuration.dynamic-linux-worker-launchconfig.name}"
+    min_size = 2
+    max_size = 3
+    health_check_grace_period = 300
+    health_check_type = "EC2"
+    force_delete = true
+
+    tag {
+        key = "Name"
+        value = "Octopus Deploy Linux Worker"
+        propagate_at_launch = true
+    }
+}
+
+resource "aws_autoscaling_group" "dynamic-windows-worker-autoscaling" {
+    name = "dynamic-windows-worker-autoscaling"
+    vpc_zone_identifier = ["${aws_subnet.worker-public-1.id}", "${aws_subnet.worker-public-2.id}", "${aws_subnet.worker-public-3.id}"]
+    launch_configuration = "${aws_launch_configuration.dynamic-windows-worker-launchconfig.name}"
+    min_size = 2
+    max_size = 3
+    health_check_grace_period = 300
+    health_check_type = "EC2"
+    force_delete = true
+
+    tag {
+        key = "Name"
+        value = "Octopus Deploy Windows Worker"
+        propagate_at_launch = true
+    }
+}
+</code></pre>
+
+<h3 id="autoscalingpolicy.tf">autoscalingpolicy.tf</h3>
+
+<p>该文件包含策略和触发器定义，用于扩大和缩小我们的EC2实例:</p>
+
+<pre><code class="language-terraform"># scale up alarm
+
+resource "aws_autoscaling_policy" "linux-worker-cpu-policy" {
+  name                   = "linux-worker-cpu-policy"
+  autoscaling_group_name = "${aws_autoscaling_group.dynamic-linux-worker-autoscaling.name}"
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "linux-worker-cpu-alarm" {
+  alarm_name          = "linux-worker-cpu-alarm"
+  alarm_description   = "linux-worker-cpu-alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "30"
+
+  dimensions = {
+    "AutoScalingGroupName" = "${aws_autoscaling_group.dynamic-linux-worker-autoscaling.name}"
+  }
+
+  actions_enabled = true
+  alarm_actions   = ["${aws_autoscaling_policy.linux-worker-cpu-policy.arn}"]
+}
+
+# scale down alarm
+resource "aws_autoscaling_policy" "linux-worker-cpu-policy-scaledown" {
+  name                   = "linux-worker-cpu-policy-scaledown"
+  autoscaling_group_name = "${aws_autoscaling_group.dynamic-linux-worker-autoscaling.name}"
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "-1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "linux-worker-cpu-alarm-scaledown" {
+  alarm_name          = "linux-worker-cpu-alarm-scaledown"
+  alarm_description   = "linux-worker-cpu-alarm-scaledown"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "5"
+
+  dimensions = {
+    "AutoScalingGroupName" = "${aws_autoscaling_group.dynamic-linux-worker-autoscaling.name}"
+  }
+
+  actions_enabled = true
+  alarm_actions   = ["${aws_autoscaling_policy.linux-worker-cpu-policy-scaledown.arn}"]
+}
+
+resource "aws_autoscaling_policy" "windows-worker-cpu-policy" {
+  name                   = "windows-worker-cpu-policy"
+  autoscaling_group_name = "${aws_autoscaling_group.dynamic-windows-worker-autoscaling.name}"
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "windows-worker-cpu-alarm" {
+  alarm_name          = "windows-worker-cpu-alarm"
+  alarm_description   = "windows-worker-cpu-alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "30"
+
+  dimensions = {
+    "AutoScalingGroupName" = "${aws_autoscaling_group.dynamic-windows-worker-autoscaling.name}"
+  }
+
+  actions_enabled = true
+  alarm_actions   = ["${aws_autoscaling_policy.windows-worker-cpu-policy.arn}"]
+}
+
+# scale down alarm
+resource "aws_autoscaling_policy" "windows-worker-cpu-policy-scaledown" {
+  name                   = "windows-worker-cpu-policy-scaledown"
+  autoscaling_group_name = "${aws_autoscaling_group.dynamic-windows-worker-autoscaling.name}"
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "-1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "windows-worker-cpu-alarm-scaledown" {
+  alarm_name          = "windows-worker-cpu-alarm-scaledown"
+  alarm_description   = "windows-worker-cpu-alarm-scaledown"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "5"
+
+  dimensions = {
+    "AutoScalingGroupName" = "${aws_autoscaling_group.dynamic-windows-worker-autoscaling.name}"
+  }
+
+  actions_enabled = true
+  alarm_actions   = ["${aws_autoscaling_policy.windows-worker-cpu-policy-scaledown.arn}"]
+}
+</code></pre>
+
+<h3 id="backend.tf">后端. tf</h3>
+
+<p>从本地机器执行Terraform时，状态文件存储在本地。Octopus Deploy不会在执行应用后保留状态文件，因此有必要将我们的状态文件存储在外部存储上。该文件告诉Terraform使用AWS S3存储桶来存储状态文件:</p>
+
+<pre><code class="language-terraform">terraform {
+    backend "s3" {
+        bucket = "#{Project.AWS.S3.Bucket}"
+        key = "#{Project.AWS.S3.Key}"
+        region = "#{Project.AWS.Region}"
+    }
+}
+</code></pre>
+
+<h3 id="installtentacle.sh">installTentacle.sh</h3>
+
+<p>这是Linux变体的autoscaling.tf启动配置中引用的bash脚本文件。其中包含下载、安装和配置Octopus Deploy触手软件以及将其连接到Octopus Deploy服务器所需的命令:</p>
+
+<pre><code class="language-bash">#!/bin/bash
+serverUrl="#{Project.Octopus.Server.Url}"
+serverCommsPort="#{Project.Octopus.Server.PollingPort}"
+apiKey="#{Project.Octopus.Server.ApiKey}"
+name=$HOSTNAME
+configFilePath="/etc/octopus/default/tentacle-default.config"
+applicationPath="/home/Octopus/Applications/"
+workerPool="#{Project.Octopus.Server.WorkerPool}"
+machinePolicy="#{Project.Octopus.Server.MachinePolicy}"
+space="#{Project.Octopus.Server.Space}"
+
+sudo apt-key adv --fetch-keys "https://apt.octopus.com/public.key"
+sudo add-apt-repository "deb https://apt.octopus.com/ stretch main"
+sudo apt-get update
+sudo apt-get install tentacle
+
+sudo /opt/octopus/tentacle/Tentacle create-instance --config "$configFilePath" --instance "$name"
+sudo /opt/octopus/tentacle/Tentacle new-certificate --if-blank
+sudo /opt/octopus/tentacle/Tentacle configure --noListen True --reset-trust --app "$applicationPath"
+echo "Registering the worker $name with server $serverUrl"
+sudo /opt/octopus/tentacle/Tentacle register-worker --server "$serverUrl" --apiKey "$apiKey" --name "$name"  --comms-style "TentacleActive" --server-comms-port $serverCommsPort --workerPool "$workerPool" --policy "$machinePolicy" --space "$space"
+sudo /opt/octopus/tentacle/Tentacle service --install --start
+</code></pre>
+
+<h3 id="provider.tf">provider.tf</h3>
+
+<p>provider.tf通知Terraform我们正在使用哪个提供程序。在我们的例子中，这就是AWS:</p>
+
+<pre><code class="language-terraform">provider "aws" {
+  region     = "${var.AWS_REGION}"
+}
+</code></pre>
+
+<h3 id="securitygroup.tf">安全组. tf</h3>
+
+<p>在与云提供商打交道时，安全组就是防火墙规则。securitygroup.tf文件包含EC2实例的入口和出口规则。在这种情况下，端口22和3389出于调试目的而打开，可以省略:</p>
+
+<pre><code class="language-terraform">resource "aws_security_group" "allow-octopusserver" {
+  vpc_id      = "${aws_vpc.worker_vpc.id}"
+  name        = "allow-octopusserver"
+  description = "Security group that allows traffic to the worker from the Octpus Server"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = 22
+    to_port = 22
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = 3389
+    to_port = 3389
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "allow-octopusserver"
+  }
+}
+</code></pre>
+
+<h3 id="vars.tfs">vars.tfs</h3>
+
+<p>该文件包含我们的Terraform脚本中使用的不同变量。在这个文件中，我们定义了哪个Amazon机器映像(AMI)用于我们的EC2实例。AMI值被硬编码在这个文件中，但是它们可以很容易地用Octopus Deploy中的变量替换，比如使用<a href="https://github.com/OctopusDeploy/Octostache" rel="nofollow">Octopus tache语法</a>替换<code>AWS_REGION</code>变量。该文件定义了以下变量:</p>
+
+<ul>
+<li><code>AWS_REGION</code>:我们正在使用的AWS区域。</li>
+<li><code>LINUX_AMIS</code>:我们的Linux EC2实例的AMI。</li>
+<li><code>WINDOWS_AMIS</code>:我们的Windows EC2实例的AMI。</li>
+<li><code>PATH_TO_PRIVATE_KEY</code>:与AWS密钥对相关联的私有密钥的路径，用于登录我们的实例(用于调试，不包括在内)。</li>
+<li><code>PATH_TO_PUBLIC_KEY</code>:与AWS密钥对相关联的公共密钥的路径，该密钥对用于登录我们的实例(用于调试，不包括在内)。</li>
+</ul>
+
+<pre><code class="language-terraform">variable "AWS_REGION" {
+  default = "#{Project.AWS.Region}"
+}
+
+variable "LINUX_AMIS" {
+  default =  "ami-084a6c14d8630bb68"
+}
+
+variable "WINDOWS_AMIS"{
+  default = "ami-087ee25b86edaf4b1"
+}
+
+variable "PATH_TO_PRIVATE_KEY" {
+  default = "mykey"
+}
+
+variable "PATH_TO_PUBLIC_KEY" {
+  default = "mykey.pub"
+}
+</code></pre>
+
+<h3 id="vpc.tf">vpc.tf</h3>
+
+<p>该文件包含在AWS中创建虚拟私有云(VPC)所需的资源。它包含以下内容的定义:</p>
+
+<ul>
+<li>VPC</li>
+<li>子网</li>
+<li>互联网网关</li>
+<li>路由表</li>
+<li>路由表关联</li>
+</ul>
+
+<pre><code class="language-terraform"># Internet VPC
+resource "aws_vpc" "worker_vpc" {
+  cidr_block           = "10.0.0.0/16"
+  instance_tenancy     = "default"
+  enable_dns_support   = "true"
+  enable_dns_hostnames = "true"
+  enable_classiclink   = "false"
+  tags = {
+    Name = "worker_vpc"
+  }
+}
+
+# Subnets
+resource "aws_subnet" "worker-public-1" {
+  vpc_id                  = "${aws_vpc.worker_vpc.id}"
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = "true"
+  availability_zone       = "${var.AWS_REGION}a"
+
+  tags = {
+    Name = "worker-public-1"
+  }
+}
+
+resource "aws_subnet" "worker-public-2" {
+  vpc_id                  = "${aws_vpc.worker_vpc.id}"
+  cidr_block              = "10.0.2.0/24"
+  map_public_ip_on_launch = "true"
+  availability_zone       = "${var.AWS_REGION}b"
+
+  tags = {
+    Name = "worker-public-2"
+  }
+}
+
+resource "aws_subnet" "worker-public-3" {
+  vpc_id                  = "${aws_vpc.worker_vpc.id}"
+  cidr_block              = "10.0.3.0/24"
+  map_public_ip_on_launch = "true"
+  availability_zone       = "${var.AWS_REGION}c"
+
+  tags = {
+    Name = "worker-public-3"
+  }
+}
+
+resource "aws_subnet" "worker-private-1" {
+  vpc_id                  = "${aws_vpc.worker_vpc.id}"
+  cidr_block              = "10.0.4.0/24"
+  map_public_ip_on_launch = "false"
+  availability_zone       = "${var.AWS_REGION}a"
+
+  tags = {
+    Name = "worker-private-1"
+  }
+}
+
+resource "aws_subnet" "worker-private-2" {
+  vpc_id                  = "${aws_vpc.worker_vpc.id}"
+  cidr_block              = "10.0.5.0/24"
+  map_public_ip_on_launch = "false"
+  availability_zone       = "${var.AWS_REGION}b"
+
+  tags = {
+    Name = "worker-private-2"
+  }
+}
+
+resource "aws_subnet" "worker-private-3" {
+  vpc_id                  = "${aws_vpc.worker_vpc.id}"
+  cidr_block              = "10.0.6.0/24"
+  map_public_ip_on_launch = "false"
+  availability_zone       = "${var.AWS_REGION}c"
+
+  tags = {
+    Name = "worker-private-3"
+  }
+}
+
+# Internet GW
+resource "aws_internet_gateway" "worker-gw" {
+  vpc_id = "${aws_vpc.worker_vpc.id}"
+
+  tags = {
+    Name = "worker"
+  }
+}
+
+# route tables
+resource "aws_route_table" "worker-public" {
+  vpc_id = "${aws_vpc.worker_vpc.id}"
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = "${aws_internet_gateway.worker-gw.id}"
+  }
+
+  tags = {
+    Name = "worker-public-1"
+  }
+}
+
+# route associations public
+resource "aws_route_table_association" "worker-public-1-a" {
+  subnet_id      = "${aws_subnet.worker-public-1.id}"
+  route_table_id = "${aws_route_table.worker-public.id}"
+}
+
+resource "aws_route_table_association" "worker-public-2-a" {
+  subnet_id      = "${aws_subnet.worker-public-2.id}"
+  route_table_id = "${aws_route_table.worker-public.id}"
+}
+
+resource "aws_route_table_association" "worker-public-3-a" {
+  subnet_id      = "${aws_subnet.worker-public-3.id}"
+  route_table_id = "${aws_route_table.worker-public.id}"
+}
+</code></pre>
+
+<p>现在你知道了！创建AWS自动缩放工人大军所需的所有Terraform脚本。剩下的工作就是将这些文件打包成. zip或。使用构建服务器或Octopus CLI。在创建包并上传到我们的Octopus服务器后，我们可以将它包含在我们的部署过程中。</p>
+
+<h2 id="octopus-deploy">章鱼部署</h2>
+
+<p>建立Terraform文件是整个过程中最难的部分。在Octopus Deploy中创建部署的步骤非常短。出于我们的目的，我们只需要两个环境，<code>Spinup</code>和<code>Teardown</code>。</p>
+
+<h3 id="environments">环境</h3>
+
+<p>要创建我们的环境，请导航至<span class="path">基础设施➜环境➜添加环境</span>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-environments.png" class="zoom" data-title=""><img src="../Images/560b1cbc0af5b5f6987176b5b3e09662.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-environments.png"/>T2】</a></p>
+
+<p>创建以下内容:</p>
+
+
+
+<p>对于本演示，我们使用默认的生命周期。如果其他项目已经存在，可能有必要为此项目创建新的生命周期。</p>
+
+<h3 id="aws-account">AWS帐户</h3>
+
+<p>要使用AWS，我们需要一个拥有创建我们的资源的必要权限的帐户。在AWS中创建之后，我们需要将这个帐户添加到Octopus Deploy中。为此，我们将点击<span class="path">基础设施➜帐户➜添加帐户</span>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-account.png" class="zoom" data-title=""><img src="../Images/facf28df7f56932378f27baa75d5245f.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-account.png"/>T2】</a></p>
+
+<p>选择AWS帐户:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-account-aws.png" class="zoom" data-title=""><img src="../Images/10fb5d257ad6e6ef571631c550ec6d5b.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-account-aws.png"/>T2】</a></p>
+
+<p>填写访问密钥和密钥。请务必点击<strong>保存并测试</strong>以确保您的帐户正常工作:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-account-details.png" class="zoom" data-title=""><img src="../Images/f7cbf328c29ac1ceb72bd682288a5730.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-account-details.png"/>T2】</a></p>
+
+<h3 id="worker-pool">工人池</h3>
+
+<p>在这篇文章中，我们将把有活力的员工放入他们自己的人才库。为此，我们首先创建池。</p>
+
+<p>导航至<span class="path">基础设施➜工人池➜添加工人池</span>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-infrastructure-workerpool.png" class="zoom" data-title=""><img src="../Images/286d8c004016fcbd6da353d488571a59.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-infrastructure-workerpool.png"/>T2】</a></p>
+
+<p>为工人池命名并点击<strong>保存</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-infrastructure-workerpool-name.png" class="zoom" data-title=""><img src="../Images/0982a26a622f8a41f569bb4c26d97a55.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-infrastructure-workerpool-name.png"/>T2】</a></p>
+
+<h3 id="project">项目</h3>
+
+<p>随着环境的创建，我们可以创建我们的项目来创建我们的工人。</p>
+
+<p>点击<span class="path">项目➜添加项目</span>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-project.png" class="zoom" data-title=""><img src="../Images/71cd40ec1466a8083a110cf45460ce97.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-create-project.png"/>T2】</a></p>
+
+<p>在您给它命名并点击<strong>保存</strong>后，您将被带到您的全新项目。</p>
+
+<h4 id="variables">变量</h4>
+
+<p>我们上面创建的Terraform脚本有需要在部署时替换的八进制变量。要定义我们的变量，单击<strong>变量</strong>选项卡并创建以下变量(我用名字隔开我的变量，以便更容易识别它们来自哪里):</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-variables.png" class="zoom" data-title=""><img src="../Images/f7f42ba7c2f5711ae32a30fd6ef395f6.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-variables.png"/>T2】</a></p>
+
+<ul>
+<li><code>Project.AWS.Account</code>:我们上面创建的AWS账户。</li>
+<li><code>Project.AWS.Region</code>:我们正在使用的AWS中的区域。</li>
+<li><code>Project.AWS.S3.Bucket</code>:我们将要存储状态文件的桶。</li>
+<li><code>Project.AWS.S3.Key</code>:存储我们状态的钥匙。</li>
+<li><code>Project.Octopus.Server.ApiKey</code>:将worker连接到Octopus服务器时使用的API密匙(敏感)。</li>
+<li><code>Project.Octopus.Server.MachinePolicy</code>:工作者将附加到的机器策略的名称。</li>
+<li><code>Project.Octopus.Server.PollingPort</code>:Octopus服务器用于轮询触须的端口。</li>
+<li><code>Project.Octopus.Server.Space</code>:工作人员将被附加到的空间的名称(默认为空)。</li>
+<li><code>Project.Octopus.Server.Url</code>:八达通服务器网址。</li>
+<li><code>Project.Octopus.Server.WorkerPool</code>:工作者将加入的工作者池的名称。</li>
+</ul>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-variables-complete.png" class="zoom" data-title=""><img src="../Images/0ae7d044ede7030e8f6cc9dcbe0afd97.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-variables-complete.png"/>T2】</a></p>
+
+<h4 id="steps">步伐</h4>
+
+<p>我们的部署过程将包括两个步骤:地形应用步骤和地形破坏步骤。</p>
+
+<h5 id="terraform-apply-template">Terraform应用模板</h5>
+
+<p>点击<span class="path">处理➜添加步骤</span>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-add-step.png" class="zoom" data-title=""><img src="../Images/7641d665cd082974df2f9e0f28b75759.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-add-step.png"/>T2】</a></p>
+
+<p>单击Terraform类别，然后选择应用Terraform模板:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-add-terraform-apply.png" class="zoom" data-title=""><img src="../Images/df0a4a933f1368f791e81884a80d82d7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-add-terraform-apply.png"/>T2】</a></p>
+
+<p>为该步骤命名，并让它在默认池中的工作线程上执行:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform1.png" class="zoom" data-title=""><img src="../Images/e84b0f948d55a7cbe6f8f41556cd7790.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform1.png"/>T2】</a></p>
+
+<p>启用帐户集成，选择AWS帐户并指定区域:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform2.png" class="zoom" data-title=""><img src="../Images/f598c27a099b799931cbe22dbdbae5f4.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform2.png"/>T2】</a></p>
+
+<p>选择包含Terraform文件的包。取消选中默认Terraform文件中的替换变量。在目标文件部分，添加两个条目:</p>
+
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform3.png" class="zoom" data-title=""><img src="../Images/8e55f6d34e094893713e82fc6d8fffec.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform3.png"/>T2】</a></p>
+
+<p>在条件下，仅在<code>Spinup</code>环境中执行该步骤:</p>
+
+<p>【T2 <img src="../Images/6356e2854a170117ba984709ef06b1e7.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-add-terraform4.png"/></p>
+
+<p>这就是应用Terraform模板的步骤。</p>
+
+<h5 id="terraform-destroy-template">地形破坏模板</h5>
+
+<p>为了节约成本，当我们知道自己创造的资源不会被使用时，比如在一天工作结束时，我们可以把它们拆掉。在本演示中，我们选择将此作为我们部署的一部分，但是，我们可以轻松地将其实现为预定的<a href="https://octopus.com/docs/operations-runbooks/">运行手册</a>。</p>
+
+<p>点击<strong>添加步骤</strong>，选择地形类别，然后选择破坏地形资源:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-destroy-terraform1.png" class="zoom" data-title=""><img src="../Images/c5d09a3bb58a446d51ab9f6832201c5d.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-destroy-terraform1.png"/>T2】</a></p>
+
+<p>除了要在哪个环境中运行之外，为该模板填充与我们为应用Terraform模板所做的相同的值。对于销毁步骤，我们只希望它在<code>Teardown</code>环境中运行。</p>
+
+<p>仅此而已！我们现在准备创建我们的版本并部署我们的Terraform模板。</p>
+
+<h3 id="applying-the-template">应用模板</h3>
+
+<p>点击<strong>创建发布</strong>按钮:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release.png" class="zoom" data-title=""><img src="../Images/efc052485ac09dd74c6461c74a04da5e.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release.png"/>T2】</a></p>
+
+<p>点击<strong>保存</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release-save.png" class="zoom" data-title=""><img src="../Images/d83c6f23e033bf9c6534ae4fc4fb1ca8.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release-save.png"/>T2】</a></p>
+
+<p>在<code>SpinUp</code>环境行上点击<strong>部署启动</strong>或<strong>部署</strong>按钮；</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release-deploy.png" class="zoom" data-title=""><img src="../Images/a2c18d6dbb9ac9fba3b5c551894e8492.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release-deploy.png"/>T2】</a></p>
+
+<p>最后，点击<strong>部署</strong>:</p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release-final.png" class="zoom" data-title=""><img src="../Images/92b425048113d14f7c07f0f23a1fa74c.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-create-release-final.png"/></a>T2】</p>
+
+<p>部署完成后，您将在动态工作线程池中看到四个工作线程。</p>
+
+<p>Linux工作者会比Windows工作者更早出现。如果一开始您没有看到四个工作人员，请给Windows工作人员多一点时间来完成资源调配。</p>
+
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-deployment.png" class="zoom" data-title=""><img src="../Images/75e8add8cd125417c936a1713c8ca148.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-project-deployment.png"/>T2】</a></p>
+
+<p><a href="#" data-featherlight="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-workers.png" class="zoom" data-title=""><img src="../Images/11256f797231ddb7f5d312aa50e7abeb.png" class="img-fluid center" alt="" data-original-src="https://i.octopus.com/blog/2020-02/dynamic-worker-army/octopus-workers.png"/>T2】</a></p>
+
+<h2 id="conclusion">结论</h2>
+
+<p>在这篇文章中，我带您创建了一些Terraform配置文件，这些文件将生成AWS自动伸缩组，以根据需求动态创建Octopus Deploy worker基础架构伸缩。</p>
+
+                    
+                    
+</body>
+</html>

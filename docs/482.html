@@ -1,0 +1,113 @@
+<html>
+<head>
+<title>Octopus Deploy 3.3 - Octopus Deploy</title>
+<link href="../Styles/Style.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+<h1>八达通部署3.3 -八达通部署</h1>
+<blockquote>原文：<a href="https://octopus.com/blog/octopus-deploy-3.3#2016-02-29">https://octopus.com/blog/octopus-deploy-3.3#2016-02-29</a></blockquote>
+                        <p>Octopus Deploy 3.3对每个人都有好处(*):</p>
+
+<ul>
+<li>对于非。我们支持zip和tar包，加上一些JavaScript库来帮助创建和推送包。</li>
+<li>对于Azure用户，资源管理器集成和新的资源组模板步骤类型。</li>
+<li>对于那些生活在雷德蒙德的人来说，3.3为ASP.NET核心带来了一个故事。</li>
+<li>我们也没有忘记我们的基础，对执行脚本进行了一系列改进。</li>
+</ul>
+
+<p><strong> * </strong>嗯...不是所有人。不包括多租户。我们在下面称呼<a href="#MultiTenancy">。</a></p>
+
+<h2>特征</h2>
+
+<p>3.3提供了以下新功能:</p>
+
+
+
+<h2>升级到八达通部署3.3</h2>
+
+<p><em>对<code>octo.exe</code>、<code>Octopus.Client</code>和TeamCity插件</em>的突破性改动</p>
+
+<p>你需要升级<code>octo.exe</code>和你的团队城市插件。如果您使用的是<code>DeploymentProcess</code>资源，您还需要升级使用<code>Octopus.Client</code>的代码。</p>
+
+<p>有关更多信息，请参考我们关于这一重大变更的<a href="http://docs.octopusdeploy.com/display/OD/Sensitive+Properties+API+Changes+in+Release+3.3">文档。</a></p>
+
+<h3><a name="ScriptsInPackages"/>编写源自包的步骤脚本</h3>
+
+<p>以前，对于独立的脚本步骤(即与打包的应用程序无关的脚本)，代码作为步骤配置的一部分存储在Octopus Deploy中。在3.3中，脚本步骤能够执行包含在包中的脚本。</p>
+
+<p>这允许您将脚本存储在源代码控制中，将它们打包成构建过程的一部分，并将其推送到Octopus Deploy。</p>
+
+<p><img src="../Images/245993d9a352d334ca2efbbbc66c8501.png" alt="Script Step from Package" data-original-src="https://i.octopus.com/blog/201601-script_in_package-4Y9B.png"/></p>
+
+<h3>在Octopus服务器上执行的脚本步骤</h3>
+
+<p>部署应用程序时，有些情况下您希望执行不需要在目标机器上执行的脚本。例如，对数据库执行一些SQL。也可能有这样的情况，脚本<em>不能</em>在目标机器上执行(由于网络拓扑等)，而<em>必须</em>在Octopus服务器上执行。</p>
+
+<p>3.3增加一个新的步骤类型:<a href="http://docs.octopusdeploy.com/display/OD/Running+Scripts+on+the+Octopus+Server">在Octopus服务器上运行一个脚本</a>。这消除了在Octopus服务器上安装触手的需要，这是以前最常见的解决方法。</p>
+
+<p><img src="../Images/a19fd4f79c0899d4aea45bd370e86433.png" alt="Run a Script on the Octopus Server" data-original-src="https://i.octopus.com/blog/201601-server_script-G3VN.png"/></p>
+
+<h3><a name="ServerBasedChildSteps"/>基于服务器的步骤作为子步骤</h3>
+
+<p>如果您有一个包含子步骤的步骤(通常用于实现滚动部署)，那么您以前不能将基于服务器的步骤(例如<a href="http://docs.octopusdeploy.com/display/OD/Email+notifications">电子邮件</a>、<a href="http://docs.octopusdeploy.com/display/OD/Manual+intervention+and+approvals">手动干预</a>)添加为子步骤。使用3.3，您现在可以对部署到的每台计算机进行手动干预。</p>
+
+<p><img src="../Images/bf77b1c2eef702412e9820e8095a154c.png" alt="Server Steps As Children" data-original-src="https://i.octopus.com/blog/201601-server_child_steps-RC3T.png"/></p>
+
+<p>这个特性与上面提到的在Octopus服务器上运行脚本<em>结合得很好。也许您有一个web应用程序的滚动部署，并且有一个PowerShell脚本步骤，该步骤在部署到负载均衡器之前将机器从负载均衡器中移除。PowerShell步骤现在可以从Octopus服务器执行了。</em></p>
+
+<h3><a name="ZipAndTarPackages"/>支持zip和tar包</h3>
+
+<p>八达通部署不再是NuGet-only！我们喜欢吃章鱼，但是我们知道有些时候，特别是对于那些生活在非。NET世界，当创建一个tar或zip文件可以更方便。</p>
+
+<p>如果使用内置的Octopus包存储库，现在可以使用常规的zip文件，或者tar文件(+ GZip或BZip2)。详情请参见我们的<a href="http://docs.octopusdeploy.com/display/OD/Supported+Packages">支持包文档</a>。</p>
+
+<h3><a name="octopackjs"/> OctoPack.js</h3>
+
+<p>继续让生活变得更简单的主题。NET伙伴们，我们已经创建了一些JavaScript工具来帮助将包推送到Octopus Deploy。<a href="https://github.com/OctopusDeploy/octopackjs"> OctoPack.js </a>为Node.js带来了一些OctoPack功能。我们还创建了<a href="https://github.com/OctopusDeploy/gulp-octo"> gulp </a>和<a href="https://github.com/OctopusDeploy/grunt-octo"> grunt </a>包装器，因此从您的JavaScript构建链推送至Octopus Deploy变得更加容易。</p>
+
+<p>查看我们的<a href="http://docs.octopusdeploy.com/display/OD/Node+on+*Nix+deployments">示例项目</a>。</p>
+
+<p><img src="../Images/a686f36929cae61618f797c946acc10f.png" alt="Octo Gulp" data-original-src="https://i.octopus.com/blog/201601-octo_gulp-8LDM.png"/></p>
+
+<h3><a name="AzureServicePrincipal"/> Azure服务主账户</h3>
+
+<p>这个<a href="http://docs.octopusdeploy.com/display/OD/Creating+an+Azure+Service+Principal+Account">新账户类型</a>代表Azure Active Directory中的一个服务主体。这样做的动机是与Azure资源管理器API集成，包括下面的新步骤类型。</p>
+
+<p><img src="../Images/e7351ff9028a849d04800294ea5bbdf6.png" alt="Azure Service Principal" data-original-src="https://i.octopus.com/blog/201601-azure_service_principal-U6FQ.png"/></p>
+
+<h3><a name="AzureResourceGroupTemplate"/> Azure资源组模板步骤</h3>
+
+<p>3.3通过一个新的<a href="http://docs.octopusdeploy.com/display/OD/Deploy+using+an+Azure+Resource+Group+Template">部署Azure资源组步骤</a>类型扩展了Octopus Deploy的Azure集成，允许通过<a href="https://azure.microsoft.com/en-us/documentation/articles/resource-group-authoring-templates/">模板</a>部署资源组。</p>
+
+<p>这个特性在去年我们的<a href="https://octopus.com/blog/rfc-azure-resource-manager"> RFC </a>中已经指出。它允许对Azure进行声明性的、不可变的部署。</p>
+
+<p><img src="../Images/3d66c260f69a8815ed04410aec1ccd0d.png" alt="Azure Resource Group Step Type" data-original-src="https://i.octopus.com/blog/201601-azure_resource_group_step_summary-WJRW.png"/></p>
+
+<p>与源自包特性的<em>脚本步骤类似，Azure资源组模板可以作为JSON源直接输入到步骤中，也可以包含在包中。如果它作为JSON source输入，我们将动态显示参数的字段，这些字段当然可以绑定到Octopus变量。</em></p>
+
+<p><img src="../Images/0f774f5deb0139035ac2303d9dfc9aa1.png" alt="Resource Group Step Edit" data-original-src="https://i.octopus.com/blog/201601-azure_resource_group_edit-96XT.png"/></p>
+
+<h3><a name="ASPNETCoreJSON"/>ASP.NET核心JSON配置</h3>
+
+<p>ASP。NET Core(以前称为ASP.NET 5)越来越接近生产版本，我们知道一些客户已经在使用它，所以我们想确保它得到支持。</p>
+
+<p>之前在包装方面有一些问题。NuGet包中的nuspec文件。有变通办法，但有点痛苦。既然我们支持替代的包类型，这个问题是完全可以避免的。</p>
+
+<p>此外，JSON是ASP.NET核心中当前最流行的配置，我们已经添加了一个新的<a href="http://docs.octopusdeploy.com/display/OD/AppSettings+JSON+Configuration+Feature"> AppSettings JSON特性</a>，使得将Octopus变量写入JSON配置文件变得更加容易。</p>
+
+<p><img src="../Images/3211f99199c901524bd55fb4a4b3e25f.png" alt="JSON Configuration Feature" data-original-src="https://i.octopus.com/blog/201601-json_config_feature-S53D.png"/></p>
+
+<p>我们现在在Octopus Deploy中也有一些关于ASP.NET核心部署的指南。</p>
+
+<h2>多租户——一个明显的疏漏</h2>
+
+<p>你们中的许多人会注意到上面的特性列表中有一个遗漏。</p>
+
+<p>我们在3.3中承诺了多租户。多租户是3.3中的<em>不是</em>。对此我们深表歉意。</p>
+
+<p>我们打算把它包括在内。我们发布了一个关于潜在实现的RFC，并收到了很多有价值的反馈。反馈促使我们重新考虑我们提议的设计。在这一点上，我们必须决定是否保留上述所有功能以等待多租户，或者发布3.3 sans MT，并花时间确保我们做得正确。显然我们选择了第二种选择。你很快就会看到修改后的RFC。多租户是我们的首要任务。</p>
+
+                    
+                    
+</body>
+</html>
